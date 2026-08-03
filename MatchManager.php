@@ -1,145 +1,74 @@
 <?php
 
 require_once 'Rating.php';
+require_once 'DatabaseManager.php';
+require_once 'CSVDatabaseManager.php';
 
 class MatchManager
 {
     public const WHITE_WIN = '1-0';
     public const BLACK_WIN = '0-1';
     public const DRAW = '1/2-1/2';
+    public const INITIAL_RATING = 400;
 
-    private static $players = [];
-    private static $matches = [];
-    private static $nextPlayerId = 4;
-    private static $nextMatchId = 1;
+    private DatabaseManager $db;
+    private array $players = [];
+    private array $matches = [];
 
-    /**
-     * Load players from CSV file
-     */
-    public static function loadPlayers()
+    public function __construct(DatabaseManager $db)
     {
-        self::$players = [];
-        if (file_exists('data/player.csv') && ($handle = fopen('data/player.csv', 'r')) !== false) {
-            $header = fgetcsv($handle); // Skip header
-            $maxId = 0;
-            while (($data = fgetcsv($handle)) !== false) {
-                $id = (int)$data[0];
-                self::$players[$data[1]] = [
-                    'id' => $id,
-                    'username' => $data[1],
-                    'rating' => (int)$data[2],
-                    'games' => (int)$data[3],
-                    'wins' => (int)$data[4],
-                    'draws' => (int)$data[5],
-                    'losses' => (int)$data[6]
-                ];
-                if ($id > $maxId) {
-                    $maxId = $id;
-                }
-            }
-            fclose($handle);
-            self::$nextPlayerId = $maxId + 1;
-        }
+        $this->db = $db;
     }
 
     /**
-     * Load matches and get the next match ID
+     * Initialize the match manager
      */
-    public static function loadMatches()
+    public function initialize(): void
     {
-        self::$matches = [];
-        $maxId = 0;
-        
-        if (file_exists('data/match.csv') && ($handle = fopen('data/match.csv', 'r')) !== false) {
-            $header = fgetcsv($handle); // Skip header
-            while (($data = fgetcsv($handle)) !== false) {
-                $id = (int)$data[0];
-                self::$matches[] = [
-                    'id' => $id,
-                    'date' => $data[1],
-                    'white_id' => (int)$data[2],
-                    'black_id' => (int)$data[3],
-                    'result' => $data[4],
-                    'analysis_url' => $data[5]
-                ];
-                if ($id > $maxId) {
-                    $maxId = $id;
-                }
-            }
-            fclose($handle);
-        }
-        
-        self::$nextMatchId = $maxId + 1;
+        $this->db->connect();
+        $this->players = $this->db->loadPlayers();
+        $this->matches = $this->db->loadMatches();
     }
 
     /**
-     * Save players to CSV file
+     * Get or create player by username
      */
-    public static function savePlayers()
+    public function getOrCreatePlayer(string $username): array
     {
-        $handle = fopen('data/player.csv', 'w');
-        fputcsv($handle, ['id', 'username', 'rating', 'games', 'wins', 'draws', 'losses']);
+        // Check if player exists
+        $player = $this->db->getPlayerByUsername($username);
         
-        foreach (self::$players as $player) {
-            fputcsv($handle, [
-                $player['id'],
-                $player['username'],
-                $player['rating'],
-                $player['games'],
-                $player['wins'],
-                $player['draws'],
-                $player['losses']
-            ]);
+        if ($player !== null) {
+            return $player;
         }
-        fclose($handle);
-    }
-
-    /**
-     * Save match to CSV file
-     */
-    public static function saveMatch($whiteId, $blackId, $result, $analysisUrl)
-    {
-        // Load existing matches first to get the correct next ID
-        self::loadMatches();
         
-        $handle = fopen('data/match.csv', 'a');
-        fputcsv($handle, [
-            self::$nextMatchId,
-            date('Y-m-d H:i:s'),
-            $whiteId,
-            $blackId,
-            $result,
-            $analysisUrl
-        ]);
-        fclose($handle);
+        // Create new player
+        $newPlayer = [
+            'id' => $this->db->getNextPlayerId(),
+            'username' => $username,
+            'rating' => self::INITIAL_RATING,
+            'games' => 0,
+            'wins' => 0,
+            'draws' => 0,
+            'losses' => 0
+        ];
         
-        // Increment for next match
-        self::$nextMatchId++;
-    }
-
-    /**
-     * Get player by username
-     */
-    public static function getPlayer($username)
-    {
-        if (!isset(self::$players[$username])) {
-            throw new Exception("Player '$username' not found");
-        }
-        return self::$players[$username];
+        $this->players[$username] = $newPlayer;
+        $this->db->savePlayers($this->players);
+        
+        echo "📝 New player '{$username}' created with rating " . self::INITIAL_RATING . "\n";
+        
+        return $newPlayer;
     }
 
     /**
      * Play a match between two players
      */
-    public static function play($whiteUsername, $blackUsername, $result, $analysisUrl)
+    public function play(string $whiteUsername, string $blackUsername, string $result, string $analysisUrl): array
     {
-        // Load existing data
-        self::loadPlayers();
-        self::loadMatches();
-
-        // Get players
-        $white = self::getPlayer($whiteUsername);
-        $black = self::getPlayer($blackUsername);
+        // Get or create players
+        $white = $this->getOrCreatePlayer($whiteUsername);
+        $black = $this->getOrCreatePlayer($blackUsername);
 
         // Calculate rating changes
         $whiteResult = null;
@@ -163,26 +92,37 @@ class MatchManager
         $blackCalculation = Rating::calculate($black['rating'], $white['rating'], $blackResult);
 
         // Update player stats
-        self::$players[$whiteUsername]['rating'] = $whiteCalculation['new_rating'];
-        self::$players[$whiteUsername]['games']++;
-        self::$players[$blackUsername]['rating'] = $blackCalculation['new_rating'];
-        self::$players[$blackUsername]['games']++;
+        $this->players[$whiteUsername]['rating'] = $whiteCalculation['new_rating'];
+        $this->players[$whiteUsername]['games']++;
+        $this->players[$blackUsername]['rating'] = $blackCalculation['new_rating'];
+        $this->players[$blackUsername]['games']++;
 
         // Update win/draw/loss counts
         if ($result === self::WHITE_WIN) {
-            self::$players[$whiteUsername]['wins']++;
-            self::$players[$blackUsername]['losses']++;
+            $this->players[$whiteUsername]['wins']++;
+            $this->players[$blackUsername]['losses']++;
         } elseif ($result === self::BLACK_WIN) {
-            self::$players[$whiteUsername]['losses']++;
-            self::$players[$blackUsername]['wins']++;
+            $this->players[$whiteUsername]['losses']++;
+            $this->players[$blackUsername]['wins']++;
         } else { // DRAW
-            self::$players[$whiteUsername]['draws']++;
-            self::$players[$blackUsername]['draws']++;
+            $this->players[$whiteUsername]['draws']++;
+            $this->players[$blackUsername]['draws']++;
         }
 
-        // Save data
-        self::savePlayers();
-        self::saveMatch($white['id'], $black['id'], $result, $analysisUrl);
+        // Save players
+        $this->db->savePlayers($this->players);
+
+        // Save match
+        $match = [
+            'id' => $this->db->getNextMatchId(),
+            'date' => date('Y-m-d H:i:s'),
+            'white_id' => $white['id'],
+            'black_id' => $black['id'],
+            'result' => $result,
+            'analysis_url' => $analysisUrl
+        ];
+        $this->db->saveMatch($match);
+        $this->matches[] = $match;
 
         // Return result details
         return [
@@ -201,61 +141,75 @@ class MatchManager
                 'expected' => $blackCalculation['expected']
             ],
             'result' => $result,
-            'analysis_url' => $analysisUrl
+            'analysis_url' => $analysisUrl,
+            'match_id' => $match['id']
         ];
     }
 
     /**
      * Display player rankings
      */
-    public static function showRankings()
+    public function showRankings(): void
     {
-        self::loadPlayers();
+        $this->players = $this->db->loadPlayers();
         
-        $players = array_values(self::$players);
+        if (empty($this->players)) {
+            echo "No players found.\n";
+            return;
+        }
+        
+        $players = array_values($this->players);
         usort($players, function($a, $b) {
             return $b['rating'] - $a['rating'];
         });
 
-        echo "Rankings:\n";
-        echo str_repeat('-', 50) . "\n";
-        echo "Rank\tUsername\tRating\tGames\tW/D/L\n";
-        echo str_repeat('-', 50) . "\n";
+        echo "\n📊 Rankings:\n";
+        echo str_repeat('=', 60) . "\n";
+        echo str_pad("Rank", 6) . "\t";
+        echo str_pad("Username", 12) . "\t";
+        echo str_pad("Rating", 8) . "\t";
+        echo str_pad("Games", 6) . "\t";
+        echo "W/D/L\n";
+        echo str_repeat('-', 60) . "\n";
         
         $rank = 1;
         foreach ($players as $player) {
             $record = "{$player['wins']}/{$player['draws']}/{$player['losses']}";
-            echo "{$rank}\t{$player['username']}\t\t{$player['rating']}\t{$player['games']}\t{$record}\n";
+            echo str_pad("#{$rank}", 6) . "\t";
+            echo str_pad($player['username'], 12) . "\t";
+            echo str_pad($player['rating'], 8) . "\t";
+            echo str_pad($player['games'], 6) . "\t";
+            echo $record . "\n";
             $rank++;
         }
-        echo str_repeat('-', 50) . "\n";
+        echo str_repeat('=', 60) . "\n";
     }
 
     /**
      * Display match history
      */
-    public static function showHistory()
+    public function showHistory(): void
     {
-        self::loadPlayers();
-        self::loadMatches();
+        $this->matches = $this->db->loadMatches();
+        $this->players = $this->db->loadPlayers();
         
-        if (empty(self::$matches)) {
+        if (empty($this->matches)) {
             echo "No matches found.\n";
             return;
         }
         
-        echo "Match History:\n";
-        echo str_repeat('-', 80) . "\n";
+        echo "\n📋 Match History:\n";
+        echo str_repeat('=', 85) . "\n";
         echo str_pad("ID", 4) . "\t";
         echo str_pad("Date", 20) . "\t";
         echo str_pad("White", 12) . "\t";
         echo str_pad("Black", 12) . "\t";
         echo "Result\n";
-        echo str_repeat('-', 80) . "\n";
+        echo str_repeat('-', 85) . "\n";
         
-        foreach (self::$matches as $match) {
-            $whitePlayer = self::getPlayerById($match['white_id']);
-            $blackPlayer = self::getPlayerById($match['black_id']);
+        foreach ($this->matches as $match) {
+            $whitePlayer = $this->db->getPlayerById($match['white_id']);
+            $blackPlayer = $this->db->getPlayerById($match['black_id']);
             
             if ($whitePlayer && $blackPlayer) {
                 echo str_pad($match['id'], 4) . "\t";
@@ -265,31 +219,30 @@ class MatchManager
                 echo $match['result'] . "\n";
             }
         }
-        echo str_repeat('-', 80) . "\n";
+        echo str_repeat('=', 85) . "\n";
     }
 
     /**
-     * Get player by ID
+     * Get player count
      */
-    private static function getPlayerById($id)
+    public function getPlayerCount(): int
     {
-        foreach (self::$players as $player) {
-            if ($player['id'] === $id) {
-                return $player;
-            }
-        }
-        return null;
+        return count($this->players);
     }
-}
 
-// Example usage:
-try {
-    MatchManager::showRankings();
-    MatchManager::showHistory();
-    $result = MatchManager::play('Charlie', 'Alice', MatchManager::DRAW, 'https://example.com/analysis/123');
-    MatchManager::showRankings();
-    MatchManager::showHistory();
+    /**
+     * Get match count
+     */
+    public function getMatchCount(): int
+    {
+        return count($this->matches);
+    }
 
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage() . "\n";
+    /**
+     * Clean up resources
+     */
+    public function cleanup(): void
+    {
+        $this->db->disconnect();
+    }
 }
