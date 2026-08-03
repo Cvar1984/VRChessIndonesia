@@ -13,4 +13,5 @@ interface DatabaseManager
     public function playerExists(string $username): bool;
     public function getPlayerByUsername(string $username): ?array;
     public function getPlayerById(int $id): ?array;
+    public function isConnected(): bool;
 }

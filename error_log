@@ -1,0 +1,11 @@
+[03-Aug-2026 14:01:07 UTC] PHP Warning:  Failed loading Zend extension 'opcache' (tried: /usr/lib64/php/modules/opcache (/usr/lib64/php/modules/opcache: cannot open shared object file: No such file or directory), /usr/lib64/php/modules/opcache.so (/usr/lib64/php/modules/opcache.so: cannot open shared object file: No such file or directory)) in Unknown on line 0
+[03-Aug-2026 14:01:07 UTC] PHP Warning:  fopen(/data/player.csv): Failed to open stream: No such file or directory in /home/cvar1984/VRchessIndo/CSVDatabaseManager.php on line 79
+[03-Aug-2026 14:01:07 UTC] PHP Fatal error:  Uncaught TypeError: fputcsv(): Argument #1 ($stream) must be of type resource, false given in /home/cvar1984/VRchessIndo/CSVDatabaseManager.php:80
+Stack trace:
+#0 /home/cvar1984/VRchessIndo/CSVDatabaseManager.php(80): fputcsv()
+#1 /home/cvar1984/VRchessIndo/MatchManager.php(53): CSVDatabaseManager->savePlayers()
+#2 /home/cvar1984/VRchessIndo/MatchManager.php(71): MatchManager->getOrCreatePlayer()
+#3 /home/cvar1984/VRchessIndo/main.php(22): MatchManager->play()
+#4 {main}
+  thrown in /home/cvar1984/VRchessIndo/CSVDatabaseManager.php on line 80
+[03-Aug-2026 14:01:41 UTC] PHP Warning:  Failed loading Zend extension 'opcache' (tried: /usr/lib64/php/modules/opcache (/usr/lib64/php/modules/opcache: cannot open shared object file: No such file or directory), /usr/lib64/php/modules/opcache.so (/usr/lib64/php/modules/opcache.so: cannot open shared object file: No such file or directory)) in Unknown on line 0

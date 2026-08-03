@@ -12,7 +12,7 @@ class CSVDatabaseManager implements DatabaseManager
     private int $nextMatchId = 1;
     private bool $connected = false;
 
-    public function __construct(string $playerFile = 'data/player.csv', string $matchFile = 'data/match.csv')
+    public function __construct(string $playerFile = 'player.csv', string $matchFile = 'match.csv')
     {
         $this->playerFile = $playerFile;
         $this->matchFile = $matchFile;
@@ -38,84 +38,109 @@ class CSVDatabaseManager implements DatabaseManager
         $maxId = 0;
         
         if (file_exists($this->playerFile) && ($handle = fopen($this->playerFile, 'r')) !== false) {
-            $header = fgetcsv($handle); // Skip header
+            $header = fgetcsv($handle);
             while (($data = fgetcsv($handle)) !== false) {
                 if (count($data) >= 7) {
                     $id = (int)$data[0];
-                    $this->players[$data[1]] = [
-                        'id' => $id,
-                        'username' => $data[1],
-                        'rating' => (int)$data[2],
-                        'games' => (int)$data[3],
-                        'wins' => (int)$data[4],
-                        'draws' => (int)$data[5],
-                        'losses' => (int)$data[6]
-                    ];
-                    if ($id > $maxId) {
-                        $maxId = $id;
+                    $username = trim($data[1]);
+                    if (!empty($username) && $id > 0) {
+                        $this->players[$username] = [
+                            'id' => $id,
+                            'username' => $username,
+                            'rating' => (int)$data[2],
+                            'games' => (int)$data[3],
+                            'wins' => (int)$data[4],
+                            'draws' => (int)$data[5],
+                            'losses' => (int)$data[6]
+                        ];
+                        if ($id > $maxId) $maxId = $id;
                     }
                 }
             }
             fclose($handle);
         }
-        
-        $this->nextPlayerId = $maxId + 1;
+        $this->nextPlayerId = max($maxId + 1, 1);
         return $this->players;
     }
 
     public function savePlayers(array $players): void
     {
+        $uniquePlayers = [];
+        $maxId = 0;
+        foreach ($players as $player) {
+            $username = trim($player['username']);
+            if (!empty($username) && isset($player['id']) && $player['id'] > 0) {
+                $uniquePlayers[$username] = $player;
+                if ($player['id'] > $maxId) $maxId = $player['id'];
+            }
+        }
+        uasort($uniquePlayers, fn($a, $b) => $a['id'] - $b['id']);
+        
         $handle = fopen($this->playerFile, 'w');
         fputcsv($handle, ['id', 'username', 'rating', 'games', 'wins', 'draws', 'losses']);
-        
-        foreach ($players as $player) {
+        foreach ($uniquePlayers as $player) {
             fputcsv($handle, [
-                $player['id'],
-                $player['username'],
-                $player['rating'],
-                $player['games'],
-                $player['wins'],
-                $player['draws'],
-                $player['losses']
+                $player['id'], $player['username'], $player['rating'],
+                $player['games'], $player['wins'], $player['draws'], $player['losses']
             ]);
         }
         fclose($handle);
-        
-        $this->players = $players;
+        $this->players = $uniquePlayers;
+        $this->nextPlayerId = max($maxId + 1, 1);
     }
 
     public function loadMatches(): array
     {
         $this->matches = [];
         $maxId = 0;
-        
         if (file_exists($this->matchFile) && ($handle = fopen($this->matchFile, 'r')) !== false) {
-            $header = fgetcsv($handle); // Skip header
+            $header = fgetcsv($handle);
             while (($data = fgetcsv($handle)) !== false) {
                 if (count($data) >= 6) {
                     $id = (int)$data[0];
-                    $this->matches[] = [
-                        'id' => $id,
-                        'date' => $data[1],
-                        'white_id' => (int)$data[2],
-                        'black_id' => (int)$data[3],
-                        'result' => $data[4],
-                        'analysis_url' => $data[5] ?? ''
-                    ];
-                    if ($id > $maxId) {
-                        $maxId = $id;
+                    $whiteId = (int)$data[2];
+                    $blackId = (int)$data[3];
+                    if ($whiteId !== $blackId && $whiteId > 0 && $blackId > 0) {
+                        $this->matches[] = [
+                            'id' => $id,
+                            'date' => $data[1],
+                            'white_id' => $whiteId,
+                            'black_id' => $blackId,
+                            'result' => $data[4],
+                            'analysis_url' => $data[5] ?? ''
+                        ];
+                        if ($id > $maxId) $maxId = $id;
                     }
                 }
             }
             fclose($handle);
         }
-        
-        $this->nextMatchId = $maxId + 1;
+        $this->nextMatchId = max($maxId + 1, 1);
         return $this->matches;
     }
 
+    /**
+     * Save a match using the ID provided in the $match array.
+     * Does NOT recalculate the ID – uses the one passed.
+     */
     public function saveMatch(array $match): void
     {
+        if ($match['white_id'] === $match['black_id']) {
+            throw new Exception("Cannot save match: White and Black players must be different");
+        }
+        if (!isset($match['id']) || $match['id'] <= 0) {
+            throw new Exception("Match ID must be provided and > 0");
+        }
+
+        // Load existing matches to check for ID conflicts
+        $this->loadMatches();
+        foreach ($this->matches as $existing) {
+            if ($existing['id'] == $match['id']) {
+                throw new Exception("Match ID {$match['id']} already exists");
+            }
+        }
+
+        // Append to file
         $handle = fopen($this->matchFile, 'a');
         fputcsv($handle, [
             $match['id'],
@@ -126,37 +151,39 @@ class CSVDatabaseManager implements DatabaseManager
             $match['analysis_url'] ?? ''
         ]);
         fclose($handle);
-        
+
+        // Update internal cache
         $this->matches[] = $match;
+        // Ensure nextMatchId is beyond this ID
         $this->nextMatchId = max($this->nextMatchId, $match['id'] + 1);
     }
 
     public function getNextPlayerId(): int
     {
+        $this->loadPlayers();
         return $this->nextPlayerId;
     }
 
     public function getNextMatchId(): int
     {
+        $this->loadMatches();
         return $this->nextMatchId;
     }
 
     public function playerExists(string $username): bool
     {
-        return isset($this->players[$username]);
+        return isset($this->players[trim($username)]);
     }
 
     public function getPlayerByUsername(string $username): ?array
     {
-        return $this->players[$username] ?? null;
+        return $this->players[trim($username)] ?? null;
     }
 
     public function getPlayerById(int $id): ?array
     {
         foreach ($this->players as $player) {
-            if ($player['id'] === $id) {
-                return $player;
-            }
+            if ($player['id'] === $id) return $player;
         }
         return null;
     }
@@ -164,5 +191,33 @@ class CSVDatabaseManager implements DatabaseManager
     public function isConnected(): bool
     {
         return $this->connected;
+    }
+
+    public function clearData(): void
+    {
+        if (file_exists($this->playerFile)) unlink($this->playerFile);
+        if (file_exists($this->matchFile)) unlink($this->matchFile);
+        $this->players = [];
+        $this->matches = [];
+        $this->nextPlayerId = 1;
+        $this->nextMatchId = 1;
+    }
+
+    public function debug(): void
+    {
+        echo "\n🔍 Database Debug Info:\n";
+        echo str_repeat('-', 40) . "\n";
+        echo "Next Player ID: " . $this->nextPlayerId . "\n";
+        echo "Next Match ID: " . $this->nextMatchId . "\n";
+        echo "Players loaded: " . count($this->players) . "\n";
+        echo "Matches loaded: " . count($this->matches) . "\n\nPlayers:\n";
+        foreach ($this->players as $p) {
+            echo "  ID: {$p['id']}, {$p['username']}, Rating: {$p['rating']}\n";
+        }
+        echo "\nMatches:\n";
+        foreach ($this->matches as $m) {
+            echo "  ID: {$m['id']}, White: {$m['white_id']}, Black: {$m['black_id']}, Result: {$m['result']}\n";
+        }
+        echo str_repeat('-', 40) . "\n";
     }
 }
