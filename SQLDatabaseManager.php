@@ -9,7 +9,6 @@ class SQLDatabaseManager implements DatabaseManager
     private string $database;
     private string $username;
     private string $password;
-    private bool $connected = false;
     private int $nextPlayerId = 1;
     private int $nextMatchId = 1;
 
@@ -19,10 +18,6 @@ class SQLDatabaseManager implements DatabaseManager
         $this->database = $database;
         $this->username = $username;
         $this->password = $password;
-    }
-
-    public function connect(): void
-    {
         try {
             $this->connection = new PDO(
                 "mysql:host={$this->host};dbname={$this->database}",
@@ -30,11 +25,9 @@ class SQLDatabaseManager implements DatabaseManager
                 $this->password
             );
             $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $this->connected = true;
-            
             // Initialize tables if they don't exist
             $this->initializeTables();
-            
+
             // Load data to get next IDs
             $this->loadPlayers();
             $this->loadMatches();
@@ -42,7 +35,10 @@ class SQLDatabaseManager implements DatabaseManager
             throw new Exception("Database connection failed: " . $e->getMessage());
         }
     }
-
+    public function __destruct()
+    {
+        $this->connection = null;
+    }
     private function initializeTables(): void
     {
         $queries = [
@@ -71,26 +67,19 @@ class SQLDatabaseManager implements DatabaseManager
             $this->connection->exec($query);
         }
     }
-
-    public function disconnect(): void
-    {
-        $this->connection = null;
-        $this->connected = false;
-    }
-
     public function loadPlayers(): array
     {
         $stmt = $this->connection->query("SELECT * FROM players");
         $players = [];
         $maxId = 0;
-        
+
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $players[$row['username']] = $row;
             if ($row['id'] > $maxId) {
                 $maxId = $row['id'];
             }
         }
-        
+
         $this->nextPlayerId = $maxId + 1;
         return $players;
     }
@@ -115,14 +104,14 @@ class SQLDatabaseManager implements DatabaseManager
         $stmt = $this->connection->query("SELECT * FROM matches ORDER BY id");
         $matches = [];
         $maxId = 0;
-        
+
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $matches[] = $row;
             if ($row['id'] > $maxId) {
                 $maxId = $row['id'];
             }
         }
-        
+
         $this->nextMatchId = $maxId + 1;
         return $matches;
     }
@@ -145,7 +134,6 @@ class SQLDatabaseManager implements DatabaseManager
     {
         return $this->nextMatchId;
     }
-
     public function playerExists(string $username): bool
     {
         $stmt = $this->connection->prepare("SELECT COUNT(*) FROM players WHERE username = :username");

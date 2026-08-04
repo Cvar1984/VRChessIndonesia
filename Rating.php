@@ -2,9 +2,9 @@
 
 class Rating
 {
-    public const WIN = 1;
-    public const DRAW = 0.5;
-    public const LOSS = 0;
+    public const int WIN = 1;
+    public const float DRAW = 0.5;
+    public const int LOSS = 0;
 
     /**
      * Expected score (0.0 - 1.0)

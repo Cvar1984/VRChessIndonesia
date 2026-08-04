@@ -10,50 +10,40 @@ class CSVDatabaseManager implements DatabaseManager
     private array $matches = [];
     private int $nextPlayerId = 1;
     private int $nextMatchId = 1;
-    private bool $connected = false;
 
     public function __construct(string $playerFile = 'player.csv', string $matchFile = 'match.csv')
     {
         $this->playerFile = $playerFile;
         $this->matchFile = $matchFile;
     }
-
-    public function connect(): void
+    public function __destruct()
     {
-        $this->connected = true;
-        $this->loadPlayers();
-        $this->loadMatches();
-    }
-
-    public function disconnect(): void
-    {
-        $this->connected = false;
         $this->players = [];
         $this->matches = [];
     }
-
     public function loadPlayers(): array
     {
         $this->players = [];
         $maxId = 0;
-        
+
         if (file_exists($this->playerFile) && ($handle = fopen($this->playerFile, 'r')) !== false) {
             $header = fgetcsv($handle);
             while (($data = fgetcsv($handle)) !== false) {
                 if (count($data) >= 7) {
-                    $id = (int)$data[0];
+                    $id = (int) $data[0];
                     $username = trim($data[1]);
                     if (!empty($username) && $id > 0) {
                         $this->players[$username] = [
                             'id' => $id,
                             'username' => $username,
-                            'rating' => (int)$data[2],
-                            'games' => (int)$data[3],
-                            'wins' => (int)$data[4],
-                            'draws' => (int)$data[5],
-                            'losses' => (int)$data[6]
+                            'rating' => (int) $data[2],
+                            'games' => (int) $data[3],
+                            'wins' => (int) $data[4],
+                            'draws' => (int) $data[5],
+                            'losses' => (int) $data[6]
                         ];
-                        if ($id > $maxId) $maxId = $id;
+                        if ($id > $maxId)
+                            $maxId = $id;
                     }
                 }
             }
@@ -71,17 +61,23 @@ class CSVDatabaseManager implements DatabaseManager
             $username = trim($player['username']);
             if (!empty($username) && isset($player['id']) && $player['id'] > 0) {
                 $uniquePlayers[$username] = $player;
-                if ($player['id'] > $maxId) $maxId = $player['id'];
+                if ($player['id'] > $maxId)
+                    $maxId = $player['id'];
             }
         }
         uasort($uniquePlayers, fn($a, $b) => $a['id'] - $b['id']);
-        
+
         $handle = fopen($this->playerFile, 'w');
         fputcsv($handle, ['id', 'username', 'rating', 'games', 'wins', 'draws', 'losses']);
         foreach ($uniquePlayers as $player) {
             fputcsv($handle, [
-                $player['id'], $player['username'], $player['rating'],
-                $player['games'], $player['wins'], $player['draws'], $player['losses']
+                $player['id'],
+                $player['username'],
+                $player['rating'],
+                $player['games'],
+                $player['wins'],
+                $player['draws'],
+                $player['losses']
             ]);
         }
         fclose($handle);
@@ -97,9 +93,9 @@ class CSVDatabaseManager implements DatabaseManager
             $header = fgetcsv($handle);
             while (($data = fgetcsv($handle)) !== false) {
                 if (count($data) >= 6) {
-                    $id = (int)$data[0];
-                    $whiteId = (int)$data[2];
-                    $blackId = (int)$data[3];
+                    $id = (int) $data[0];
+                    $whiteId = (int) $data[2];
+                    $blackId = (int) $data[3];
                     if ($whiteId !== $blackId && $whiteId > 0 && $blackId > 0) {
                         $this->matches[] = [
                             'id' => $id,
@@ -109,7 +105,8 @@ class CSVDatabaseManager implements DatabaseManager
                             'result' => $data[4],
                             'analysis_url' => $data[5] ?? ''
                         ];
-                        if ($id > $maxId) $maxId = $id;
+                        if ($id > $maxId)
+                            $maxId = $id;
                     }
                 }
             }
@@ -183,41 +180,9 @@ class CSVDatabaseManager implements DatabaseManager
     public function getPlayerById(int $id): ?array
     {
         foreach ($this->players as $player) {
-            if ($player['id'] === $id) return $player;
+            if ($player['id'] === $id)
+                return $player;
         }
         return null;
-    }
-
-    public function isConnected(): bool
-    {
-        return $this->connected;
-    }
-
-    public function clearData(): void
-    {
-        if (file_exists($this->playerFile)) unlink($this->playerFile);
-        if (file_exists($this->matchFile)) unlink($this->matchFile);
-        $this->players = [];
-        $this->matches = [];
-        $this->nextPlayerId = 1;
-        $this->nextMatchId = 1;
-    }
-
-    public function debug(): void
-    {
-        echo "\n🔍 Database Debug Info:\n";
-        echo str_repeat('-', 40) . "\n";
-        echo "Next Player ID: " . $this->nextPlayerId . "\n";
-        echo "Next Match ID: " . $this->nextMatchId . "\n";
-        echo "Players loaded: " . count($this->players) . "\n";
-        echo "Matches loaded: " . count($this->matches) . "\n\nPlayers:\n";
-        foreach ($this->players as $p) {
-            echo "  ID: {$p['id']}, {$p['username']}, Rating: {$p['rating']}\n";
-        }
-        echo "\nMatches:\n";
-        foreach ($this->matches as $m) {
-            echo "  ID: {$m['id']}, White: {$m['white_id']}, Black: {$m['black_id']}, Result: {$m['result']}\n";
-        }
-        echo str_repeat('-', 40) . "\n";
     }
 }

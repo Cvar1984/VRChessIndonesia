@@ -6,10 +6,10 @@ require_once 'CSVDatabaseManager.php';
 
 class MatchManager
 {
-    public const WHITE_WIN = '1-0';
-    public const BLACK_WIN = '0-1';
-    public const DRAW = '1/2-1/2';
-    public const INITIAL_RATING = 400;
+    public const string WHITE_WIN = '1-0';
+    public const string BLACK_WIN = '0-1';
+    public const string DRAW = '1/2-1/2';
+    public const int INITIAL_RATING = 400;
 
     private DatabaseManager $db;
     private array $players = [];
@@ -18,27 +18,37 @@ class MatchManager
     public function __construct(DatabaseManager $db)
     {
         $this->db = $db;
-    }
-
-    public function initialize(): void
-    {
-        $this->db->connect();
         $this->players = $this->db->loadPlayers();
         $this->matches = $this->db->loadMatches();
+    }
+    public function getPlayers(): array
+    {
+        $players = array_values($this->players);
+
+        usort($players, function (array $a, array $b): int {
+            return $b['rating'] <=> $a['rating'];
+        });
+
+        return $players;
+    }
+
+    public function getMatches(): array
+    {
+        return array_values($this->matches);
     }
 
     public function getOrCreatePlayer(string $username): array
     {
         $username = trim($username);
-        
+
         $player = $this->db->getPlayerByUsername($username);
-        
+
         if ($player !== null) {
             return $player;
         }
-        
+
         $nextId = $this->db->getNextPlayerId();
-        
+
         $newPlayer = [
             'id' => $nextId,
             'username' => $username,
@@ -48,14 +58,11 @@ class MatchManager
             'draws' => 0,
             'losses' => 0
         ];
-        
+
         $this->players[$username] = $newPlayer;
         $this->db->savePlayers($this->players);
-        
-        echo "📝 New player '{$username}' created with ID: {$nextId}, Rating: " . self::INITIAL_RATING . "\n";
-        
         $this->players = $this->db->loadPlayers();
-        
+
         return $newPlayer;
     }
 
@@ -63,11 +70,11 @@ class MatchManager
     {
         $whiteUsername = trim($whiteUsername);
         $blackUsername = trim($blackUsername);
-        
+
         if ($whiteUsername === $blackUsername) {
             throw new Exception("A player cannot play against themselves!");
         }
-        
+
         $white = $this->getOrCreatePlayer($whiteUsername);
         $black = $this->getOrCreatePlayer($blackUsername);
 
@@ -124,7 +131,7 @@ class MatchManager
             'result' => $result,
             'analysis_url' => $analysisUrl
         ];
-        
+
         $this->db->saveMatch($match);
         $this->matches = $this->db->loadMatches();
 
@@ -149,81 +156,6 @@ class MatchManager
         ];
     }
 
-    public function showRankings(): void
-    {
-        $this->players = $this->db->loadPlayers();
-        
-        if (empty($this->players)) {
-            echo "No players found.\n";
-            return;
-        }
-        
-        $players = array_values($this->players);
-        usort($players, function($a, $b) {
-            if ($b['rating'] !== $a['rating']) {
-                return $b['rating'] - $a['rating'];
-            }
-            return $b['games'] - $a['games'];
-        });
-
-        echo "\n📊 Rankings:\n";
-        echo str_repeat('=', 70) . "\n";
-        echo str_pad("Rank", 6) . "\t";
-        echo str_pad("ID", 4) . "\t";
-        echo str_pad("Username", 15) . "\t";
-        echo str_pad("Rating", 8) . "\t";
-        echo str_pad("Games", 6) . "\t";
-        echo "W/D/L\n";
-        echo str_repeat('-', 70) . "\n";
-        
-        $rank = 1;
-        foreach ($players as $player) {
-            $record = "{$player['wins']}/{$player['draws']}/{$player['losses']}";
-            echo str_pad("#{$rank}", 6) . "\t";
-            echo str_pad($player['id'], 4) . "\t";
-            echo str_pad($player['username'], 15) . "\t";
-            echo str_pad($player['rating'], 8) . "\t";
-            echo str_pad($player['games'], 6) . "\t";
-            echo $record . "\n";
-            $rank++;
-        }
-        echo str_repeat('=', 70) . "\n";
-    }
-
-    public function showHistory(): void
-    {
-        $this->matches = $this->db->loadMatches();
-        $this->players = $this->db->loadPlayers();
-        
-        if (empty($this->matches)) {
-            echo "No matches found.\n";
-            return;
-        }
-        
-        echo "\n📋 Match History:\n";
-        echo str_repeat('=', 95) . "\n";
-        echo str_pad("ID", 4) . "\t";
-        echo str_pad("Date", 20) . "\t";
-        echo str_pad("White (ID)", 12) . "\t";
-        echo str_pad("Black (ID)", 12) . "\t";
-        echo "Result\n";
-        echo str_repeat('-', 95) . "\n";
-        
-        foreach ($this->matches as $match) {
-            $whitePlayer = $this->db->getPlayerById($match['white_id']);
-            $blackPlayer = $this->db->getPlayerById($match['black_id']);
-            
-            if ($whitePlayer && $blackPlayer) {
-                echo str_pad($match['id'], 4) . "\t";
-                echo str_pad($match['date'], 20) . "\t";
-                echo str_pad($whitePlayer['username'] . " ({$whitePlayer['id']})", 12) . "\t";
-                echo str_pad($blackPlayer['username'] . " ({$blackPlayer['id']})", 12) . "\t";
-                echo $match['result'] . "\n";
-            }
-        }
-        echo str_repeat('=', 95) . "\n";
-    }
-
     public function getPlayerCount(): int
     {
         return count($this->players);
@@ -232,17 +164,5 @@ class MatchManager
     public function getMatchCount(): int
     {
         return count($this->matches);
-    }
-
-    public function cleanup(): void
-    {
-        $this->db->disconnect();
-    }
-    
-    public function debug(): void
-    {
-        if (method_exists($this->db, 'debug')) {
-            $this->db->debug();
-        }
     }
 }
