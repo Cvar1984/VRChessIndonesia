@@ -1,7 +1,7 @@
 <?php
 
-require_once 'DatabaseManager.php';
-
+namespace VRchessIndo\Connection;
+use VRchessIndo\Connection\Interface\DatabaseManager;
 class SQLDatabaseManager implements DatabaseManager
 {
     private $connection;
@@ -19,20 +19,20 @@ class SQLDatabaseManager implements DatabaseManager
         $this->username = $username;
         $this->password = $password;
         try {
-            $this->connection = new PDO(
+            $this->connection = new \PDO(
                 "mysql:host={$this->host};dbname={$this->database}",
                 $this->username,
                 $this->password
             );
-            $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->connection->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             // Initialize tables if they don't exist
             $this->initializeTables();
 
             // Load data to get next IDs
             $this->loadPlayers();
             $this->loadMatches();
-        } catch (PDOException $e) {
-            throw new Exception("Database connection failed: " . $e->getMessage());
+        } catch (\PDOException $e) {
+            throw new \Exception("Database connection failed: " . $e->getMessage());
         }
     }
     public function __destruct()
@@ -73,7 +73,7 @@ class SQLDatabaseManager implements DatabaseManager
         $players = [];
         $maxId = 0;
 
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $players[$row['username']] = $row;
             if ($row['id'] > $maxId) {
                 $maxId = $row['id'];
@@ -105,7 +105,7 @@ class SQLDatabaseManager implements DatabaseManager
         $matches = [];
         $maxId = 0;
 
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $matches[] = $row;
             if ($row['id'] > $maxId) {
                 $maxId = $row['id'];
@@ -145,13 +145,13 @@ class SQLDatabaseManager implements DatabaseManager
     {
         $stmt = $this->connection->prepare("SELECT * FROM players WHERE username = :username");
         $stmt->execute(['username' => $username]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 
     public function getPlayerById(int $id): ?array
     {
         $stmt = $this->connection->prepare("SELECT * FROM players WHERE id = :id");
         $stmt->execute(['id' => $id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 }

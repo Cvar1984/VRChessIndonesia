@@ -1,5 +1,6 @@
 <?php
 
+namespace VRchessIndo\Connection\Interface;
 interface DatabaseManager
 {
     public function __construct();

@@ -1,8 +1,8 @@
 <?php
 
-require_once 'Rating.php';
-require_once 'DatabaseManager.php';
-require_once 'CSVDatabaseManager.php';
+namespace VRchessIndo\Logic;
+use VRchessIndo\Connection\Interface\DatabaseManager;
+use VRchessIndo\Logic\Rating;
 
 class MatchManager
 {
@@ -72,14 +72,14 @@ class MatchManager
         $blackUsername = trim($blackUsername);
 
         if ($whiteUsername === $blackUsername) {
-            throw new Exception("A player cannot play against themselves!");
+            throw new \Exception("A player cannot play against themselves!");
         }
 
         $white = $this->getOrCreatePlayer($whiteUsername);
         $black = $this->getOrCreatePlayer($blackUsername);
 
         if ($white['id'] === $black['id']) {
-            throw new Exception("White and Black players must be different!");
+            throw new \Exception("White and Black players must be different!");
         }
 
         $whiteResult = null;
@@ -95,7 +95,7 @@ class MatchManager
             $whiteResult = Rating::DRAW;
             $blackResult = Rating::DRAW;
         } else {
-            throw new Exception("Invalid result. Use WHITE_WIN, BLACK_WIN, or DRAW");
+            throw new \Exception("Invalid result. Use WHITE_WIN, BLACK_WIN, or DRAW");
         }
 
         $whiteCalculation = Rating::calculate($white['rating'], $black['rating'], $whiteResult);

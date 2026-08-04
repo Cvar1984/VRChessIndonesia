@@ -1,5 +1,7 @@
 <?php
 
+namespace VRchessIndo\Logic;
+
 class Rating
 {
     public const int WIN = 1;

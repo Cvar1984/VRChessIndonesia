@@ -1,6 +1,8 @@
 <?php
 
-require_once 'DatabaseManager.php';
+namespace VRchessIndo\Connection;
+
+use VRchessIndo\Connection\Interface\DatabaseManager;
 
 class CSVDatabaseManager implements DatabaseManager
 {
@@ -123,17 +125,17 @@ class CSVDatabaseManager implements DatabaseManager
     public function saveMatch(array $match): void
     {
         if ($match['white_id'] === $match['black_id']) {
-            throw new Exception("Cannot save match: White and Black players must be different");
+            throw new \Exception("Cannot save match: White and Black players must be different");
         }
         if (!isset($match['id']) || $match['id'] <= 0) {
-            throw new Exception("Match ID must be provided and > 0");
+            throw new \Exception("Match ID must be provided and > 0");
         }
 
         // Load existing matches to check for ID conflicts
         $this->loadMatches();
         foreach ($this->matches as $existing) {
             if ($existing['id'] == $match['id']) {
-                throw new Exception("Match ID {$match['id']} already exists");
+                throw new \Exception("Match ID {$match['id']} already exists");
             }
         }
 

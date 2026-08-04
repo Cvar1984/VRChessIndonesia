@@ -1,0 +1,21 @@
+{
+    "name": "cvar1984/chess",
+    "description": "Chess Microservices",
+    "type": "project",
+    "require": {
+        "php": "^8.5"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "VRchessIndo\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Cvar1984",
+            "email": "cvar1984@cvar1984.net"
+        }
+    ],
+    "minimum-stability": "stable"
+}

@@ -1,7 +1,9 @@
 <?php
 
-require_once 'MatchManager.php';
-require_once 'CSVDatabaseManager.php';
+require __DIR__ . '/vendor/autoload.php';
+
+use VRchessIndo\Logic\MatchManager;
+use VRchessIndo\Connection\CSVDatabaseManager;
 
 try {
     // Choose database implementation
@@ -18,6 +20,6 @@ try {
     print_r($manager->getPlayers());
     print_r($manager->getMatches());
     
-} catch (Exception $e) {
+} catch (\Exception $e) {
     echo "Error: " . $e->getMessage() . "\n";
 }

@@ -1,5 +1,6 @@
 <?php
 
+namespace VRchessIndo\Logic;
 class Stockfish
 {
     private $process;
@@ -22,7 +23,7 @@ class Stockfish
         );
 
         if (!is_resource($this->process)) {
-            throw new Exception("Unable to start Stockfish.");
+            throw new \Exception("Unable to start Stockfish.");
         }
 
         stream_set_blocking($this->pipes[1], true);
@@ -176,16 +177,16 @@ function sanitizeFen(string $fen): string
     $fen = trim($fen);
 
     if (strlen($fen) > 128) {
-        throw new Exception("FEN too long.");
+        throw new \Exception("FEN too long.");
     }
 
     if (preg_match('/[\r\n\x00]/', $fen)) {
-        throw new Exception("Invalid characters in FEN.");
+        throw new \Exception("Invalid characters in FEN.");
     }
 
     // Basic FEN character whitelist
     if (!preg_match('/^[prnbqkPRNBQK1-8\/wb\-\sKQkqa-h0-9]+$/', $fen)) {
-        throw new Exception("Invalid FEN.");
+        throw new \Exception("Invalid FEN.");
     }
 
     return $fen;
@@ -242,7 +243,7 @@ try {
 
     jsonResponse($result);
 
-} catch (Throwable $e) {
+} catch (\Throwable $e) {
 
     jsonResponse([
         "error" => $e->getMessage()
