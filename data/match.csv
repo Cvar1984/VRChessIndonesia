@@ -1,7 +1,1 @@
 id,date,white_id,black_id,result,analysis_url
-1,"2026-08-03 14:01:41",1,2,1-0,https://example.com/analysis/123
-2,"2026-08-03 14:01:41",3,4,1/2-1/2,https://example.com/analysis/456
-3,"2026-08-03 14:01:41",5,6,0-1,https://example.com/analysis/789
-4,"2026-08-03 14:01:41",1,7,1-0,https://example.com/analysis/101
-5,"2026-08-03 14:01:41",2,3,1/2-1/2,https://example.com/analysis/202
-6,"2026-08-03 14:01:41",1,3,0-1,https://example.com/analysis/303
