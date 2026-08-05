@@ -1,6 +1,9 @@
 <?php
 
 use VRchessIndo\Logic\Stockfish;
+
+require_once __DIR__ . '/vendor/autoload.php';
+
 function jsonResponse(array $data, int $status = 200)
 {
     http_response_code($status);
