@@ -1,2 +1,8 @@
 /vendor/
 error_log
+*.phar
+composer.phar
+
+data/player.csv
+data/match.csv
+

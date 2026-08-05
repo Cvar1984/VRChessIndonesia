@@ -11,6 +11,9 @@ function jsonResponse(array $data, int $status = 200): never
 {
     http_response_code($status);
     header('Content-Type: application/json');
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
     echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     exit;
 }
