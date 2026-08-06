@@ -17,12 +17,37 @@ class CSVDatabaseManager implements DatabaseManager
     {
         $this->playerFile = $playerFile;
         $this->matchFile = $matchFile;
+        
+        $this->initializeMatchFile();
+        $this->initializePlayerFile();
     }
 
     public function __destruct()
     {
         $this->players = [];
         $this->matches = [];
+    }
+
+    private function initializePlayerFile(): void
+    {
+        if (!file_exists($this->playerFile)) {
+            $handle = fopen($this->playerFile, 'w');
+            fputcsv($handle, ['id', 'username', 'rating', 'games', 'wins', 'draws', 'losses']);
+            fclose($handle);
+        }
+    }
+
+    private function initializeMatchFile(): void
+    {
+        if (!file_exists($this->matchFile)) {
+            $handle = fopen($this->matchFile, 'w');
+            fputcsv($handle, [
+                'id', 'date', 'white_id', 'black_id', 'result', 'analysis_url',
+                'old_white_rating', 'old_black_rating', 'rating_change_white', 'rating_change_black',
+                'is_valid', 'invalidated_at', 'restored_white_rating', 'restored_black_rating'
+            ]);
+            fclose($handle);
+        }
     }
 
     public function loadPlayers(): array
@@ -46,8 +71,7 @@ class CSVDatabaseManager implements DatabaseManager
                             'draws' => (int) $data[5],
                             'losses' => (int) $data[6]
                         ];
-                        if ($id > $maxId)
-                            $maxId = $id;
+                        if ($id > $maxId) $maxId = $id;
                     }
                 }
             }
@@ -66,8 +90,7 @@ class CSVDatabaseManager implements DatabaseManager
             $username = trim($player['username']);
             if (!empty($username) && isset($player['id']) && $player['id'] > 0) {
                 $uniquePlayers[$username] = $player;
-                if ($player['id'] > $maxId)
-                    $maxId = $player['id'];
+                if ($player['id'] > $maxId) $maxId = $player['id'];
             }
         }
 
@@ -99,12 +122,23 @@ class CSVDatabaseManager implements DatabaseManager
 
         if (file_exists($this->matchFile) && ($handle = fopen($this->matchFile, 'r')) !== false) {
             $header = fgetcsv($handle);
+            
+            $isNewFormat = false;
+            if ($header && count($header) >= 14) {
+                $isNewFormat = true;
+            }
+            
             while (($data = fgetcsv($handle)) !== false) {
-                if (count($data) >= 6) {
-                    $id = (int) $data[0];
-                    $whiteId = (int) $data[2];
-                    $blackId = (int) $data[3];
-                    if ($whiteId !== $blackId && $whiteId > 0 && $blackId > 0) {
+                // Skip if not enough data
+                if (count($data) < 6) continue;
+                
+                $id = (int) $data[0];
+                $whiteId = (int) $data[2];
+                $blackId = (int) $data[3];
+                
+                if ($whiteId !== $blackId && $whiteId > 0 && $blackId > 0) {
+                    if ($isNewFormat && count($data) >= 14) {
+                        // New format with all fields
                         $match = [
                             'id' => $id,
                             'date' => $data[1],
@@ -121,14 +155,33 @@ class CSVDatabaseManager implements DatabaseManager
                             'restored_white_rating' => isset($data[12]) ? (int) $data[12] : null,
                             'restored_black_rating' => isset($data[13]) ? (int) $data[13] : null,
                         ];
-                        $this->matches[] = $match;
-                        if ($id > $maxId)
-                            $maxId = $id;
+                    } else {
+                        // Old format - convert to new format with defaults
+                        $match = [
+                            'id' => $id,
+                            'date' => $data[1],
+                            'white_id' => $whiteId,
+                            'black_id' => $blackId,
+                            'result' => $data[4],
+                            'analysis_url' => $data[5] ?? '',
+                            'old_white_rating' => 0,
+                            'old_black_rating' => 0,
+                            'rating_change_white' => 0,
+                            'rating_change_black' => 0,
+                            'is_valid' => true,
+                            'invalidated_at' => null,
+                            'restored_white_rating' => null,
+                            'restored_black_rating' => null,
+                        ];
                     }
+                    
+                    $this->matches[] = $match;
+                    if ($id > $maxId) $maxId = $id;
                 }
             }
             fclose($handle);
         }
+        
         $this->nextMatchId = max($maxId + 1, 1);
         return $this->matches;
     }
@@ -143,8 +196,12 @@ class CSVDatabaseManager implements DatabaseManager
             throw new \Exception("Match ID must be provided and > 0");
         }
 
-        // Check for duplicate ID
-        foreach ($this->matches as $existing) {
+        // Ensure file exists with header
+        $this->initializeMatchFile();
+
+        // Check for duplicate ID by reading the file
+        $existingMatches = $this->loadMatches();
+        foreach ($existingMatches as $existing) {
             if ($existing['id'] == $match['id']) {
                 throw new \Exception("Match ID {$match['id']} already exists");
             }
@@ -222,8 +279,7 @@ class CSVDatabaseManager implements DatabaseManager
         // Update nextMatchId
         $maxId = 0;
         foreach ($matches as $match) {
-            if ($match['id'] > $maxId)
-                $maxId = $match['id'];
+            if ($match['id'] > $maxId) $maxId = $match['id'];
         }
         $this->nextMatchId = max($maxId + 1, 1);
     }
@@ -251,8 +307,7 @@ class CSVDatabaseManager implements DatabaseManager
     public function getPlayerById(int $id): ?array
     {
         foreach ($this->players as $player) {
-            if ($player['id'] === $id)
-                return $player;
+            if ($player['id'] === $id) return $player;
         }
         return null;
     }
