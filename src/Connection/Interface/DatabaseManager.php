@@ -9,6 +9,7 @@ interface DatabaseManager
     public function savePlayers(array $players): void;
     public function loadMatches(): array;
     public function saveMatch(array $match): void;
+    public function saveMatches(array $matches): void;
     public function getNextPlayerId(): int;
     public function getNextMatchId(): int;
     public function playerExists(string $username): bool;

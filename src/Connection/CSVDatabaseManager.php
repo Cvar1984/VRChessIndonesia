@@ -18,11 +18,13 @@ class CSVDatabaseManager implements DatabaseManager
         $this->playerFile = $playerFile;
         $this->matchFile = $matchFile;
     }
+
     public function __destruct()
     {
         $this->players = [];
         $this->matches = [];
     }
+
     public function loadPlayers(): array
     {
         $this->players = [];
@@ -59,6 +61,7 @@ class CSVDatabaseManager implements DatabaseManager
     {
         $uniquePlayers = [];
         $maxId = 0;
+
         foreach ($players as $player) {
             $username = trim($player['username']);
             if (!empty($username) && isset($player['id']) && $player['id'] > 0) {
@@ -67,6 +70,7 @@ class CSVDatabaseManager implements DatabaseManager
                     $maxId = $player['id'];
             }
         }
+
         uasort($uniquePlayers, fn($a, $b) => $a['id'] - $b['id']);
 
         $handle = fopen($this->playerFile, 'w');
@@ -83,6 +87,7 @@ class CSVDatabaseManager implements DatabaseManager
             ]);
         }
         fclose($handle);
+
         $this->players = $uniquePlayers;
         $this->nextPlayerId = max($maxId + 1, 1);
     }
@@ -91,6 +96,7 @@ class CSVDatabaseManager implements DatabaseManager
     {
         $this->matches = [];
         $maxId = 0;
+
         if (file_exists($this->matchFile) && ($handle = fopen($this->matchFile, 'r')) !== false) {
             $header = fgetcsv($handle);
             while (($data = fgetcsv($handle)) !== false) {
@@ -99,14 +105,23 @@ class CSVDatabaseManager implements DatabaseManager
                     $whiteId = (int) $data[2];
                     $blackId = (int) $data[3];
                     if ($whiteId !== $blackId && $whiteId > 0 && $blackId > 0) {
-                        $this->matches[] = [
+                        $match = [
                             'id' => $id,
                             'date' => $data[1],
                             'white_id' => $whiteId,
                             'black_id' => $blackId,
                             'result' => $data[4],
-                            'analysis_url' => $data[5] ?? ''
+                            'analysis_url' => $data[5] ?? '',
+                            'old_white_rating' => isset($data[6]) ? (int) $data[6] : 0,
+                            'old_black_rating' => isset($data[7]) ? (int) $data[7] : 0,
+                            'rating_change_white' => isset($data[8]) ? (int) $data[8] : 0,
+                            'rating_change_black' => isset($data[9]) ? (int) $data[9] : 0,
+                            'is_valid' => isset($data[10]) ? filter_var($data[10], FILTER_VALIDATE_BOOLEAN) : true,
+                            'invalidated_at' => $data[11] ?? null,
+                            'restored_white_rating' => isset($data[12]) ? (int) $data[12] : null,
+                            'restored_black_rating' => isset($data[13]) ? (int) $data[13] : null,
                         ];
+                        $this->matches[] = $match;
                         if ($id > $maxId)
                             $maxId = $id;
                     }
@@ -118,28 +133,24 @@ class CSVDatabaseManager implements DatabaseManager
         return $this->matches;
     }
 
-    /**
-     * Save a match using the ID provided in the $match array.
-     * Does NOT recalculate the ID – uses the one passed.
-     */
     public function saveMatch(array $match): void
     {
         if ($match['white_id'] === $match['black_id']) {
             throw new \Exception("Cannot save match: White and Black players must be different");
         }
+
         if (!isset($match['id']) || $match['id'] <= 0) {
             throw new \Exception("Match ID must be provided and > 0");
         }
 
-        // Load existing matches to check for ID conflicts
-        $this->loadMatches();
+        // Check for duplicate ID
         foreach ($this->matches as $existing) {
             if ($existing['id'] == $match['id']) {
                 throw new \Exception("Match ID {$match['id']} already exists");
             }
         }
 
-        // Append to file
+        // Append to file with all fields
         $handle = fopen($this->matchFile, 'a');
         fputcsv($handle, [
             $match['id'],
@@ -147,25 +158,83 @@ class CSVDatabaseManager implements DatabaseManager
             $match['white_id'],
             $match['black_id'],
             $match['result'],
-            $match['analysis_url'] ?? ''
+            $match['analysis_url'] ?? '',
+            $match['old_white_rating'] ?? 0,
+            $match['old_black_rating'] ?? 0,
+            $match['rating_change_white'] ?? 0,
+            $match['rating_change_black'] ?? 0,
+            isset($match['is_valid']) ? ($match['is_valid'] ? 'true' : 'false') : 'true',
+            $match['invalidated_at'] ?? null,
+            $match['restored_white_rating'] ?? null,
+            $match['restored_black_rating'] ?? null,
         ]);
         fclose($handle);
 
-        // Update internal cache
         $this->matches[] = $match;
-        // Ensure nextMatchId is beyond this ID
         $this->nextMatchId = max($this->nextMatchId, $match['id'] + 1);
+    }
+
+    public function saveMatches(array $matches): void
+    {
+        // Sort by ID
+        uasort($matches, fn($a, $b) => $a['id'] - $b['id']);
+
+        $handle = fopen($this->matchFile, 'w');
+        fputcsv($handle, [
+            'id',
+            'date',
+            'white_id',
+            'black_id',
+            'result',
+            'analysis_url',
+            'old_white_rating',
+            'old_black_rating',
+            'rating_change_white',
+            'rating_change_black',
+            'is_valid',
+            'invalidated_at',
+            'restored_white_rating',
+            'restored_black_rating'
+        ]);
+
+        foreach ($matches as $match) {
+            fputcsv($handle, [
+                $match['id'],
+                $match['date'] ?? date('Y-m-d H:i:s'),
+                $match['white_id'],
+                $match['black_id'],
+                $match['result'],
+                $match['analysis_url'] ?? '',
+                $match['old_white_rating'] ?? 0,
+                $match['old_black_rating'] ?? 0,
+                $match['rating_change_white'] ?? 0,
+                $match['rating_change_black'] ?? 0,
+                isset($match['is_valid']) ? ($match['is_valid'] ? 'true' : 'false') : 'true',
+                $match['invalidated_at'] ?? null,
+                $match['restored_white_rating'] ?? null,
+                $match['restored_black_rating'] ?? null,
+            ]);
+        }
+        fclose($handle);
+
+        $this->matches = $matches;
+
+        // Update nextMatchId
+        $maxId = 0;
+        foreach ($matches as $match) {
+            if ($match['id'] > $maxId)
+                $maxId = $match['id'];
+        }
+        $this->nextMatchId = max($maxId + 1, 1);
     }
 
     public function getNextPlayerId(): int
     {
-        $this->loadPlayers();
         return $this->nextPlayerId;
     }
 
     public function getNextMatchId(): int
     {
-        $this->loadMatches();
         return $this->nextMatchId;
     }
 
