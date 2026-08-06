@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>♟️ Chess Rating System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 3em;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        header h1 span {
+            color: #f0c040;
+            font-weight: 700;
+        }
+
+        header p {
+            color: #8892b0;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+
+        .api-url {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #64ffda;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card h2 {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #f0c040;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2 .badge {
+            font-size: 0.6em;
+            background: rgba(240, 192, 64, 0.2);
+            padding: 2px 10px;
+            border-radius: 20px;
+            color: #f0c040;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85em;
+            color: #8892b0;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #f0c040;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .form-group select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #f0c040;
+            color: #1a1a2e;
+        }
+
+        .btn-primary:hover {
+            background: #ffd700;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(240, 192, 64, 0.3);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #2ecc71;
+            color: #1a1a2e;
+        }
+
+        .btn-success:hover {
+            background: #27ae60;
+            transform: translateY(-2px);
+        }
+
+        .btn-info {
+            background: #3498db;
+            color: #fff;
+        }
+
+        .btn-info:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: #1a1a2e;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .response-area {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow: auto;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .response-area pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            color: #64ffda;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+        }
+
+        .response-area .empty {
+            color: #8892b0;
+            font-style: italic;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+
+        .status-error {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
+        .status-pending {
+            background: rgba(241, 196, 15, 0.2);
+            color: #f1c40f;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #f0c040;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            background: transparent;
+            border: none;
+            color: #8892b0;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        .tab.active {
+            background: rgba(240, 192, 64, 0.15);
+            color: #f0c040;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-item .number {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #f0c040;
+        }
+
+        .stat-item .label {
+            font-size: 0.75em;
+            color: #8892b0;
+            margin-top: 2px;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 2em;
+            }
+
+            .container {
+                padding: 10px;
+            }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(240, 192, 64, 0.3);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(240, 192, 64, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>♟️ Chess <span>Rating</span> System</h1>
+            <p>Test all API endpoints with this interactive dashboard</p>
+            <div class="api-url">📡 API Base URL: <span id="apiBaseUrl">/index.php</span></div>
+        </header>
+
+        <div class="grid">
+            <!-- Play Match Card -->
+            <div class="card">
+                <h2>🎯 Play Match <span class="badge">POST</span></h2>
+                <div class="form-group">
+                    <label>White Player</label>
+                    <input type="text" id="playWhite" placeholder="e.g., Alice" value="Alice">
+                </div>
+                <div class="form-group">
+                    <label>Black Player</label>
+                    <input type="text" id="playBlack" placeholder="e.g., Bob" value="Bob">
+                </div>
+                <div class="form-group">
+                    <label>Result</label>
+                    <select id="playResult">
+                        <option value="1">1 - White Wins</option>
+                        <option value="0">0 - Draw</option>
+                        <option value="-1">-1 - Black Wins</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Analysis URL (optional)</label>
+                    <input type="text" id="playUrl" placeholder="https://chess.com/analysis/..." value="https://example.com/analysis/123">
+                </div>
+                <button class="btn btn-primary" onclick="playMatch()">▶ Play Match</button>
+                <div id="playResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
+            </div>
+
+            <!-- Get Data Card -->
+            <div class="card">
+                <h2>📊 Get Data <span class="badge">GET</span></h2>
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('players')">Players</button>
+                    <button class="tab" onclick="switchTab('matches')">Matches</button>
+                    <button class="tab" onclick="switchTab('valid')">Valid</button>
+                    <button class="tab" onclick="switchTab('invalid')">Invalid</button>
+                    <button class="tab" onclick="switchTab('rankings')">Rankings</button>
+                </div>
+                <div id="tab-players" class="tab-content active">
+                    <button class="btn btn-info" onclick="fetchData('players')">📋 Get Players</button>
+                    <div id="playersResponse" class="response-area"><span class="empty">Click to load players...</span></div>
+                </div>
+                <div id="tab-matches" class="tab-content">
+                    <button class="btn btn-info" onclick="fetchData('matches')">📋 Get Matches</button>
+                    <div id="matchesResponse" class="response-area"><span class="empty">Click to load matches...</span></div>
+                </div>
+                <div id="tab-valid" class="tab-content">
+                    <button class="btn btn-success" onclick="fetchData('valid-matches')">✅ Get Valid Matches</button>
+                    <div id="validResponse" class="response-area"><span class="empty">Click to load valid matches...</span></div>
+                </div>
+                <div id="tab-invalid" class="tab-content">
+                    <button class="btn btn-warning" onclick="fetchData('invalid-matches')">❌ Get Invalid Matches</button>
+                    <div id="invalidResponse" class="response-area"><span class="empty">Click to load invalid matches...</span></div>
+                </div>
+                <div id="tab-rankings" class="tab-content">
+                    <button class="btn btn-primary" onclick="fetchData('rankings')">🏆 Get Rankings</button>
+                    <div id="rankingsResponse" class="response-area"><span class="empty">Click to load rankings...</span></div>
+                </div>
+            </div>
+
+            <!-- Invalidate/Revalidate Card -->
+            <div class="card">
+                <h2>🔄 Invalidate / Revalidate <span class="badge">PUT</span></h2>
+                <div class="form-group">
+                    <label>Match ID</label>
+                    <input type="number" id="matchId" placeholder="e.g., 1" value="1">
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-warning" onclick="invalidateMatch()">🚫 Invalidate</button>
+                    <button class="btn btn-success" onclick="revalidateMatch()">✅ Revalidate</button>
+                </div>
+                <div id="invalidateResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
+            </div>
+
+            <!-- Delete Card -->
+            <div class="card">
+                <h2>🗑️ Delete <span class="badge">DELETE</span></h2>
+                <div class="form-group">
+                    <label>Match ID to Delete</label>
+                    <input type="number" id="deleteMatchId" placeholder="e.g., 1" value="1">
+                </div>
+                <button class="btn btn-danger" onclick="deleteMatch()">🗑️ Delete Match</button>
+                <div style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label>Player to Delete</label>
+                        <input type="text" id="deletePlayer" placeholder="e.g., Alice" value="Alice">
+                    </div>
+                    <button class="btn btn-danger" onclick="deletePlayer()">🗑️ Delete Player</button>
+                </div>
+                <div id="deleteResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
+            </div>
+
+            <!-- Player Stats Card -->
+            <div class="card">
+                <h2>📈 Player Stats <span class="badge">GET</span></h2>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="statsUsername" placeholder="e.g., Alice" value="Alice">
+                </div>
+                <button class="btn btn-info" onclick="getPlayerStats()">📊 Get Stats</button>
+                <div id="statsResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
+            </div>
+
+            <!-- Edit Card -->
+            <div class="card">
+                <h2>✏️ Edit <span class="badge">PATCH</span></h2>
+                <div class="form-group">
+                    <label>Match ID</label>
+                    <input type="number" id="editMatchId" placeholder="e.g., 1" value="1">
+                </div>
+                <div class="form-group">
+                    <label>New Result</label>
+                    <select id="editResult">
+                        <option value="1-0">1-0 (White Wins)</option>
+                        <option value="0-1">0-1 (Black Wins)</option>
+                        <option value="1/2-1/2">1/2-1/2 (Draw)</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="editMatch()">✏️ Edit Match</button>
+                <div style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label>Player Username</label>
+                        <input type="text" id="editPlayer" placeholder="e.g., Alice" value="Alice">
+                    </div>
+                    <div class="form-group">
+                        <label>New Rating</label>
+                        <input type="number" id="editRating" placeholder="e.g., 1500" value="1500">
+                    </div>
+                    <button class="btn btn-primary" onclick="editPlayer()">✏️ Edit Player</button>
+                </div>
+                <div id="editResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.pathname.replace(/\/[^/]*$/, '/') + 'index.php';
+
+        // Update API URL display
+        document.getElementById('apiBaseUrl').textContent = API_BASE;
+
+        // Tab switching
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Find and activate clicked tab
+            const buttons = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.tab-content');
+
+            const tabMap = {
+                'players': 0,
+                'matches': 1,
+                'valid': 2,
+                'invalid': 3,
+                'rankings': 4
+            };
+
+            const index = tabMap[tab];
+            if (index !== undefined) {
+                buttons[index].classList.add('active');
+                contents[index].classList.add('active');
+            }
+        }
+
+        // Helper function to make API requests
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE}?${endpoint}`;
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+            return await response.json();
+        }
+
+        // Display response in a container
+        function displayResponse(containerId, data, isError = false) {
+            const container = document.getElementById(containerId);
+            if (data === null || data === undefined) {
+                container.innerHTML = `<span class="empty">No data available</span>`;
+                return;
+            }
+
+            const json = JSON.stringify(data, null, 2);
+            const status = isError ? 'status-error' : 'status-success';
+            const statusText = isError ? '❌ Error' : '✅ Success';
+
+            container.innerHTML = `
+                <div style="margin-bottom: 8px;">
+                    <span class="status-badge ${status}">${statusText}</span>
+                </div>
+                <pre>${json}</pre>
+            `;
+        }
+
+        // Display loading state
+        function displayLoading(containerId) {
+            document.getElementById(containerId).innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; color: #8892b0;">
+                    <span class="loading"></span>
+                    Loading...
+                </div>
+            `;
+        }
+
+        // 1. Play Match
+        async function playMatch() {
+            const white = document.getElementById('playWhite').value.trim();
+            const black = document.getElementById('playBlack').value.trim();
+            const result = document.getElementById('playResult').value;
+            const url = document.getElementById('playUrl').value.trim();
+
+            if (!white || !black) {
+                displayResponse('playResponse', { error: 'Please enter both player names' }, true);
+                return;
+            }
+
+            displayLoading('playResponse');
+
+            try {
+                const endpoint = `play&white=${encodeURIComponent(white)}&black=${encodeURIComponent(black)}&result=${result}&url=${encodeURIComponent(url)}`;
+                const data = await apiRequest(endpoint);
+                displayResponse('playResponse', data);
+            } catch (error) {
+                displayResponse('playResponse', { error: error.message }, true);
+            }
+        }
+
+        // 2. Fetch Data
+        async function fetchData(type) {
+            const containerMap = {
+                'players': 'playersResponse',
+                'matches': 'matchesResponse',
+                'valid-matches': 'validResponse',
+                'invalid-matches': 'invalidResponse',
+                'rankings': 'rankingsResponse'
+            };
+
+            const containerId = containerMap[type];
+            if (!containerId) return;
+
+            displayLoading(containerId);
+
+            try {
+                const data = await apiRequest(type);
+                displayResponse(containerId, data);
+            } catch (error) {
+                displayResponse(containerId, { error: error.message }, true);
+            }
+        }
+
+        // 3. Invalidate Match
+        async function invalidateMatch() {
+            const matchId = document.getElementById('matchId').value;
+            displayLoading('invalidateResponse');
+
+            try {
+                const response = await fetch(`${API_BASE}?invalidate&match=${matchId}`, {
+                    method: 'PUT'
+                });
+                const data = await response.json();
+                displayResponse('invalidateResponse', data);
+            } catch (error) {
+                displayResponse('invalidateResponse', { error: error.message }, true);
+            }
+        }
+
+        // 4. Revalidate Match
+        async function revalidateMatch() {
+            const matchId = document.getElementById('matchId').value;
+            displayLoading('invalidateResponse');
+
+            try {
+                const response = await fetch(`${API_BASE}?revalidate&match=${matchId}`, {
+                    method: 'PUT'
+                });
+                const data = await response.json();
+                displayResponse('invalidateResponse', data);
+            } catch (error) {
+                displayResponse('invalidateResponse', { error: error.message }, true);
+            }
+        }
+
+        // 5. Delete Match
+        async function deleteMatch() {
+            const matchId = document.getElementById('deleteMatchId').value;
+            displayLoading('deleteResponse');
+
+            try {
+                const response = await fetch(`${API_BASE}?match=${matchId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                displayResponse('deleteResponse', data);
+            } catch (error) {
+                displayResponse('deleteResponse', { error: error.message }, true);
+            }
+        }
+
+        // 6. Delete Player
+        async function deletePlayer() {
+            const player = document.getElementById('deletePlayer').value.trim();
+            if (!player) {
+                displayResponse('deleteResponse', { error: 'Please enter a player name' }, true);
+                return;
+            }
+
+            displayLoading('deleteResponse');
+
+            try {
+                const response = await fetch(`${API_BASE}?player=${encodeURIComponent(player)}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                displayResponse('deleteResponse', data);
+            } catch (error) {
+                displayResponse('deleteResponse', { error: error.message }, true);
+            }
+        }
+
+        // 7. Get Player Stats
+        async function getPlayerStats() {
+            const username = document.getElementById('statsUsername').value.trim();
+            if (!username) {
+                displayResponse('statsResponse', { error: 'Please enter a username' }, true);
+                return;
+            }
+
+            displayLoading('statsResponse');
+
+            try {
+                const data = await apiRequest(`player-stats&username=${encodeURIComponent(username)}`);
+                displayResponse('statsResponse', data);
+            } catch (error) {
+                displayResponse('statsResponse', { error: error.message }, true);
+            }
+        }
+
+        // 8. Edit Match
+        async function editMatch() {
+            const matchId = document.getElementById('editMatchId').value;
+            const result = document.getElementById('editResult').value;
+            displayLoading('editResponse');
+
+            try {
+                const response = await fetch(`${API_BASE}?match=${matchId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ result })
+                });
+                const data = await response.json();
+                displayResponse('editResponse', data);
+            } catch (error) {
+                displayResponse('editResponse', { error: error.message }, true);
+            }
+        }
+
+        // 9. Edit Player
+        async function editPlayer() {
+            const username = document.getElementById('editPlayer').value.trim();
+            const rating = document.getElementById('editRating').value;
+
+            if (!username) {
+                displayResponse('editResponse', { error: 'Please enter a username' }, true);
+                return;
+            }
+
+            displayLoading('editResponse');
+
+            try {
+                const response = await fetch(`${API_BASE}?player=${encodeURIComponent(username)}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ rating: parseInt(rating) })
+                });
+                const data = await response.json();
+                displayResponse('editResponse', data);
+            } catch (error) {
+                displayResponse('editResponse', { error: error.message }, true);
+            }
+        }
+
+        // Add enter key support for inputs
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const target = e.target;
+                if (target.id === 'playWhite' || target.id === 'playBlack' || target.id === 'playUrl') {
+                    playMatch();
+                } else if (target.id === 'matchId') {
+                    // Don't auto-submit, user should click button
+                } else if (target.id === 'deleteMatchId' || target.id === 'deletePlayer') {
+                    deleteMatch();
+                } else if (target.id === 'statsUsername') {
+                    getPlayerStats();
+                } else if (target.id === 'editMatchId' || target.id === 'editPlayer' || target.id === 'editRating') {
+                    // Don't auto-submit
+                }
+            }
+        });
+
+        // Auto-load players on page load
+        window.onload = function() {
+            setTimeout(() => fetchData('players'), 500);
+        };
+    </script>
+</body>
+</html>
