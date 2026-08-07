@@ -34,6 +34,16 @@ class MatchManager
         return $players;
     }
 
+    private function getUsernameById(int $id): string
+    {
+        foreach ($this->players as $username => $data) {
+            if ($data['id'] === $id) {
+                return $username;
+            }
+        }
+        throw new \Exception("Player ID $id not found");
+    }
+
     public function getMatches(): array
     {
         return array_values($this->matches);
@@ -192,6 +202,79 @@ class MatchManager
         ];
     }
 
+    private function recalculateRatings(): void
+    {
+        // 1. Reset all players to initial state
+        foreach ($this->players as $username => &$player) {
+            $player['rating'] = self::INITIAL_RATING;
+            $player['games'] = 0;
+            $player['wins'] = 0;
+            $player['draws'] = 0;
+            $player['losses'] = 0;
+        }
+        unset($player);
+
+        // 2. Get only valid matches, sorted by date (oldest first)
+        $validMatches = $this->getValidMatches();
+        usort($validMatches, function ($a, $b) {
+            return strtotime($a['date']) - strtotime($b['date']);
+        });
+
+        // 3. Replay all valid matches in chronological order
+        foreach ($validMatches as $match) {
+            $whiteUsername = $this->getUsernameById($match['white_id']);
+            $blackUsername = $this->getUsernameById($match['black_id']);
+
+            $white = $this->players[$whiteUsername];
+            $black = $this->players[$blackUsername];
+
+            // Normalize result string (trim, remove extra spaces)
+            $result = trim($match['result']);
+
+            // Determine result constants
+            if ($result === self::WHITE_WIN) {
+                $whiteResult = Rating::WIN;
+                $blackResult = Rating::LOSS;
+            } elseif ($result === self::BLACK_WIN) {
+                $whiteResult = Rating::LOSS;
+                $blackResult = Rating::WIN;
+            } elseif ($result === self::DRAW) {
+                $whiteResult = Rating::DRAW;
+                $blackResult = Rating::DRAW;
+            } else {
+                // Fallback: treat as draw? Or skip? We'll skip to avoid corruption.
+                continue;
+            }
+
+            $whiteCalc = Rating::calculate($white['rating'], $black['rating'], $whiteResult);
+            $blackCalc = Rating::calculate($black['rating'], $white['rating'], $blackResult);
+
+            // Update ratings
+            $this->players[$whiteUsername]['rating'] = $whiteCalc['new_rating'];
+            $this->players[$blackUsername]['rating'] = $blackCalc['new_rating'];
+
+            // Update stats
+            $this->players[$whiteUsername]['games']++;
+            $this->players[$blackUsername]['games']++;
+
+            if ($result === self::WHITE_WIN) {
+                $this->players[$whiteUsername]['wins']++;
+                $this->players[$blackUsername]['losses']++;
+            } elseif ($result === self::BLACK_WIN) {
+                $this->players[$whiteUsername]['losses']++;
+                $this->players[$blackUsername]['wins']++;
+            } else { // DRAW
+                $this->players[$whiteUsername]['draws']++;
+                $this->players[$blackUsername]['draws']++;
+            }
+        }
+
+        // Save the recalculated players
+        $this->db->savePlayers($this->players);
+        // Reload from DB to keep in sync
+        $this->players = $this->db->loadPlayers();
+    }
+
     public function invalidateMatch(int $matchId): array
     {
         // Find the match
@@ -215,7 +298,7 @@ class MatchManager
             throw new \Exception("Match #{$matchId} is already marked as invalid");
         }
 
-        // Get players
+        // Get players for response
         $white = $this->db->getPlayerById($match['white_id']);
         $black = $this->db->getPlayerById($match['black_id']);
 
@@ -223,50 +306,24 @@ class MatchManager
             throw new \Exception("One or both players not found");
         }
 
-        // Store current ratings before restoration
+        // Store current ratings before invalidation for response
         $currentWhiteRating = $this->players[$white['username']]['rating'];
         $currentBlackRating = $this->players[$black['username']]['rating'];
-
-        // Get old ratings from match data
-        $oldWhiteRating = $match['old_white_rating'] ?? $white['rating'];
-        $oldBlackRating = $match['old_black_rating'] ?? $black['rating'];
-
-        // Reverse the rating changes
-        $whiteRatingChange = $match['rating_change_white'] ?? ($currentWhiteRating - $oldWhiteRating);
-        $blackRatingChange = $match['rating_change_black'] ?? ($currentBlackRating - $oldBlackRating);
-
-        // Update player ratings back to old values
-        $this->players[$white['username']]['rating'] = $oldWhiteRating;
-        $this->players[$black['username']]['rating'] = $oldBlackRating;
-
-        // Reverse games played
-        $this->players[$white['username']]['games']--;
-        $this->players[$black['username']]['games']--;
-
-        // Reverse win/draw/loss counts
-        $result = $match['result'];
-        if ($result === self::WHITE_WIN) {
-            $this->players[$white['username']]['wins']--;
-            $this->players[$black['username']]['losses']--;
-        } elseif ($result === self::BLACK_WIN) {
-            $this->players[$white['username']]['losses']--;
-            $this->players[$black['username']]['wins']--;
-        } else { // DRAW
-            $this->players[$white['username']]['draws']--;
-            $this->players[$black['username']]['draws']--;
-        }
-
-        $this->db->savePlayers($this->players);
-        $this->players = $this->db->loadPlayers();
 
         // Mark match as invalid
         $this->matches[$matchIndex]['is_valid'] = false;
         $this->matches[$matchIndex]['invalidated_at'] = date('Y-m-d H:i:s');
-        $this->matches[$matchIndex]['restored_white_rating'] = $oldWhiteRating;
-        $this->matches[$matchIndex]['restored_black_rating'] = $oldBlackRating;
 
+        // Save matches
         $this->db->saveMatches($this->matches);
         $this->matches = $this->db->loadMatches();
+
+        // Recalculate all ratings from scratch based on valid matches
+        $this->recalculateRatings();
+
+        // Get updated ratings
+        $updatedWhite = $this->db->getPlayerById($match['white_id']);
+        $updatedBlack = $this->db->getPlayerById($match['black_id']);
 
         return [
             'match_id' => $matchId,
@@ -275,19 +332,19 @@ class MatchManager
             'white' => [
                 'username' => $white['username'],
                 'rating_before' => $currentWhiteRating,
-                'rating_restored' => $oldWhiteRating,
-                'change' => -$whiteRatingChange, // Negative because we reversed
-                'games_reversed' => 1
+                'rating_after' => $updatedWhite['rating'],
+                'change' => $updatedWhite['rating'] - $currentWhiteRating,
             ],
             'black' => [
                 'username' => $black['username'],
                 'rating_before' => $currentBlackRating,
-                'rating_restored' => $oldBlackRating,
-                'change' => -$blackRatingChange, // Negative because we reversed
-                'games_reversed' => 1
+                'rating_after' => $updatedBlack['rating'],
+                'change' => $updatedBlack['rating'] - $currentBlackRating,
             ],
-            'original_result' => $result,
-            'restored' => true
+            'original_result' => $match['result'],
+            'restored' => true,
+            'total_valid_matches' => count($this->getValidMatches()),
+            'total_invalid_matches' => count($this->getInvalidMatches())
         ];
     }
 
@@ -309,10 +366,12 @@ class MatchManager
             throw new \Exception("Match #{$matchId} not found");
         }
 
+        // Check if it's invalid
         if (!isset($match['is_valid']) || $match['is_valid'] !== false) {
             throw new \Exception("Match #{$matchId} is not marked as invalid");
         }
 
+        // Get players for response
         $white = $this->db->getPlayerById($match['white_id']);
         $black = $this->db->getPlayerById($match['black_id']);
 
@@ -320,41 +379,9 @@ class MatchManager
             throw new \Exception("One or both players not found");
         }
 
-        // Get the restored ratings
-        $restoredWhiteRating = $match['restored_white_rating'] ?? $white['rating'];
-        $restoredBlackRating = $match['restored_black_rating'] ?? $black['rating'];
-
-        // Get the original changes
-        $whiteRatingChange = $match['rating_change_white'] ?? 0;
-        $blackRatingChange = $match['rating_change_black'] ?? 0;
-
-        // Re-apply the original changes
-        $newWhiteRating = $restoredWhiteRating + $whiteRatingChange;
-        $newBlackRating = $restoredBlackRating + $blackRatingChange;
-
-        $this->players[$white['username']]['rating'] = $newWhiteRating;
-        $this->players[$black['username']]['rating'] = $newBlackRating;
-
-        // Re-add games
-        $this->players[$white['username']]['games']++;
-        $this->players[$black['username']]['games']++;
-
-        // Re-add win/draw/loss counts
-        $result = $match['result'];
-        if ($result === self::WHITE_WIN) {
-            $this->players[$white['username']]['wins']++;
-            $this->players[$black['username']]['losses']++;
-        } elseif ($result === self::BLACK_WIN) {
-            $this->players[$white['username']]['losses']++;
-            $this->players[$black['username']]['wins']++;
-        } else { // DRAW
-            $this->players[$white['username']]['draws']++;
-            $this->players[$black['username']]['draws']++;
-        }
-
-        // Save updated players
-        $this->db->savePlayers($this->players);
-        $this->players = $this->db->loadPlayers();
+        // Store current ratings before revalidation for response
+        $currentWhiteRating = $this->players[$white['username']]['rating'];
+        $currentBlackRating = $this->players[$black['username']]['rating'];
 
         // Mark match as valid again
         $this->matches[$matchIndex]['is_valid'] = true;
@@ -362,8 +389,16 @@ class MatchManager
         unset($this->matches[$matchIndex]['restored_white_rating']);
         unset($this->matches[$matchIndex]['restored_black_rating']);
 
+        // Save matches
         $this->db->saveMatches($this->matches);
         $this->matches = $this->db->loadMatches();
+
+        // Recalculate all ratings from scratch based on valid matches
+        $this->recalculateRatings();
+
+        // Get updated ratings
+        $updatedWhite = $this->db->getPlayerById($match['white_id']);
+        $updatedBlack = $this->db->getPlayerById($match['black_id']);
 
         return [
             'match_id' => $matchId,
@@ -371,15 +406,20 @@ class MatchManager
             'revalidated_at' => date('Y-m-d H:i:s'),
             'white' => [
                 'username' => $white['username'],
-                'rating_restored' => $newWhiteRating,
-                'change' => $whiteRatingChange
+                'rating_before' => $currentWhiteRating,
+                'rating_after' => $updatedWhite['rating'],
+                'change' => $updatedWhite['rating'] - $currentWhiteRating,
             ],
             'black' => [
                 'username' => $black['username'],
-                'rating_restored' => $newBlackRating,
-                'change' => $blackRatingChange
+                'rating_before' => $currentBlackRating,
+                'rating_after' => $updatedBlack['rating'],
+                'change' => $updatedBlack['rating'] - $currentBlackRating,
             ],
-            'revalidated' => true
+            'original_result' => $match['result'],
+            'revalidated' => true,
+            'total_valid_matches' => count($this->getValidMatches()),
+            'total_invalid_matches' => count($this->getInvalidMatches())
         ];
     }
 
@@ -416,6 +456,9 @@ class MatchManager
         unset($this->matches[$matchIndex]);
         $this->db->saveMatches($this->matches);
         $this->matches = $this->db->loadMatches();
+
+        // Recalculate ratings after removing a match
+        $this->recalculateRatings();
 
         return true;
     }
@@ -463,6 +506,9 @@ class MatchManager
 
         $this->db->saveMatches($this->matches);
         $this->matches = $this->db->loadMatches();
+
+        // Recalculate ratings after editing a match
+        $this->recalculateRatings();
 
         return true;
     }
