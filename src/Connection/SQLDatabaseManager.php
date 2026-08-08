@@ -76,8 +76,6 @@ class SQLDatabaseManager implements DatabaseManager
                 restored_black_rating INT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                FOREIGN KEY (white_id) REFERENCES players(id) ON DELETE CASCADE,
-                FOREIGN KEY (black_id) REFERENCES players(id) ON DELETE CASCADE,
                 INDEX idx_is_valid (is_valid),
                 INDEX idx_date (date)
             )"
@@ -107,6 +105,8 @@ class SQLDatabaseManager implements DatabaseManager
 
     public function savePlayers(array $players): void
     {
+        $usernames = [];
+
         foreach ($players as $player) {
             $stmt = $this->connection->prepare(
                 "INSERT INTO players (id, username, rating, games, wins, draws, losses) 
@@ -127,6 +127,16 @@ class SQLDatabaseManager implements DatabaseManager
                 'draws' => $player['draws'],
                 'losses' => $player['losses']
             ]);
+
+            $usernames[] = $player['username'];
+        }
+
+        if (count($usernames) > 0) {
+            $placeholders = implode(',', array_fill(0, count($usernames), '?'));
+            $stmt = $this->connection->prepare("DELETE FROM players WHERE username NOT IN ($placeholders)");
+            $stmt->execute($usernames);
+        } else {
+            $this->connection->exec("TRUNCATE TABLE players");
         }
     }
 

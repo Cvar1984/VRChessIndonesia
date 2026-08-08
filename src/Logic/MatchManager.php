@@ -44,6 +44,27 @@ class MatchManager
         throw new \Exception("Player ID $id not found");
     }
 
+    private function getPlayerRecordById(int $playerId): array
+    {
+        foreach ($this->players as $player) {
+            if ($player['id'] === $playerId) {
+                $player['__deleted'] = false;
+                return $player;
+            }
+        }
+
+        return [
+            'id' => $playerId,
+            'username' => "DeletedPlayer#{$playerId}",
+            'rating' => self::INITIAL_RATING,
+            'games' => 0,
+            'wins' => 0,
+            'draws' => 0,
+            'losses' => 0,
+            '__deleted' => true,
+        ];
+    }
+
     public function getMatches(): array
     {
         return array_values($this->matches);
@@ -222,11 +243,14 @@ class MatchManager
 
         // 3. Replay all valid matches in chronological order
         foreach ($validMatches as $match) {
-            $whiteUsername = $this->getUsernameById($match['white_id']);
-            $blackUsername = $this->getUsernameById($match['black_id']);
+            $whitePlayer = $this->getPlayerRecordById($match['white_id']);
+            $blackPlayer = $this->getPlayerRecordById($match['black_id']);
 
-            $white = $this->players[$whiteUsername];
-            $black = $this->players[$blackUsername];
+            $whiteUsername = $whitePlayer['username'];
+            $blackUsername = $blackPlayer['username'];
+
+            $whiteRating = $whitePlayer['__deleted'] ? ($match['old_white_rating'] ?? self::INITIAL_RATING) : $whitePlayer['rating'];
+            $blackRating = $blackPlayer['__deleted'] ? ($match['old_black_rating'] ?? self::INITIAL_RATING) : $blackPlayer['rating'];
 
             // Normalize result string (trim, remove extra spaces)
             $result = trim($match['result']);
@@ -242,30 +266,45 @@ class MatchManager
                 $whiteResult = Rating::DRAW;
                 $blackResult = Rating::DRAW;
             } else {
-                // Fallback: treat as draw? Or skip? We'll skip to avoid corruption.
+                // Fallback: skip invalid results to avoid corruption.
                 continue;
             }
 
-            $whiteCalc = Rating::calculate($white['rating'], $black['rating'], $whiteResult);
-            $blackCalc = Rating::calculate($black['rating'], $white['rating'], $blackResult);
+            $whiteCalc = Rating::calculate($whiteRating, $blackRating, $whiteResult);
+            $blackCalc = Rating::calculate($blackRating, $whiteRating, $blackResult);
 
-            // Update ratings
-            $this->players[$whiteUsername]['rating'] = $whiteCalc['new_rating'];
-            $this->players[$blackUsername]['rating'] = $blackCalc['new_rating'];
+            // Update ratings for existing players only
+            if (!$whitePlayer['__deleted']) {
+                $this->players[$whiteUsername]['rating'] = $whiteCalc['new_rating'];
+                $this->players[$whiteUsername]['games']++;
+            }
 
-            // Update stats
-            $this->players[$whiteUsername]['games']++;
-            $this->players[$blackUsername]['games']++;
+            if (!$blackPlayer['__deleted']) {
+                $this->players[$blackUsername]['rating'] = $blackCalc['new_rating'];
+                $this->players[$blackUsername]['games']++;
+            }
 
             if ($result === self::WHITE_WIN) {
-                $this->players[$whiteUsername]['wins']++;
-                $this->players[$blackUsername]['losses']++;
+                if (!$whitePlayer['__deleted']) {
+                    $this->players[$whiteUsername]['wins']++;
+                }
+                if (!$blackPlayer['__deleted']) {
+                    $this->players[$blackUsername]['losses']++;
+                }
             } elseif ($result === self::BLACK_WIN) {
-                $this->players[$whiteUsername]['losses']++;
-                $this->players[$blackUsername]['wins']++;
+                if (!$whitePlayer['__deleted']) {
+                    $this->players[$whiteUsername]['losses']++;
+                }
+                if (!$blackPlayer['__deleted']) {
+                    $this->players[$blackUsername]['wins']++;
+                }
             } else { // DRAW
-                $this->players[$whiteUsername]['draws']++;
-                $this->players[$blackUsername]['draws']++;
+                if (!$whitePlayer['__deleted']) {
+                    $this->players[$whiteUsername]['draws']++;
+                }
+                if (!$blackPlayer['__deleted']) {
+                    $this->players[$blackUsername]['draws']++;
+                }
             }
         }
 
@@ -300,15 +339,34 @@ class MatchManager
 
         // Get players for response
         $white = $this->db->getPlayerById($match['white_id']);
-        $black = $this->db->getPlayerById($match['black_id']);
+        if ($white === null) {
+            $white = [
+                'id' => $match['white_id'],
+                'username' => "DeletedPlayer#{$match['white_id']}",
+                'rating' => ($match['old_white_rating'] ?? self::INITIAL_RATING) + ($match['rating_change_white'] ?? 0),
+                'games' => 0,
+                'wins' => 0,
+                'draws' => 0,
+                'losses' => 0,
+            ];
+        }
 
-        if ($white === null || $black === null) {
-            throw new \Exception("One or both players not found");
+        $black = $this->db->getPlayerById($match['black_id']);
+        if ($black === null) {
+            $black = [
+                'id' => $match['black_id'],
+                'username' => "DeletedPlayer#{$match['black_id']}",
+                'rating' => ($match['old_black_rating'] ?? self::INITIAL_RATING) + ($match['rating_change_black'] ?? 0),
+                'games' => 0,
+                'wins' => 0,
+                'draws' => 0,
+                'losses' => 0,
+            ];
         }
 
         // Store current ratings before invalidation for response
-        $currentWhiteRating = $this->players[$white['username']]['rating'];
-        $currentBlackRating = $this->players[$black['username']]['rating'];
+        $currentWhiteRating = $white['rating'];
+        $currentBlackRating = $black['rating'];
 
         // Mark match as invalid
         $this->matches[$matchIndex]['is_valid'] = false;
@@ -373,15 +431,34 @@ class MatchManager
 
         // Get players for response
         $white = $this->db->getPlayerById($match['white_id']);
-        $black = $this->db->getPlayerById($match['black_id']);
+        if ($white === null) {
+            $white = [
+                'id' => $match['white_id'],
+                'username' => "DeletedPlayer#{$match['white_id']}",
+                'rating' => ($match['old_white_rating'] ?? self::INITIAL_RATING) + ($match['rating_change_white'] ?? 0),
+                'games' => 0,
+                'wins' => 0,
+                'draws' => 0,
+                'losses' => 0,
+            ];
+        }
 
-        if ($white === null || $black === null) {
-            throw new \Exception("One or both players not found");
+        $black = $this->db->getPlayerById($match['black_id']);
+        if ($black === null) {
+            $black = [
+                'id' => $match['black_id'],
+                'username' => "DeletedPlayer#{$match['black_id']}",
+                'rating' => ($match['old_black_rating'] ?? self::INITIAL_RATING) + ($match['rating_change_black'] ?? 0),
+                'games' => 0,
+                'wins' => 0,
+                'draws' => 0,
+                'losses' => 0,
+            ];
         }
 
         // Store current ratings before revalidation for response
-        $currentWhiteRating = $this->players[$white['username']]['rating'];
-        $currentBlackRating = $this->players[$black['username']]['rating'];
+        $currentWhiteRating = $white['rating'];
+        $currentBlackRating = $black['rating'];
 
         // Mark match as valid again
         $this->matches[$matchIndex]['is_valid'] = true;
