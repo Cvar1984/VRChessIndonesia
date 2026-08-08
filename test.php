@@ -825,6 +825,11 @@ class RatingSystemTest
 
         // 4. Remove player and check removal
         $this->manager->play('Alice', 'Bob', MatchManager::WHITE_WIN, '');
+        $playedMatch = $this->manager->getMatch(1);
+        $this->assertTrue($playedMatch !== null, "Match exists before player removal");
+        $aliceId = $playedMatch['white_id'];
+        $bobId = $playedMatch['black_id'];
+
         $this->manager->removePlayer('Alice');
         $players = $this->manager->getPlayers();
         $found = false;
@@ -835,6 +840,12 @@ class RatingSystemTest
             }
         }
         $this->assertTrue(!$found, "Player Alice was removed");
+
+        // The match should remain in history after removing the player.
+        $match = $this->manager->getMatch(1);
+        $this->assertTrue($match !== null, "Match remains after player removal");
+        $this->assertEquals($aliceId, $match['white_id'], "Removed player's match still references Alice ID");
+        $this->assertEquals($bobId, $match['black_id'], "Match still references remaining player Bob ID");
 
         // 5. Remove match and check recalculation
         // Since we are starting fresh, these are match IDs 1 and 2
