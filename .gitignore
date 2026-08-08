@@ -3,6 +3,5 @@ error_log
 *.phar
 composer.phar
 
-data/player.csv
-data/match.csv
-/data/test*
+/data/*csv
+/data/*sql
