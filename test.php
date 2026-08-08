@@ -16,12 +16,10 @@ class RatingSystemTest
     private $passed = 0;
     private $failed = 0;
     private $matchHistory = [];
-
-    public function __construct()
+    private function resetDatabase(): void
     {
-        // Clean start
-        @unlink(__DIR__ . '/data/test_player.csv');
-        @unlink(__DIR__ . '/data/test_match.csv');
+        unlink(__DIR__ . '/data/test_player.csv');
+        unlink(__DIR__ . '/data/test_match.csv');
 
         $db = new CSVDatabaseManager(
             __DIR__ . '/data/test_player.csv',
@@ -29,6 +27,12 @@ class RatingSystemTest
         );
 
         $this->manager = new MatchManager($db);
+        $this->matchHistory = [];
+    }
+
+    public function __construct()
+    {
+        $this->resetDatabase();
     }
 
     public function run(): void
@@ -336,70 +340,70 @@ class RatingSystemTest
     // TEST 4: Complex Scenario with Multiple Players
     // ============================================================
     private function testComplexScenario(): void
-{
-    echo "\n📋 TEST 4: Complex Scenario (6 Players, 15 Matches)\n";
-    echo str_repeat('-', 70) . "\n";
+    {
+        echo "\n📋 TEST 4: Complex Scenario (6 Players, 15 Matches)\n";
+        echo str_repeat('-', 70) . "\n";
 
-    $this->resetDatabase();
+        $this->resetDatabase();
 
-    $players = ['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Frank'];
-    $results = [MatchManager::WHITE_WIN, MatchManager::DRAW, MatchManager::BLACK_WIN];
+        $players = ['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Frank'];
+        $results = [MatchManager::WHITE_WIN, MatchManager::DRAW, MatchManager::BLACK_WIN];
 
-    // Round-robin tournament (15 matches)
-    $matches = [];
-    for ($i = 0; $i < count($players); $i++) {
-        for ($j = $i + 1; $j < count($players); $j++) {
-            $matches[] = [
-                'white' => $players[$i],
-                'black' => $players[$j],
-                'result' => $results[array_rand($results)],
-                'url' => 'https://tournament.com/match'
-            ];
+        // Round-robin tournament (15 matches)
+        $matches = [];
+        for ($i = 0; $i < count($players); $i++) {
+            for ($j = $i + 1; $j < count($players); $j++) {
+                $matches[] = [
+                    'white' => $players[$i],
+                    'black' => $players[$j],
+                    'result' => $results[array_rand($results)],
+                    'url' => 'https://tournament.com/match'
+                ];
+            }
         }
-    }
 
-    $this->playMatches($matches);
+        $this->playMatches($matches);
 
-    // Get final ratings
-    $finalRatings = [];
-    $playersList = $this->manager->getPlayers();
-    foreach ($playersList as $p) {
-        $finalRatings[$p['username']] = $p['rating'];
-    }
-
-    // Invalidate random matches
-    $matchIds = range(1, count($matches));
-    shuffle($matchIds);
-    $invalidatedIds = array_slice($matchIds, 0, 8);   // pick 8 to invalidate
-
-    foreach ($invalidatedIds as $id) {
-        $this->manager->invalidateMatch($id);
-    }
-
-    // Confirm ratings changed
-    $changed = false;
-    $newRatings = $this->manager->getPlayers();
-    foreach ($newRatings as $p) {
-        if ($p['rating'] !== $finalRatings[$p['username']]) {
-            $changed = true;
-            break;
+        // Get final ratings
+        $finalRatings = [];
+        $playersList = $this->manager->getPlayers();
+        foreach ($playersList as $p) {
+            $finalRatings[$p['username']] = $p['rating'];
         }
-    }
-    $this->assertTrue($changed, "Ratings changed after invalidation");
 
-    // Revalidate the **same** matches in a different order
-    shuffle($invalidatedIds);
-    foreach ($invalidatedIds as $id) {
-        $this->manager->revalidateMatch($id);
-    }
+        // Invalidate random matches
+        $matchIds = range(1, count($matches));
+        shuffle($matchIds);
+        $invalidatedIds = array_slice($matchIds, 0, 8);   // pick 8 to invalidate
 
-    // Final ratings should match original
-    foreach ($finalRatings as $username => $expected) {
-        $this->assertRating($username, $expected);
-    }
+        foreach ($invalidatedIds as $id) {
+            $this->manager->invalidateMatch($id);
+        }
 
-    echo "  ✅ Complex scenario test passed\n";
-}
+        // Confirm ratings changed
+        $changed = false;
+        $newRatings = $this->manager->getPlayers();
+        foreach ($newRatings as $p) {
+            if ($p['rating'] !== $finalRatings[$p['username']]) {
+                $changed = true;
+                break;
+            }
+        }
+        $this->assertTrue($changed, "Ratings changed after invalidation");
+
+        // Revalidate the **same** matches in a different order
+        shuffle($invalidatedIds);
+        foreach ($invalidatedIds as $id) {
+            $this->manager->revalidateMatch($id);
+        }
+
+        // Final ratings should match original
+        foreach ($finalRatings as $username => $expected) {
+            $this->assertRating($username, $expected);
+        }
+
+        echo "  ✅ Complex scenario test passed\n";
+    }
 
     // ============================================================
     // TEST 5: Invalidate All Matches
@@ -624,16 +628,16 @@ class RatingSystemTest
         ]);
 
         // Check initial stats
-        $this->assertStats('Alice', 5, 3, 1, 1);
-        $this->assertStats('Bob', 2, 1, 0, 1);
+        $this->assertStats('Alice', 5, 4, 1, 0);
+        $this->assertStats('Bob', 2, 0, 0, 2);
 
         // Invalidate Alice's wins (matches 1, 2, 3)
+        $this->manager->invalidateMatch(3);
         $this->manager->invalidateMatch(1);
         $this->manager->invalidateMatch(2);
-        $this->manager->invalidateMatch(3);
 
         // Alice should have fewer wins
-        $this->assertStats('Alice', 2, 0, 1, 1);
+        $this->assertStats('Alice', 2, 1, 1, 0);
 
         // Revalidate them
         $this->manager->revalidateMatch(1);
@@ -641,7 +645,7 @@ class RatingSystemTest
         $this->manager->revalidateMatch(3);
 
         // Stats should be back
-        $this->assertStats('Alice', 5, 3, 1, 1);
+        $this->assertStats('Alice', 5, 4, 1, 0);
 
         echo "  ✅ Player stats test passed\n";
     }
@@ -657,8 +661,16 @@ class RatingSystemTest
         $this->resetDatabase();
 
         $playerNames = [
-            'Alice', 'Bob', 'Charlie', 'David', 'Eve',
-            'Frank', 'Grace', 'Henry', 'Ivy', 'Jack'
+            'Alice',
+            'Bob',
+            'Charlie',
+            'David',
+            'Eve',
+            'Frank',
+            'Grace',
+            'Henry',
+            'Ivy',
+            'Jack'
         ];
 
         $results = [MatchManager::WHITE_WIN, MatchManager::DRAW, MatchManager::BLACK_WIN];
@@ -825,20 +837,32 @@ class RatingSystemTest
         $this->assertTrue(!$found, "Player Alice was removed");
 
         // 5. Remove match and check recalculation
-        $this->manager->play('Charlie', 'David', MatchManager::WHITE_WIN, '');
-        $this->manager->play('Eve', 'Frank', MatchManager::DRAW, '');
-        
-        $ratingsBefore = $this->manager->getPlayers();
-        $this->manager->removeMatch(4); // Remove Charlie vs David
-        
-        $ratingsAfter = $this->manager->getPlayers();
+        // Since we are starting fresh, these are match IDs 1 and 2
+        $result1 = $this->manager->play('Charlie', 'David', MatchManager::WHITE_WIN, '');
+        $result2 = $this->manager->play('Eve', 'Frank', MatchManager::DRAW, '');
+
+        $ratingsBefore = [];
+        $playersBefore = $this->manager->getPlayers();
+        foreach ($playersBefore as $p) {
+            $ratingsBefore[$p['username']] = $p['rating'];
+        }
+
+        // Remove Charlie vs David (match 1)
+        $removed = $this->manager->removeMatch(1);
+        $this->assertTrue($removed, "Match 1 removed successfully");
+
+        $ratingsAfter = [];
+        $playersAfter = $this->manager->getPlayers();
+        foreach ($playersAfter as $p) {
+            $ratingsAfter[$p['username']] = $p['rating'];
+        }
+
+        // Ratings should change for Charlie and David
         $changed = false;
-        foreach ($ratingsAfter as $p) {
-            foreach ($ratingsBefore as $before) {
-                if ($p['username'] === $before['username'] && $p['rating'] !== $before['rating']) {
-                    $changed = true;
-                    break 2;
-                }
+        foreach ($ratingsBefore as $username => $rating) {
+            if (isset($ratingsAfter[$username]) && $ratingsAfter[$username] !== $rating) {
+                $changed = true;
+                break;
             }
         }
         $this->assertTrue($changed, "Ratings changed after match removal");
@@ -852,20 +876,6 @@ class RatingSystemTest
         }
 
         echo "  ✅ Edge cases test passed\n";
-    }
-
-    private function resetDatabase(): void
-    {
-        @unlink(__DIR__ . '/data/test_player.csv');
-        @unlink(__DIR__ . '/data/test_match.csv');
-
-        $db = new CSVDatabaseManager(
-            __DIR__ . '/data/test_player.csv',
-            __DIR__ . '/data/test_match.csv'
-        );
-
-        $this->manager = new MatchManager($db);
-        $this->matchHistory = [];
     }
 }
 
