@@ -237,11 +237,7 @@ try {
             'rankings' => $manager->getPlayers()
         ]);
     }
-
-    jsonResponse([
-        'success' => false,
-    ], 400);
-
+    echo file_get_contents('index.html');
 } catch (\Throwable $e) {
     jsonResponse([
         'success' => false,

@@ -1,805 +1,608 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>♟️ Chess Rating System</title>
+    <meta name="description" content="VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia.">
+    <title>VRChess Indonesia</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>♚</text></svg>">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* View-Only Overrides */
+        .btn--danger, .btn--primary:not(#btnRefreshPlayers):not(#btnRefreshMatches),
+        .btn--secondary:not(#btnRefreshPlayers):not(#btnRefreshMatches) {
+            display: none !important;
         }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            min-height: 100vh;
-            color: #fff;
-            padding: 20px;
+        #btnRefreshPlayers, #btnRefreshMatches {
+            display: inline-flex !important;
         }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
+        .match-actions, .match-card__actions {
+            display: none !important;
         }
-
-        header {
-            text-align: center;
-            padding: 30px 0;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 30px;
+        #btnEditPlayerFromModal, #btnDeletePlayerFromModal {
+            display: none !important;
         }
-
-        header h1 {
-            font-size: 3em;
-            font-weight: 300;
-            letter-spacing: 2px;
+        .leaderboard-row {
+            cursor: default !important;
         }
-
-        header h1 span {
-            color: #f0c040;
-            font-weight: 700;
-        }
-
-        header p {
-            color: #8892b0;
-            margin-top: 10px;
-            font-size: 1.1em;
-        }
-
-        .api-url {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 10px 20px;
-            border-radius: 8px;
-            display: inline-block;
-            margin-top: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            color: #64ffda;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 25px;
-            margin-bottom: 30px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 25px;
-            transition: all 0.3s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .card h2 {
-            font-size: 1.3em;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #f0c040;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .card h2 .badge {
-            font-size: 0.6em;
-            background: rgba(240, 192, 64, 0.2);
-            padding: 2px 10px;
-            border-radius: 20px;
-            color: #f0c040;
-        }
-
-        .form-group {
-            margin-bottom: 12px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 0.85em;
-            color: #8892b0;
-            margin-bottom: 4px;
-            font-weight: 500;
-        }
-
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 10px 12px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 0.95em;
-            transition: all 0.3s ease;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #f0c040;
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        .form-group input::placeholder {
-            color: rgba(255, 255, 255, 0.3);
-        }
-
-        .form-group select option {
-            background: #1a1a2e;
-            color: #fff;
-        }
-
-        .btn {
-            padding: 10px 24px;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.95em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: #f0c040;
-            color: #1a1a2e;
-        }
-
-        .btn-primary:hover {
-            background: #ffd700;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(240, 192, 64, 0.3);
-        }
-
-        .btn-danger {
-            background: #e74c3c;
-            color: #fff;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
-            transform: translateY(-2px);
-        }
-
-        .btn-success {
-            background: #2ecc71;
-            color: #1a1a2e;
-        }
-
-        .btn-success:hover {
-            background: #27ae60;
-            transform: translateY(-2px);
-        }
-
-        .btn-info {
-            background: #3498db;
-            color: #fff;
-        }
-
-        .btn-info:hover {
-            background: #2980b9;
-            transform: translateY(-2px);
-        }
-
-        .btn-warning {
-            background: #f39c12;
-            color: #1a1a2e;
-        }
-
-        .btn-warning:hover {
-            background: #e67e22;
-            transform: translateY(-2px);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .leaderboard-row:hover {
+            background: rgba(255, 255, 255, 0.03) !important;
             transform: none !important;
         }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 10px;
+        .tab-btn[data-tab="play"] {
+            display: none !important;
         }
-
-        .response-area {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 15px;
-            max-height: 400px;
-            overflow: auto;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .response-area pre {
-            font-family: 'Courier New', monospace;
-            font-size: 0.85em;
-            color: #64ffda;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            margin: 0;
-        }
-
-        .response-area .empty {
-            color: #8892b0;
-            font-style: italic;
-        }
-
-        .status-badge {
+        .view-only-badge {
             display: inline-block;
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: 0.75em;
-            font-weight: 600;
-        }
-
-        .status-success {
-            background: rgba(46, 204, 113, 0.2);
-            color: #2ecc71;
-        }
-
-        .status-error {
-            background: rgba(231, 76, 60, 0.2);
-            color: #e74c3c;
-        }
-
-        .status-pending {
-            background: rgba(241, 196, 15, 0.2);
-            color: #f1c40f;
-        }
-
-        .loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-top-color: #f0c040;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .tabs {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 15px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding-bottom: 10px;
-        }
-
-        .tab {
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 0.9em;
-            background: transparent;
-            border: none;
-            color: #8892b0;
-        }
-
-        .tab:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: #e74c3c;
             color: #fff;
+            font-size: 0.65rem;
+            padding: 2px 12px;
+            border-radius: 20px;
+            margin-left: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-
-        .tab.active {
-            background: rgba(240, 192, 64, 0.15);
-            color: #f0c040;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            margin: 10px 0;
-        }
-
-        .stat-item {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 12px;
+        .view-only-notice {
+            background: rgba(231, 76, 60, 0.12);
+            border: 1px solid rgba(231, 76, 60, 0.25);
             border-radius: 8px;
-            text-align: center;
+            padding: 10px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #e74c3c;
+            font-size: 0.85rem;
         }
-
-        .stat-item .number {
-            font-size: 1.5em;
-            font-weight: 700;
-            color: #f0c040;
+        .view-only-notice .icon {
+            font-size: 1.2rem;
         }
-
-        .stat-item .label {
-            font-size: 0.75em;
-            color: #8892b0;
-            margin-top: 2px;
+        /* Settings button hidden */
+        #btnSettings {
+            display: none !important;
         }
-
-        .full-width {
-            grid-column: 1 / -1;
+        /* API URL display hidden */
+        .connection-bar__url {
+            display: none !important;
         }
-
-        @media (max-width: 768px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-
-            header h1 {
-                font-size: 2em;
-            }
-
-            .container {
-                padding: 10px;
-            }
+        /* Config modal hidden */
+        #settingsModal {
+            display: none !important;
         }
-
-        /* Scrollbar styling */
-        ::-webkit-scrollbar {
-            width: 8px;
+        /* Edit modals hidden */
+        #editPlayerModal, #editMatchModal, #confirmModal {
+            display: none !important;
         }
-
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(240, 192, 64, 0.3);
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(240, 192, 64, 0.5);
+        /* Hide match filter bar */
+        .filter-bar {
+            display: none !important;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>♟️ Chess <span>Rating</span> System</h1>
-            <p>Test all API endpoints with this interactive dashboard</p>
-            <div class="api-url">📡 API Base URL: <span id="apiBaseUrl">/index.php</span></div>
-        </header>
 
-        <div class="grid">
-            <!-- Play Match Card -->
-            <div class="card">
-                <h2>🎯 Play Match <span class="badge">POST</span></h2>
-                <div class="form-group">
-                    <label>White Player</label>
-                    <input type="text" id="playWhite" placeholder="e.g., Alice" value="Alice">
-                </div>
-                <div class="form-group">
-                    <label>Black Player</label>
-                    <input type="text" id="playBlack" placeholder="e.g., Bob" value="Bob">
-                </div>
-                <div class="form-group">
-                    <label>Result</label>
-                    <select id="playResult">
-                        <option value="1">1 - White Wins</option>
-                        <option value="0">0 - Draw</option>
-                        <option value="-1">-1 - Black Wins</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Analysis URL (optional)</label>
-                    <input type="text" id="playUrl" placeholder="https://chess.com/analysis/..." value="https://example.com/analysis/123">
-                </div>
-                <button class="btn btn-primary" onclick="playMatch()">▶ Play Match</button>
-                <div id="playResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
-            </div>
+<div class="app-wrapper">
 
-            <!-- Get Data Card -->
-            <div class="card">
-                <h2>📊 Get Data <span class="badge">GET</span></h2>
-                <div class="tabs">
-                    <button class="tab active" onclick="switchTab('players')">Players</button>
-                    <button class="tab" onclick="switchTab('matches')">Matches</button>
-                    <button class="tab" onclick="switchTab('valid')">Valid</button>
-                    <button class="tab" onclick="switchTab('invalid')">Invalid</button>
-                    <button class="tab" onclick="switchTab('rankings')">Rankings</button>
-                </div>
-                <div id="tab-players" class="tab-content active">
-                    <button class="btn btn-info" onclick="fetchData('players')">📋 Get Players</button>
-                    <div id="playersResponse" class="response-area"><span class="empty">Click to load players...</span></div>
-                </div>
-                <div id="tab-matches" class="tab-content">
-                    <button class="btn btn-info" onclick="fetchData('matches')">📋 Get Matches</button>
-                    <div id="matchesResponse" class="response-area"><span class="empty">Click to load matches...</span></div>
-                </div>
-                <div id="tab-valid" class="tab-content">
-                    <button class="btn btn-success" onclick="fetchData('valid-matches')">✅ Get Valid Matches</button>
-                    <div id="validResponse" class="response-area"><span class="empty">Click to load valid matches...</span></div>
-                </div>
-                <div id="tab-invalid" class="tab-content">
-                    <button class="btn btn-warning" onclick="fetchData('invalid-matches')">❌ Get Invalid Matches</button>
-                    <div id="invalidResponse" class="response-area"><span class="empty">Click to load invalid matches...</span></div>
-                </div>
-                <div id="tab-rankings" class="tab-content">
-                    <button class="btn btn-primary" onclick="fetchData('rankings')">🏆 Get Rankings</button>
-                    <div id="rankingsResponse" class="response-area"><span class="empty">Click to load rankings...</span></div>
-                </div>
-            </div>
-
-            <!-- Invalidate/Revalidate Card -->
-            <div class="card">
-                <h2>🔄 Invalidate / Revalidate <span class="badge">PUT</span></h2>
-                <div class="form-group">
-                    <label>Match ID</label>
-                    <input type="number" id="matchId" placeholder="e.g., 1" value="1">
-                </div>
-                <div class="btn-group">
-                    <button class="btn btn-warning" onclick="invalidateMatch()">🚫 Invalidate</button>
-                    <button class="btn btn-success" onclick="revalidateMatch()">✅ Revalidate</button>
-                </div>
-                <div id="invalidateResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
-            </div>
-
-            <!-- Delete Card -->
-            <div class="card">
-                <h2>🗑️ Delete <span class="badge">DELETE</span></h2>
-                <div class="form-group">
-                    <label>Match ID to Delete</label>
-                    <input type="number" id="deleteMatchId" placeholder="e.g., 1" value="1">
-                </div>
-                <button class="btn btn-danger" onclick="deleteMatch()">🗑️ Delete Match</button>
-                <div style="margin-top: 15px;">
-                    <div class="form-group">
-                        <label>Player to Delete</label>
-                        <input type="text" id="deletePlayer" placeholder="e.g., Alice" value="Alice">
-                    </div>
-                    <button class="btn btn-danger" onclick="deletePlayer()">🗑️ Delete Player</button>
-                </div>
-                <div id="deleteResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
-            </div>
-
-            <!-- Player Stats Card -->
-            <div class="card">
-                <h2>📈 Player Stats <span class="badge">GET</span></h2>
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="statsUsername" placeholder="e.g., Alice" value="Alice">
-                </div>
-                <button class="btn btn-info" onclick="getPlayerStats()">📊 Get Stats</button>
-                <div id="statsResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
-            </div>
-
-            <!-- Edit Card -->
-            <div class="card">
-                <h2>✏️ Edit <span class="badge">PATCH</span></h2>
-                <div class="form-group">
-                    <label>Match ID</label>
-                    <input type="number" id="editMatchId" placeholder="e.g., 1" value="1">
-                </div>
-                <div class="form-group">
-                    <label>New Result</label>
-                    <select id="editResult">
-                        <option value="1-0">1-0 (White Wins)</option>
-                        <option value="0-1">0-1 (Black Wins)</option>
-                        <option value="1/2-1/2">1/2-1/2 (Draw)</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary" onclick="editMatch()">✏️ Edit Match</button>
-                <div style="margin-top: 15px;">
-                    <div class="form-group">
-                        <label>Player Username</label>
-                        <input type="text" id="editPlayer" placeholder="e.g., Alice" value="Alice">
-                    </div>
-                    <div class="form-group">
-                        <label>New Rating</label>
-                        <input type="number" id="editRating" placeholder="e.g., 1500" value="1500">
-                    </div>
-                    <button class="btn btn-primary" onclick="editPlayer()">✏️ Edit Player</button>
-                </div>
-                <div id="editResponse" class="response-area"><span class="empty">Response will appear here...</span></div>
+    <!-- ── Header ── -->
+    <header class="app-header">
+        <div class="app-header__logo">
+            <div class="app-header__icon">♚</div>
+            <div>
+                <h1 class="app-header__title">VRChess Indonesia</h1>
+                <p class="app-header__subtitle">Rating &amp; Match Management System</p>
             </div>
         </div>
+        <div style="margin-left: auto;">
+            <span class="view-only-badge">🔒 VIEW ONLY</span>
+        </div>
+    </header>
+
+    <!-- ── View Only Notice ── -->
+    <div class="view-only-notice">
+        <span class="icon">🔒</span>
+        <span><strong>View Only Mode</strong> — This instance is in read-only mode. All submission, editing, and deletion features are disabled.</span>
     </div>
 
-    <script>
-        const API_BASE = window.location.pathname.replace(/\/[^/]*$/, '/') + 'index.php';
+    <!-- ── Connection Status ── -->
+    <div class="connection-bar" id="connectionBar">
+        <span class="connection-bar__dot" id="statusDot"></span>
+        <span id="statusText">Connecting…</span>
+        <button class="connection-bar__btn" id="btnSettings" style="display:none;">⚙ Config</button>
+    </div>
 
-        // Update API URL display
-        document.getElementById('apiBaseUrl').textContent = API_BASE;
+    <!-- ── Tab Navigation ── -->
+    <nav class="tab-nav" id="tabNav">
+        <button class="tab-btn active" data-tab="leaderboard">
+            <span class="tab-btn__icon">🏆</span>
+            <span class="tab-btn__label">Leaderboard</span>
+            <span class="tab-btn__count" id="playerCount">0</span>
+        </button>
+        <button class="tab-btn" data-tab="matches">
+            <span class="tab-btn__icon">⚔</span>
+            <span class="tab-btn__label">Match History</span>
+            <span class="tab-btn__count" id="matchCount">0</span>
+        </button>
+    </nav>
 
-        // Tab switching
-        function switchTab(tab) {
-            // Update tab buttons
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB 1: Leaderboard                                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="tab-content active" id="tab-leaderboard">
+        <div class="card">
+            <div class="card__header">
+                <div class="card__title">🏆 Player Rankings</div>
+                <button class="btn btn--secondary" id="btnRefreshPlayers" title="Refresh leaderboard">↻ Refresh</button>
+            </div>
 
-            // Find and activate clicked tab
-            const buttons = document.querySelectorAll('.tab');
-            const contents = document.querySelectorAll('.tab-content');
+            <div class="search-wrapper">
+                <span class="search-wrapper__icon">🔍</span>
+                <input type="text" class="search-input" id="playerSearch" placeholder="Search player…">
+            </div>
 
-            const tabMap = {
-                'players': 0,
-                'matches': 1,
-                'valid': 2,
-                'invalid': 3,
-                'rankings': 4
-            };
+            <div id="leaderboardContainer">
+                <div class="empty-state">
+                    <div class="empty-state__icon">♟</div>
+                    <div class="empty-state__text">No players yet</div>
+                    <div class="empty-state__sub">Submit a match to create players automatically</div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-            const index = tabMap[tab];
-            if (index !== undefined) {
-                buttons[index].classList.add('active');
-                contents[index].classList.add('active');
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB 2: Match History                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section class="tab-content" id="tab-matches">
+        <div class="card">
+            <div class="card__header">
+                <div class="card__title">⚔ Match History</div>
+                <button class="btn btn--secondary" id="btnRefreshMatches" title="Refresh matches">↻ Refresh</button>
+            </div>
+
+            <div id="matchesContainer">
+                <div class="empty-state">
+                    <div class="empty-state__icon">📋</div>
+                    <div class="empty-state__text">No matches recorded</div>
+                    <div class="empty-state__sub">Submit a match result to see it here</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Footer ── -->
+    <footer class="app-footer">
+        VRChess Indonesia &copy; 2026 — Built with ♥ for the Indonesian Chess Community
+        <span style="color: #e74c3c; margin-left: 12px;">🔒 View Only</span>
+    </footer>
+
+</div>
+
+<!-- ── Player Stats Modal (View-Only) ── -->
+<div class="modal-overlay" id="playerStatsModal" style="display:none;">
+    <div class="modal-content modal-content--wide">
+        <div class="modal-header">
+            <div class="modal-header__profile">
+                <div class="modal-avatar" id="modalPlayerAvatar">♚</div>
+                <div>
+                    <h3 id="modalPlayerUsername" style="margin:0;">Player</h3>
+                    <span class="player-rating-badge" id="modalPlayerRatingBadge">Rating: 400</span>
+                </div>
+            </div>
+            <button class="modal-close-btn" id="btnClosePlayerStats" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="stats-overview-grid" id="modalPlayerStatsGrid">
+            <div class="stat-box">
+                <div class="stat-box__val" id="statGames">0</div>
+                <div class="stat-box__lbl">Games Played</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box__val stat-win" id="statWins">0</div>
+                <div class="stat-box__lbl">Wins</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box__val stat-draw" id="statDraws">0</div>
+                <div class="stat-box__lbl">Draws</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box__val stat-loss" id="statLosses">0</div>
+                <div class="stat-box__lbl">Losses</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box__val" id="statValidMatches">0</div>
+                <div class="stat-box__lbl">Valid Matches</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box__val" id="statInvalidMatches">0</div>
+                <div class="stat-box__lbl">Invalid Matches</div>
+            </div>
+        </div>
+
+        <div class="winrate-section">
+            <div class="winrate-section__header">
+                <span>Win Rate</span>
+                <span id="statWinRatePercent">0%</span>
+            </div>
+            <div class="winrate-bar-lg">
+                <div class="winrate-bar-lg__fill" id="statWinRateBar" style="width:0%"></div>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
+            <button class="btn btn--secondary btn--sm" id="btnClosePlayerStatsBtn">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Toast Container ── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/**
+ * VRChess Indonesia — Frontend Application (View-Only)
+ * Pure vanilla JavaScript, no dependencies.
+ */
+
+(function() {
+    'use strict';
+
+    // ── Configuration ──────────────────────────────────────────
+    // 👇 FIX: Set your actual API URL here
+    const API_URL = 'https://chess.cvar1984.net';
+    let isOnline = false;
+
+    // Cached data
+    let playersCache = [];
+    let matchesCache = [];
+    let playerIdMap = {};
+
+    // ── DOM References ─────────────────────────────────────────
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => document.querySelectorAll(sel);
+
+    const statusDot = $('#statusDot');
+    const statusText = $('#statusText');
+    const playerCountEl = $('#playerCount');
+    const matchCountEl = $('#matchCount');
+    const leaderboardContainer = $('#leaderboardContainer');
+    const matchesContainer = $('#matchesContainer');
+
+    // Modals
+    const playerStatsModal = $('#playerStatsModal');
+
+    // ── Toast Notifications ────────────────────────────────────
+    function toast(message, type = 'info') {
+        const container = $('#toastContainer');
+        const el = document.createElement('div');
+        el.className = `toast toast--${type}`;
+        el.textContent = message;
+        container.appendChild(el);
+        setTimeout(() => el.remove(), 4000);
+    }
+
+    // ── API Helpers ────────────────────────────────────────────
+    function buildUrl(endpoint, params = {}) {
+        let base = API_URL.replace(/\/+$/, '');
+        if (!endpoint.startsWith('/')) endpoint = '/' + endpoint;
+        const url = new URL(base + endpoint);
+        Object.entries(params).forEach(([k, v]) => {
+            if (v !== undefined && v !== null) {
+                url.searchParams.set(k, v);
             }
+        });
+        return url;
+    }
+
+    async function apiFetch(endpoint, params = {}) {
+        const url = buildUrl(endpoint, params);
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        return data;
+    }
+
+    // ── Connection Check ───────────────────────────────────────
+    async function checkConnection() {
+        statusText.textContent = 'Connecting…';
+        statusDot.className = 'connection-bar__dot';
+
+        try {
+            const data = await apiFetch('/index.php', { players: '' });
+            if (data.success) {
+                setOnline(true);
+                playersCache = data.players || [];
+                buildPlayerIdMap();
+                playerCountEl.textContent = data.count || playersCache.length;
+                renderLeaderboard();
+                await fetchMatches(true);
+            } else {
+                setOnline(false);
+            }
+        } catch (e) {
+            console.error('Connection error:', e);
+            setOnline(false);
+            toast('Failed to connect to server: ' + e.message, 'error');
+        }
+    }
+
+    function setOnline(online) {
+        isOnline = online;
+        statusDot.className = 'connection-bar__dot ' + (online ? 'online' : 'offline');
+        statusText.textContent = online ? 'Connected' : 'Offline — check server';
+    }
+
+    // ── Build player id→username map ───────────────────────────
+    function buildPlayerIdMap() {
+        playerIdMap = {};
+        playersCache.forEach(p => {
+            playerIdMap[p.id] = p.username;
+        });
+    }
+
+    // ── Fetch Players ──────────────────────────────────────────
+    async function fetchPlayers(silent = false) {
+        try {
+            const data = await apiFetch('/index.php', { players: '' });
+            if (data.success) {
+                playersCache = data.players || [];
+                buildPlayerIdMap();
+                playerCountEl.textContent = data.count || playersCache.length;
+                renderLeaderboard($('#playerSearch') ? $('#playerSearch').value : '');
+                if (!silent) toast('Leaderboard refreshed', 'success');
+            }
+        } catch (e) {
+            if (!silent) toast('Failed to fetch players: ' + e.message, 'error');
+        }
+    }
+
+    // ── Fetch Matches ──────────────────────────────────────────
+    async function fetchMatches(silent = false) {
+        try {
+            const data = await apiFetch('/index.php', { matches: '' });
+            if (data.success) {
+                matchesCache = data.matches || [];
+                matchCountEl.textContent = data.count || matchesCache.length;
+                renderMatches();
+                if (!silent) toast('Matches refreshed', 'success');
+            }
+        } catch (e) {
+            if (!silent) toast('Failed to fetch matches: ' + e.message, 'error');
+        }
+    }
+
+    // ── Render Leaderboard ─────────────────────────────────────
+    function renderLeaderboard(filter = '') {
+        let players = playersCache;
+
+        if (filter) {
+            const q = filter.toLowerCase();
+            players = players.filter(p => p.username.toLowerCase().includes(q));
         }
 
-        // Helper function to make API requests
-        async function apiRequest(endpoint, options = {}) {
-            const url = `${API_BASE}?${endpoint}`;
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
+        if (players.length === 0) {
+            leaderboardContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state__icon">♟</div>
+                    <div class="empty-state__text">${filter ? 'No players match your search' : 'No players yet'}</div>
+                    <div class="empty-state__sub">${filter ? 'Try a different search term' : 'Submit a match to create players automatically'}</div>
+                </div>`;
+            return;
+        }
+
+        let html = `
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Player</th>
+                        <th>Rating</th>
+                        <th class="hide-mobile">W</th>
+                        <th class="hide-mobile">D</th>
+                        <th class="hide-mobile">L</th>
+                        <th>Games</th>
+                        <th class="hide-mobile">Win Rate</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        players.forEach((p, i) => {
+            const rank = i + 1;
+            const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'default';
+            const games = parseInt(p.games) || 0;
+            const wins = parseInt(p.wins) || 0;
+            const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+
+            html += `
+                <tr class="leaderboard-row" data-username="${escHtml(p.username)}" title="Click to view player stats">
+                    <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
+                    <td><span class="player-name">${escHtml(p.username)}</span></td>
+                    <td><span class="player-rating">${p.rating}</span></td>
+                    <td class="hide-mobile"><span class="stat-value stat-win">${p.wins}</span></td>
+                    <td class="hide-mobile"><span class="stat-value stat-draw">${p.draws}</span></td>
+                    <td class="hide-mobile"><span class="stat-value stat-loss">${p.losses}</span></td>
+                    <td><span class="stat-value">${p.games}</span></td>
+                    <td class="hide-mobile">
+                        <span class="stat-value">${winRate}%</span>
+                        <span class="winrate-bar"><span class="winrate-bar__fill" style="width:${winRate}%"></span></span>
+                    </td>
+                </tr>`;
+        });
+
+        html += '</tbody></table>';
+        leaderboardContainer.innerHTML = html;
+
+        leaderboardContainer.querySelectorAll('.leaderboard-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const username = row.dataset.username;
+                if (username) openPlayerStats(username);
             });
-            return await response.json();
+        });
+    }
+
+    // ── Render Matches ─────────────────────────────────────────
+    function renderMatches() {
+        if (matchesCache.length === 0) {
+            matchesContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state__icon">📋</div>
+                    <div class="empty-state__text">No matches recorded</div>
+                    <div class="empty-state__sub">Submit a match result to see it here</div>
+                </div>`;
+            return;
         }
 
-        // Display response in a container
-        function displayResponse(containerId, data, isError = false) {
-            const container = document.getElementById(containerId);
-            if (data === null || data === undefined) {
-                container.innerHTML = `<span class="empty">No data available</span>`;
-                return;
+        const sorted = [...matchesCache].reverse();
+
+        let html = '';
+        sorted.forEach(m => {
+            const whiteName = playerIdMap[m.white_id] || `Player #${m.white_id}`;
+            const blackName = playerIdMap[m.black_id] || `Player #${m.black_id}`;
+            const isValid = !('is_valid' in m) || m.is_valid === true;
+
+            let resultClass = 'draw';
+            let resultLabel = '½-½';
+            if (m.result === '1-0') { resultClass = 'white'; resultLabel = '1-0'; }
+            else if (m.result === '0-1') { resultClass = 'black'; resultLabel = '0-1'; }
+
+            const analysisLink = m.analysis_url
+                ? `<a class="match-card__link" href="${escHtml(m.analysis_url)}" target="_blank" rel="noopener">📊 Analysis</a>`
+                : '';
+
+            const statusBadge = !isValid
+                ? `<span class="match-card__status-tag match-card__status-tag--invalid">🚫 Invalidated</span>`
+                : '';
+
+            html += `
+                <div class="match-card ${!isValid ? 'is-invalid' : ''}">
+                    <div class="match-card__player match-card__player--white">
+                        <span class="match-card__player-label">⬜ White</span>
+                        <span class="match-card__player-name">${escHtml(whiteName)}</span>
+                    </div>
+                    <div class="match-card__vs">
+                        <span class="match-card__result match-card__result--${resultClass}">${resultLabel}</span>
+                        ${statusBadge}
+                        <span class="match-card__date">${escHtml(m.date || '')}</span>
+                        ${analysisLink}
+                    </div>
+                    <div class="match-card__player match-card__player--black">
+                        <span class="match-card__player-label">⬛ Black</span>
+                        <span class="match-card__player-name">${escHtml(blackName)}</span>
+                    </div>
+                </div>`;
+        });
+
+        matchesContainer.innerHTML = html;
+    }
+
+    // ── Player Stats Modal ─────────────────────────────────────
+    async function openPlayerStats(username) {
+        $('#modalPlayerUsername').textContent = username;
+        $('#modalPlayerRatingBadge').textContent = 'Loading…';
+        playerStatsModal.style.display = 'flex';
+
+        try {
+            const data = await apiFetch('/index.php', { 'player-stats': '', username });
+            if (data.success && data.stats) {
+                const s = data.stats;
+                const p = s.player || {};
+                $('#modalPlayerRatingBadge').textContent = `Rating: ${s.current_rating || p.rating || 400}`;
+                $('#statGames').textContent = s.games || 0;
+                $('#statWins').textContent = s.wins || 0;
+                $('#statDraws').textContent = s.draws || 0;
+                $('#statLosses').textContent = s.losses || 0;
+                $('#statValidMatches').textContent = s.valid_matches || 0;
+                $('#statInvalidMatches').textContent = s.invalid_matches || 0;
+
+                const games = parseInt(s.games) || 0;
+                const wins = parseInt(s.wins) || 0;
+                const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+                $('#statWinRatePercent').textContent = `${winRate}%`;
+                $('#statWinRateBar').style.width = `${winRate}%`;
             }
-
-            const json = JSON.stringify(data, null, 2);
-            const status = isError ? 'status-error' : 'status-success';
-            const statusText = isError ? '❌ Error' : '✅ Success';
-
-            container.innerHTML = `
-                <div style="margin-bottom: 8px;">
-                    <span class="status-badge ${status}">${statusText}</span>
-                </div>
-                <pre>${json}</pre>
-            `;
+        } catch (e) {
+            toast('Failed to load stats: ' + e.message, 'error');
         }
+    }
 
-        // Display loading state
-        function displayLoading(containerId) {
-            document.getElementById(containerId).innerHTML = `
-                <div style="display: flex; align-items: center; gap: 10px; color: #8892b0;">
-                    <span class="loading"></span>
-                    Loading...
-                </div>
-            `;
-        }
+    // ── Utility ────────────────────────────────────────────────
+    function escHtml(str) {
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
 
-        // 1. Play Match
-        async function playMatch() {
-            const white = document.getElementById('playWhite').value.trim();
-            const black = document.getElementById('playBlack').value.trim();
-            const result = document.getElementById('playResult').value;
-            const url = document.getElementById('playUrl').value.trim();
+    function closeAllModals() {
+        playerStatsModal.style.display = 'none';
+    }
 
-            if (!white || !black) {
-                displayResponse('playResponse', { error: 'Please enter both player names' }, true);
-                return;
-            }
+    // ── Tab Navigation ─────────────────────────────────────────
+    function initTabs() {
+        $$('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.dataset.tab;
 
-            displayLoading('playResponse');
+                $$('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
 
-            try {
-                const endpoint = `play&white=${encodeURIComponent(white)}&black=${encodeURIComponent(black)}&result=${result}&url=${encodeURIComponent(url)}`;
-                const data = await apiRequest(endpoint);
-                displayResponse('playResponse', data);
-            } catch (error) {
-                displayResponse('playResponse', { error: error.message }, true);
-            }
-        }
+                $$('.tab-content').forEach(c => c.classList.remove('active'));
+                $(`#tab-${tabName}`).classList.add('active');
+            });
+        });
+    }
 
-        // 2. Fetch Data
-        async function fetchData(type) {
-            const containerMap = {
-                'players': 'playersResponse',
-                'matches': 'matchesResponse',
-                'valid-matches': 'validResponse',
-                'invalid-matches': 'invalidResponse',
-                'rankings': 'rankingsResponse'
-            };
+    // ── Event Bindings ─────────────────────────────────────────
+    function init() {
+        initTabs();
 
-            const containerId = containerMap[type];
-            if (!containerId) return;
+        // Player Stats Modal
+        $('#btnClosePlayerStats').addEventListener('click', () => {
+            playerStatsModal.style.display = 'none';
+        });
+        $('#btnClosePlayerStatsBtn').addEventListener('click', () => {
+            playerStatsModal.style.display = 'none';
+        });
 
-            displayLoading(containerId);
-
-            try {
-                const data = await apiRequest(type);
-                displayResponse(containerId, data);
-            } catch (error) {
-                displayResponse(containerId, { error: error.message }, true);
-            }
-        }
-
-        // 3. Invalidate Match
-        async function invalidateMatch() {
-            const matchId = document.getElementById('matchId').value;
-            displayLoading('invalidateResponse');
-
-            try {
-                const response = await fetch(`${API_BASE}?invalidate&match=${matchId}`, {
-                    method: 'PUT'
-                });
-                const data = await response.json();
-                displayResponse('invalidateResponse', data);
-            } catch (error) {
-                displayResponse('invalidateResponse', { error: error.message }, true);
-            }
-        }
-
-        // 4. Revalidate Match
-        async function revalidateMatch() {
-            const matchId = document.getElementById('matchId').value;
-            displayLoading('invalidateResponse');
-
-            try {
-                const response = await fetch(`${API_BASE}?revalidate&match=${matchId}`, {
-                    method: 'PUT'
-                });
-                const data = await response.json();
-                displayResponse('invalidateResponse', data);
-            } catch (error) {
-                displayResponse('invalidateResponse', { error: error.message }, true);
-            }
-        }
-
-        // 5. Delete Match
-        async function deleteMatch() {
-            const matchId = document.getElementById('deleteMatchId').value;
-            displayLoading('deleteResponse');
-
-            try {
-                const response = await fetch(`${API_BASE}?match=${matchId}`, {
-                    method: 'DELETE'
-                });
-                const data = await response.json();
-                displayResponse('deleteResponse', data);
-            } catch (error) {
-                displayResponse('deleteResponse', { error: error.message }, true);
-            }
-        }
-
-        // 6. Delete Player
-        async function deletePlayer() {
-            const player = document.getElementById('deletePlayer').value.trim();
-            if (!player) {
-                displayResponse('deleteResponse', { error: 'Please enter a player name' }, true);
-                return;
-            }
-
-            displayLoading('deleteResponse');
-
-            try {
-                const response = await fetch(`${API_BASE}?player=${encodeURIComponent(player)}`, {
-                    method: 'DELETE'
-                });
-                const data = await response.json();
-                displayResponse('deleteResponse', data);
-            } catch (error) {
-                displayResponse('deleteResponse', { error: error.message }, true);
-            }
-        }
-
-        // 7. Get Player Stats
-        async function getPlayerStats() {
-            const username = document.getElementById('statsUsername').value.trim();
-            if (!username) {
-                displayResponse('statsResponse', { error: 'Please enter a username' }, true);
-                return;
-            }
-
-            displayLoading('statsResponse');
-
-            try {
-                const data = await apiRequest(`player-stats&username=${encodeURIComponent(username)}`);
-                displayResponse('statsResponse', data);
-            } catch (error) {
-                displayResponse('statsResponse', { error: error.message }, true);
-            }
-        }
-
-        // 8. Edit Match
-        async function editMatch() {
-            const matchId = document.getElementById('editMatchId').value;
-            const result = document.getElementById('editResult').value;
-            displayLoading('editResponse');
-
-            try {
-                const response = await fetch(`${API_BASE}?match=${matchId}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ result })
-                });
-                const data = await response.json();
-                displayResponse('editResponse', data);
-            } catch (error) {
-                displayResponse('editResponse', { error: error.message }, true);
-            }
-        }
-
-        // 9. Edit Player
-        async function editPlayer() {
-            const username = document.getElementById('editPlayer').value.trim();
-            const rating = document.getElementById('editRating').value;
-
-            if (!username) {
-                displayResponse('editResponse', { error: 'Please enter a username' }, true);
-                return;
-            }
-
-            displayLoading('editResponse');
-
-            try {
-                const response = await fetch(`${API_BASE}?player=${encodeURIComponent(username)}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ rating: parseInt(rating) })
-                });
-                const data = await response.json();
-                displayResponse('editResponse', data);
-            } catch (error) {
-                displayResponse('editResponse', { error: error.message }, true);
-            }
-        }
-
-        // Add enter key support for inputs
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                const target = e.target;
-                if (target.id === 'playWhite' || target.id === 'playBlack' || target.id === 'playUrl') {
-                    playMatch();
-                } else if (target.id === 'matchId') {
-                    // Don't auto-submit, user should click button
-                } else if (target.id === 'deleteMatchId' || target.id === 'deletePlayer') {
-                    deleteMatch();
-                } else if (target.id === 'statsUsername') {
-                    getPlayerStats();
-                } else if (target.id === 'editMatchId' || target.id === 'editPlayer' || target.id === 'editRating') {
-                    // Don't auto-submit
-                }
+        // Close modal on background click
+        playerStatsModal.addEventListener('click', (e) => {
+            if (e.target === playerStatsModal) {
+                playerStatsModal.style.display = 'none';
             }
         });
 
-        // Auto-load players on page load
-        window.onload = function() {
-            setTimeout(() => fetchData('players'), 500);
-        };
-    </script>
+        // Refresh buttons
+        $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
+        $('#btnRefreshMatches').addEventListener('click', () => fetchMatches(false));
+
+        // Player search
+        $('#playerSearch').addEventListener('input', (e) => {
+            renderLeaderboard(e.target.value);
+        });
+
+        // Keyboard shortcut: Escape closes modals
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeAllModals();
+        });
+
+        // Initial connection check
+        checkConnection();
+    }
+
+    // ── Boot ───────────────────────────────────────────────────
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+})();
+</script>
 </body>
 </html>
