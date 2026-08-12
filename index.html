@@ -1,402 +1,463 @@
 <!DOCTYPE html>
 <html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia.">
-    <title>VRChess Indonesia</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>♚</text></svg>">
-    <style>
-        /* View-Only Overrides */
-        .btn--danger, .btn--primary:not(#btnRefreshPlayers):not(#btnRefreshMatches),
-        .btn--secondary:not(#btnRefreshPlayers):not(#btnRefreshMatches) {
-            display: none !important;
-        }
-        #btnRefreshPlayers, #btnRefreshMatches {
-            display: inline-flex !important;
-        }
-        .match-actions, .match-card__actions {
-            display: none !important;
-        }
-        #btnEditPlayerFromModal, #btnDeletePlayerFromModal {
-            display: none !important;
-        }
-        .leaderboard-row {
-            cursor: default !important;
-        }
-        .leaderboard-row:hover {
-            background: rgba(255, 255, 255, 0.03) !important;
-            transform: none !important;
-        }
-        .tab-btn[data-tab="play"] {
-            display: none !important;
-        }
-        .view-only-badge {
-            display: inline-block;
-            background: #e74c3c;
-            color: #fff;
-            font-size: 0.65rem;
-            padding: 2px 12px;
-            border-radius: 20px;
-            margin-left: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .view-only-notice {
-            background: rgba(231, 76, 60, 0.12);
-            border: 1px solid rgba(231, 76, 60, 0.25);
-            border-radius: 8px;
-            padding: 10px 16px;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #e74c3c;
-            font-size: 0.85rem;
-        }
-        .view-only-notice .icon {
-            font-size: 1.2rem;
-        }
-        /* Settings button hidden */
-        #btnSettings {
-            display: none !important;
-        }
-        /* API URL display hidden */
-        .connection-bar__url {
-            display: none !important;
-        }
-        /* Config modal hidden */
-        #settingsModal {
-            display: none !important;
-        }
-        /* Edit modals hidden */
-        #editPlayerModal, #editMatchModal, #confirmModal {
-            display: none !important;
-        }
-        /* Hide match filter bar */
-        .filter-bar {
-            display: none !important;
-        }
-    </style>
-</head>
-<body>
 
-<div class="app-wrapper">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- ── Header ── -->
-    <header class="app-header">
-        <div class="app-header__logo">
-            <div class="app-header__icon">♚</div>
-            <div>
-                <h1 class="app-header__title">VRChess Indonesia</h1>
-                <p class="app-header__subtitle">Rating &amp; Match Management System</p>
+        <!-- ── Basic Meta Tags ── -->
+        <title>VRChess Indonesia — Peringkat Catur & Match Management</title>
+        <meta name="description"
+            content="VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan statistik pemain.">
+        <meta name="keywords" content="catur, chess, VR, Indonesia, rating, peringkat, turnamen, match management">
+        <meta name="author" content="VRChess Indonesia">
+        <meta name="robots" content="index, follow">
+        <link rel="canonical" href="https://chess.cvar1984.net/">
+
+        <!-- ── Open Graph / Facebook ── -->
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://chess.cvar1984.net/">
+        <meta property="og:title" content="VRChess Indonesia — Peringkat Catur & Match Management">
+        <meta property="og:description"
+            content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan statistik pemain.">
+        <meta property="og:image" content="https://chess.cvar1984.net/thumbnail.png">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta property="og:image:alt" content="VRChess Indonesia - Platform Peringkat Catur">
+        <meta property="og:site_name" content="VRChess Indonesia">
+        <meta property="og:locale" content="id_ID">
+
+        <!-- ── Twitter Card ── -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:url" content="https://chess.cvar1984.net/">
+        <meta name="twitter:title" content="VRChess Indonesia — Peringkat Catur & Match Management">
+        <meta name="twitter:description"
+            content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia.">
+        <meta name="twitter:image" content="https://chess.cvar1984.net/thumbnail.png">
+        <meta name="twitter:image:alt" content="VRChess Indonesia - Platform Peringkat Catur">
+
+        <!-- ── Favicon ── -->
+        <link rel="icon" type="image/svg+xml"
+            href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>♚</text></svg>">
+        <link rel="apple-touch-icon" href="https://chess.cvar1984.net/images/apple-touch-icon.png">
+        <link rel="manifest" href="https://chess.cvar1984.net/site.webmanifest">
+
+        <link rel="stylesheet" href="style.css">
+        <style>
+            /* View-Only Overrides */
+            .btn--danger,
+            .btn--primary:not(#btnRefreshPlayers):not(#btnRefreshMatches),
+            .btn--secondary:not(#btnRefreshPlayers):not(#btnRefreshMatches) {
+                display: none !important;
+            }
+
+            #btnRefreshPlayers,
+            #btnRefreshMatches {
+                display: inline-flex !important;
+            }
+
+            .match-actions,
+            .match-card__actions {
+                display: none !important;
+            }
+
+            #btnEditPlayerFromModal,
+            #btnDeletePlayerFromModal {
+                display: none !important;
+            }
+
+            .leaderboard-row {
+                cursor: default !important;
+            }
+
+            .leaderboard-row:hover {
+                background: rgba(255, 255, 255, 0.03) !important;
+                transform: none !important;
+            }
+
+            .tab-btn[data-tab="play"] {
+                display: none !important;
+            }
+
+            .view-only-badge {
+                display: inline-block;
+                background: #e74c3c;
+                color: #fff;
+                font-size: 0.65rem;
+                padding: 2px 12px;
+                border-radius: 20px;
+                margin-left: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .view-only-notice {
+                background: rgba(231, 76, 60, 0.12);
+                border: 1px solid rgba(231, 76, 60, 0.25);
+                border-radius: 8px;
+                padding: 10px 16px;
+                margin-bottom: 16px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                color: #e74c3c;
+                font-size: 0.85rem;
+            }
+
+            .view-only-notice .icon {
+                font-size: 1.2rem;
+            }
+
+            /* Settings button hidden */
+            #btnSettings {
+                display: none !important;
+            }
+
+            /* API URL display hidden */
+            .connection-bar__url {
+                display: none !important;
+            }
+
+            /* Config modal hidden */
+            #settingsModal {
+                display: none !important;
+            }
+
+            /* Edit modals hidden */
+            #editPlayerModal,
+            #editMatchModal,
+            #confirmModal {
+                display: none !important;
+            }
+
+            /* Hide match filter bar */
+            .filter-bar {
+                display: none !important;
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <div class="app-wrapper">
+
+            <!-- ── Header ── -->
+            <header class="app-header">
+                <div class="app-header__logo">
+                    <div class="app-header__icon">♚</div>
+                    <div>
+                        <h1 class="app-header__title">VRChess Indonesia</h1>
+                        <p class="app-header__subtitle">Rating &amp; Match Management System</p>
+                    </div>
+                </div>
+                <div style="margin-left: auto;">
+                    <span class="view-only-badge">🔒 VIEW ONLY</span>
+                </div>
+            </header>
+
+            <!-- ── View Only Notice ── -->
+            <div class="view-only-notice">
+                <span class="icon">🔒</span>
+                <span><strong>View Only Mode</strong> — This instance is in read-only mode. All submission, editing, and
+                    deletion features are disabled.</span>
             </div>
+
+            <!-- ── Connection Status ── -->
+            <div class="connection-bar" id="connectionBar">
+                <span class="connection-bar__dot" id="statusDot"></span>
+                <span id="statusText">Connecting…</span>
+                <button class="connection-bar__btn" id="btnSettings" style="display:none;">⚙ Config</button>
+            </div>
+
+            <!-- ── Tab Navigation ── -->
+            <nav class="tab-nav" id="tabNav">
+                <button class="tab-btn active" data-tab="leaderboard">
+                    <span class="tab-btn__icon">🏆</span>
+                    <span class="tab-btn__label">Leaderboard</span>
+                    <span class="tab-btn__count" id="playerCount">0</span>
+                </button>
+                <button class="tab-btn" data-tab="matches">
+                    <span class="tab-btn__icon">⚔</span>
+                    <span class="tab-btn__label">Match History</span>
+                    <span class="tab-btn__count" id="matchCount">0</span>
+                </button>
+            </nav>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- TAB 1: Leaderboard                                      -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <section class="tab-content active" id="tab-leaderboard">
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">🏆 Player Rankings</div>
+                        <button class="btn btn--secondary" id="btnRefreshPlayers" title="Refresh leaderboard">↻
+                            Refresh</button>
+                    </div>
+
+                    <div class="search-wrapper">
+                        <span class="search-wrapper__icon">🔍</span>
+                        <input type="text" class="search-input" id="playerSearch" placeholder="Search player…">
+                    </div>
+
+                    <div id="leaderboardContainer">
+                        <div class="empty-state">
+                            <div class="empty-state__icon">♟</div>
+                            <div class="empty-state__text">No players yet</div>
+                            <div class="empty-state__sub">Submit a match to create players automatically</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- TAB 2: Match History                                    -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <section class="tab-content" id="tab-matches">
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">⚔ Match History</div>
+                        <button class="btn btn--secondary" id="btnRefreshMatches" title="Refresh matches">↻
+                            Refresh</button>
+                    </div>
+
+                    <div id="matchesContainer">
+                        <div class="empty-state">
+                            <div class="empty-state__icon">📋</div>
+                            <div class="empty-state__text">No matches recorded</div>
+                            <div class="empty-state__sub">Submit a match result to see it here</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── Footer ── -->
+            <footer class="app-footer">
+                VRChess Indonesia &copy; 2026 — Built with ♥ for the Indonesian Chess Community
+                <span style="color: #e74c3c; margin-left: 12px;">🔒 View Only</span>
+            </footer>
+
         </div>
-        <div style="margin-left: auto;">
-            <span class="view-only-badge">🔒 VIEW ONLY</span>
-        </div>
-    </header>
 
-    <!-- ── View Only Notice ── -->
-    <div class="view-only-notice">
-        <span class="icon">🔒</span>
-        <span><strong>View Only Mode</strong> — This instance is in read-only mode. All submission, editing, and deletion features are disabled.</span>
-    </div>
+        <!-- ── Player Stats Modal (View-Only) ── -->
+        <div class="modal-overlay" id="playerStatsModal" style="display:none;">
+            <div class="modal-content modal-content--wide">
+                <div class="modal-header">
+                    <div class="modal-header__profile">
+                        <div class="modal-avatar" id="modalPlayerAvatar">♚</div>
+                        <div>
+                            <h3 id="modalPlayerUsername" style="margin:0;">Player</h3>
+                            <span class="player-rating-badge" id="modalPlayerRatingBadge">Rating: 400</span>
+                        </div>
+                    </div>
+                    <button class="modal-close-btn" id="btnClosePlayerStats" aria-label="Close">&times;</button>
+                </div>
 
-    <!-- ── Connection Status ── -->
-    <div class="connection-bar" id="connectionBar">
-        <span class="connection-bar__dot" id="statusDot"></span>
-        <span id="statusText">Connecting…</span>
-        <button class="connection-bar__btn" id="btnSettings" style="display:none;">⚙ Config</button>
-    </div>
+                <div class="stats-overview-grid" id="modalPlayerStatsGrid">
+                    <div class="stat-box">
+                        <div class="stat-box__val" id="statGames">0</div>
+                        <div class="stat-box__lbl">Games Played</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box__val stat-win" id="statWins">0</div>
+                        <div class="stat-box__lbl">Wins</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box__val stat-draw" id="statDraws">0</div>
+                        <div class="stat-box__lbl">Draws</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box__val stat-loss" id="statLosses">0</div>
+                        <div class="stat-box__lbl">Losses</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box__val" id="statValidMatches">0</div>
+                        <div class="stat-box__lbl">Valid Matches</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box__val" id="statInvalidMatches">0</div>
+                        <div class="stat-box__lbl">Invalid Matches</div>
+                    </div>
+                </div>
 
-    <!-- ── Tab Navigation ── -->
-    <nav class="tab-nav" id="tabNav">
-        <button class="tab-btn active" data-tab="leaderboard">
-            <span class="tab-btn__icon">🏆</span>
-            <span class="tab-btn__label">Leaderboard</span>
-            <span class="tab-btn__count" id="playerCount">0</span>
-        </button>
-        <button class="tab-btn" data-tab="matches">
-            <span class="tab-btn__icon">⚔</span>
-            <span class="tab-btn__label">Match History</span>
-            <span class="tab-btn__count" id="matchCount">0</span>
-        </button>
-    </nav>
+                <div class="winrate-section">
+                    <div class="winrate-section__header">
+                        <span>Win Rate</span>
+                        <span id="statWinRatePercent">0%</span>
+                    </div>
+                    <div class="winrate-bar-lg">
+                        <div class="winrate-bar-lg__fill" id="statWinRateBar" style="width:0%"></div>
+                    </div>
+                </div>
 
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- TAB 1: Leaderboard                                      -->
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <section class="tab-content active" id="tab-leaderboard">
-        <div class="card">
-            <div class="card__header">
-                <div class="card__title">🏆 Player Rankings</div>
-                <button class="btn btn--secondary" id="btnRefreshPlayers" title="Refresh leaderboard">↻ Refresh</button>
-            </div>
-
-            <div class="search-wrapper">
-                <span class="search-wrapper__icon">🔍</span>
-                <input type="text" class="search-input" id="playerSearch" placeholder="Search player…">
-            </div>
-
-            <div id="leaderboardContainer">
-                <div class="empty-state">
-                    <div class="empty-state__icon">♟</div>
-                    <div class="empty-state__text">No players yet</div>
-                    <div class="empty-state__sub">Submit a match to create players automatically</div>
+                <div class="modal-footer"
+                    style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
+                    <button class="btn btn--secondary btn--sm" id="btnClosePlayerStatsBtn">Close</button>
                 </div>
             </div>
         </div>
-    </section>
 
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- TAB 2: Match History                                    -->
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <section class="tab-content" id="tab-matches">
-        <div class="card">
-            <div class="card__header">
-                <div class="card__title">⚔ Match History</div>
-                <button class="btn btn--secondary" id="btnRefreshMatches" title="Refresh matches">↻ Refresh</button>
-            </div>
+        <!-- ── Toast Container ── -->
+        <div class="toast-container" id="toastContainer"></div>
 
-            <div id="matchesContainer">
-                <div class="empty-state">
-                    <div class="empty-state__icon">📋</div>
-                    <div class="empty-state__text">No matches recorded</div>
-                    <div class="empty-state__sub">Submit a match result to see it here</div>
-                </div>
-            </div>
-        </div>
-    </section>
+        <script>
+            /**
+             * VRChess Indonesia — Frontend Application (View-Only)
+             * Pure vanilla JavaScript, no dependencies.
+             */
 
-    <!-- ── Footer ── -->
-    <footer class="app-footer">
-        VRChess Indonesia &copy; 2026 — Built with ♥ for the Indonesian Chess Community
-        <span style="color: #e74c3c; margin-left: 12px;">🔒 View Only</span>
-    </footer>
+            (function () {
+                'use strict';
 
-</div>
+                // ── Configuration ──────────────────────────────────────────
+                // 👇 FIX: Set your actual API URL here
+                const API_URL = 'https://chess.cvar1984.net';
+                let isOnline = false;
 
-<!-- ── Player Stats Modal (View-Only) ── -->
-<div class="modal-overlay" id="playerStatsModal" style="display:none;">
-    <div class="modal-content modal-content--wide">
-        <div class="modal-header">
-            <div class="modal-header__profile">
-                <div class="modal-avatar" id="modalPlayerAvatar">♚</div>
-                <div>
-                    <h3 id="modalPlayerUsername" style="margin:0;">Player</h3>
-                    <span class="player-rating-badge" id="modalPlayerRatingBadge">Rating: 400</span>
-                </div>
-            </div>
-            <button class="modal-close-btn" id="btnClosePlayerStats" aria-label="Close">&times;</button>
-        </div>
+                // Cached data
+                let playersCache = [];
+                let matchesCache = [];
+                let playerIdMap = {};
 
-        <div class="stats-overview-grid" id="modalPlayerStatsGrid">
-            <div class="stat-box">
-                <div class="stat-box__val" id="statGames">0</div>
-                <div class="stat-box__lbl">Games Played</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-box__val stat-win" id="statWins">0</div>
-                <div class="stat-box__lbl">Wins</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-box__val stat-draw" id="statDraws">0</div>
-                <div class="stat-box__lbl">Draws</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-box__val stat-loss" id="statLosses">0</div>
-                <div class="stat-box__lbl">Losses</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-box__val" id="statValidMatches">0</div>
-                <div class="stat-box__lbl">Valid Matches</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-box__val" id="statInvalidMatches">0</div>
-                <div class="stat-box__lbl">Invalid Matches</div>
-            </div>
-        </div>
+                // ── DOM References ─────────────────────────────────────────
+                const $ = sel => document.querySelector(sel);
+                const $$ = sel => document.querySelectorAll(sel);
 
-        <div class="winrate-section">
-            <div class="winrate-section__header">
-                <span>Win Rate</span>
-                <span id="statWinRatePercent">0%</span>
-            </div>
-            <div class="winrate-bar-lg">
-                <div class="winrate-bar-lg__fill" id="statWinRateBar" style="width:0%"></div>
-            </div>
-        </div>
+                const statusDot = $('#statusDot');
+                const statusText = $('#statusText');
+                const playerCountEl = $('#playerCount');
+                const matchCountEl = $('#matchCount');
+                const leaderboardContainer = $('#leaderboardContainer');
+                const matchesContainer = $('#matchesContainer');
 
-        <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
-            <button class="btn btn--secondary btn--sm" id="btnClosePlayerStatsBtn">Close</button>
-        </div>
-    </div>
-</div>
+                // Modals
+                const playerStatsModal = $('#playerStatsModal');
 
-<!-- ── Toast Container ── -->
-<div class="toast-container" id="toastContainer"></div>
+                // ── Toast Notifications ────────────────────────────────────
+                function toast(message, type = 'info') {
+                    const container = $('#toastContainer');
+                    const el = document.createElement('div');
+                    el.className = `toast toast--${type}`;
+                    el.textContent = message;
+                    container.appendChild(el);
+                    setTimeout(() => el.remove(), 4000);
+                }
 
-<script>
-/**
- * VRChess Indonesia — Frontend Application (View-Only)
- * Pure vanilla JavaScript, no dependencies.
- */
+                // ── API Helpers ────────────────────────────────────────────
+                function buildUrl(endpoint, params = {}) {
+                    let base = API_URL.replace(/\/+$/, '');
+                    if (!endpoint.startsWith('/')) endpoint = '/' + endpoint;
+                    const url = new URL(base + endpoint);
+                    Object.entries(params).forEach(([k, v]) => {
+                        if (v !== undefined && v !== null) {
+                            url.searchParams.set(k, v);
+                        }
+                    });
+                    return url;
+                }
 
-(function() {
-    'use strict';
+                async function apiFetch(endpoint, params = {}) {
+                    const url = buildUrl(endpoint, params);
+                    const response = await fetch(url.toString(), {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || `HTTP ${response.status}`);
+                    }
+                    return data;
+                }
 
-    // ── Configuration ──────────────────────────────────────────
-    // 👇 FIX: Set your actual API URL here
-    const API_URL = 'https://chess.cvar1984.net';
-    let isOnline = false;
+                // ── Connection Check ───────────────────────────────────────
+                async function checkConnection() {
+                    statusText.textContent = 'Connecting…';
+                    statusDot.className = 'connection-bar__dot';
 
-    // Cached data
-    let playersCache = [];
-    let matchesCache = [];
-    let playerIdMap = {};
+                    try {
+                        const data = await apiFetch('/index.php', { players: '' });
+                        if (data.success) {
+                            setOnline(true);
+                            playersCache = data.players || [];
+                            buildPlayerIdMap();
+                            playerCountEl.textContent = data.count || playersCache.length;
+                            renderLeaderboard();
+                            await fetchMatches(true);
+                        } else {
+                            setOnline(false);
+                        }
+                    } catch (e) {
+                        console.error('Connection error:', e);
+                        setOnline(false);
+                        toast('Failed to connect to server: ' + e.message, 'error');
+                    }
+                }
 
-    // ── DOM References ─────────────────────────────────────────
-    const $ = sel => document.querySelector(sel);
-    const $$ = sel => document.querySelectorAll(sel);
+                function setOnline(online) {
+                    isOnline = online;
+                    statusDot.className = 'connection-bar__dot ' + (online ? 'online' : 'offline');
+                    statusText.textContent = online ? 'Connected' : 'Offline — check server';
+                }
 
-    const statusDot = $('#statusDot');
-    const statusText = $('#statusText');
-    const playerCountEl = $('#playerCount');
-    const matchCountEl = $('#matchCount');
-    const leaderboardContainer = $('#leaderboardContainer');
-    const matchesContainer = $('#matchesContainer');
+                // ── Build player id→username map ───────────────────────────
+                function buildPlayerIdMap() {
+                    playerIdMap = {};
+                    playersCache.forEach(p => {
+                        playerIdMap[p.id] = p.username;
+                    });
+                }
 
-    // Modals
-    const playerStatsModal = $('#playerStatsModal');
+                // ── Fetch Players ──────────────────────────────────────────
+                async function fetchPlayers(silent = false) {
+                    try {
+                        const data = await apiFetch('/index.php', { players: '' });
+                        if (data.success) {
+                            playersCache = data.players || [];
+                            buildPlayerIdMap();
+                            playerCountEl.textContent = data.count || playersCache.length;
+                            renderLeaderboard($('#playerSearch') ? $('#playerSearch').value : '');
+                            if (!silent) toast('Leaderboard refreshed', 'success');
+                        }
+                    } catch (e) {
+                        if (!silent) toast('Failed to fetch players: ' + e.message, 'error');
+                    }
+                }
 
-    // ── Toast Notifications ────────────────────────────────────
-    function toast(message, type = 'info') {
-        const container = $('#toastContainer');
-        const el = document.createElement('div');
-        el.className = `toast toast--${type}`;
-        el.textContent = message;
-        container.appendChild(el);
-        setTimeout(() => el.remove(), 4000);
-    }
+                // ── Fetch Matches ──────────────────────────────────────────
+                async function fetchMatches(silent = false) {
+                    try {
+                        const data = await apiFetch('/index.php', { matches: '' });
+                        if (data.success) {
+                            matchesCache = data.matches || [];
+                            matchCountEl.textContent = data.count || matchesCache.length;
+                            renderMatches();
+                            if (!silent) toast('Matches refreshed', 'success');
+                        }
+                    } catch (e) {
+                        if (!silent) toast('Failed to fetch matches: ' + e.message, 'error');
+                    }
+                }
 
-    // ── API Helpers ────────────────────────────────────────────
-    function buildUrl(endpoint, params = {}) {
-        let base = API_URL.replace(/\/+$/, '');
-        if (!endpoint.startsWith('/')) endpoint = '/' + endpoint;
-        const url = new URL(base + endpoint);
-        Object.entries(params).forEach(([k, v]) => {
-            if (v !== undefined && v !== null) {
-                url.searchParams.set(k, v);
-            }
-        });
-        return url;
-    }
+                // ── Render Leaderboard ─────────────────────────────────────
+                function renderLeaderboard(filter = '') {
+                    let players = playersCache;
 
-    async function apiFetch(endpoint, params = {}) {
-        const url = buildUrl(endpoint, params);
-        const response = await fetch(url.toString(), {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || `HTTP ${response.status}`);
-        }
-        return data;
-    }
+                    if (filter) {
+                        const q = filter.toLowerCase();
+                        players = players.filter(p => p.username.toLowerCase().includes(q));
+                    }
 
-    // ── Connection Check ───────────────────────────────────────
-    async function checkConnection() {
-        statusText.textContent = 'Connecting…';
-        statusDot.className = 'connection-bar__dot';
-
-        try {
-            const data = await apiFetch('/index.php', { players: '' });
-            if (data.success) {
-                setOnline(true);
-                playersCache = data.players || [];
-                buildPlayerIdMap();
-                playerCountEl.textContent = data.count || playersCache.length;
-                renderLeaderboard();
-                await fetchMatches(true);
-            } else {
-                setOnline(false);
-            }
-        } catch (e) {
-            console.error('Connection error:', e);
-            setOnline(false);
-            toast('Failed to connect to server: ' + e.message, 'error');
-        }
-    }
-
-    function setOnline(online) {
-        isOnline = online;
-        statusDot.className = 'connection-bar__dot ' + (online ? 'online' : 'offline');
-        statusText.textContent = online ? 'Connected' : 'Offline — check server';
-    }
-
-    // ── Build player id→username map ───────────────────────────
-    function buildPlayerIdMap() {
-        playerIdMap = {};
-        playersCache.forEach(p => {
-            playerIdMap[p.id] = p.username;
-        });
-    }
-
-    // ── Fetch Players ──────────────────────────────────────────
-    async function fetchPlayers(silent = false) {
-        try {
-            const data = await apiFetch('/index.php', { players: '' });
-            if (data.success) {
-                playersCache = data.players || [];
-                buildPlayerIdMap();
-                playerCountEl.textContent = data.count || playersCache.length;
-                renderLeaderboard($('#playerSearch') ? $('#playerSearch').value : '');
-                if (!silent) toast('Leaderboard refreshed', 'success');
-            }
-        } catch (e) {
-            if (!silent) toast('Failed to fetch players: ' + e.message, 'error');
-        }
-    }
-
-    // ── Fetch Matches ──────────────────────────────────────────
-    async function fetchMatches(silent = false) {
-        try {
-            const data = await apiFetch('/index.php', { matches: '' });
-            if (data.success) {
-                matchesCache = data.matches || [];
-                matchCountEl.textContent = data.count || matchesCache.length;
-                renderMatches();
-                if (!silent) toast('Matches refreshed', 'success');
-            }
-        } catch (e) {
-            if (!silent) toast('Failed to fetch matches: ' + e.message, 'error');
-        }
-    }
-
-    // ── Render Leaderboard ─────────────────────────────────────
-    function renderLeaderboard(filter = '') {
-        let players = playersCache;
-
-        if (filter) {
-            const q = filter.toLowerCase();
-            players = players.filter(p => p.username.toLowerCase().includes(q));
-        }
-
-        if (players.length === 0) {
-            leaderboardContainer.innerHTML = `
+                    if (players.length === 0) {
+                        leaderboardContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state__icon">♟</div>
                     <div class="empty-state__text">${filter ? 'No players match your search' : 'No players yet'}</div>
                     <div class="empty-state__sub">${filter ? 'Try a different search term' : 'Submit a match to create players automatically'}</div>
                 </div>`;
-            return;
-        }
+                        return;
+                    }
 
-        let html = `
+                    let html = `
             <table class="leaderboard-table">
                 <thead>
                     <tr>
@@ -412,14 +473,14 @@
                 </thead>
                 <tbody>`;
 
-        players.forEach((p, i) => {
-            const rank = i + 1;
-            const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'default';
-            const games = parseInt(p.games) || 0;
-            const wins = parseInt(p.wins) || 0;
-            const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+                    players.forEach((p, i) => {
+                        const rank = i + 1;
+                        const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'default';
+                        const games = parseInt(p.games) || 0;
+                        const wins = parseInt(p.wins) || 0;
+                        const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
 
-            html += `
+                        html += `
                 <tr class="leaderboard-row" data-username="${escHtml(p.username)}" title="Click to view player stats">
                     <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
                     <td><span class="player-name">${escHtml(p.username)}</span></td>
@@ -433,53 +494,53 @@
                         <span class="winrate-bar"><span class="winrate-bar__fill" style="width:${winRate}%"></span></span>
                     </td>
                 </tr>`;
-        });
+                    });
 
-        html += '</tbody></table>';
-        leaderboardContainer.innerHTML = html;
+                    html += '</tbody></table>';
+                    leaderboardContainer.innerHTML = html;
 
-        leaderboardContainer.querySelectorAll('.leaderboard-row').forEach(row => {
-            row.addEventListener('click', () => {
-                const username = row.dataset.username;
-                if (username) openPlayerStats(username);
-            });
-        });
-    }
+                    leaderboardContainer.querySelectorAll('.leaderboard-row').forEach(row => {
+                        row.addEventListener('click', () => {
+                            const username = row.dataset.username;
+                            if (username) openPlayerStats(username);
+                        });
+                    });
+                }
 
-    // ── Render Matches ─────────────────────────────────────────
-    function renderMatches() {
-        if (matchesCache.length === 0) {
-            matchesContainer.innerHTML = `
+                // ── Render Matches ─────────────────────────────────────────
+                function renderMatches() {
+                    if (matchesCache.length === 0) {
+                        matchesContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state__icon">📋</div>
                     <div class="empty-state__text">No matches recorded</div>
                     <div class="empty-state__sub">Submit a match result to see it here</div>
                 </div>`;
-            return;
-        }
+                        return;
+                    }
 
-        const sorted = [...matchesCache].reverse();
+                    const sorted = [...matchesCache].reverse();
 
-        let html = '';
-        sorted.forEach(m => {
-            const whiteName = playerIdMap[m.white_id] || `Player #${m.white_id}`;
-            const blackName = playerIdMap[m.black_id] || `Player #${m.black_id}`;
-            const isValid = !('is_valid' in m) || m.is_valid === true;
+                    let html = '';
+                    sorted.forEach(m => {
+                        const whiteName = playerIdMap[m.white_id] || `Player #${m.white_id}`;
+                        const blackName = playerIdMap[m.black_id] || `Player #${m.black_id}`;
+                        const isValid = !('is_valid' in m) || m.is_valid === true;
 
-            let resultClass = 'draw';
-            let resultLabel = '½-½';
-            if (m.result === '1-0') { resultClass = 'white'; resultLabel = '1-0'; }
-            else if (m.result === '0-1') { resultClass = 'black'; resultLabel = '0-1'; }
+                        let resultClass = 'draw';
+                        let resultLabel = '½-½';
+                        if (m.result === '1-0') { resultClass = 'white'; resultLabel = '1-0'; }
+                        else if (m.result === '0-1') { resultClass = 'black'; resultLabel = '0-1'; }
 
-            const analysisLink = m.analysis_url
-                ? `<a class="match-card__link" href="${escHtml(m.analysis_url)}" target="_blank" rel="noopener">📊 Analysis</a>`
-                : '';
+                        const analysisLink = m.analysis_url
+                            ? `<a class="match-card__link" href="${escHtml(m.analysis_url)}" target="_blank" rel="noopener">📊 Analysis</a>`
+                            : '';
 
-            const statusBadge = !isValid
-                ? `<span class="match-card__status-tag match-card__status-tag--invalid">🚫 Invalidated</span>`
-                : '';
+                        const statusBadge = !isValid
+                            ? `<span class="match-card__status-tag match-card__status-tag--invalid">🚫 Invalidated</span>`
+                            : '';
 
-            html += `
+                        html += `
                 <div class="match-card ${!isValid ? 'is-invalid' : ''}">
                     <div class="match-card__player match-card__player--white">
                         <span class="match-card__player-label">⬜ White</span>
@@ -496,113 +557,114 @@
                         <span class="match-card__player-name">${escHtml(blackName)}</span>
                     </div>
                 </div>`;
-        });
+                    });
 
-        matchesContainer.innerHTML = html;
-    }
+                    matchesContainer.innerHTML = html;
+                }
 
-    // ── Player Stats Modal ─────────────────────────────────────
-    async function openPlayerStats(username) {
-        $('#modalPlayerUsername').textContent = username;
-        $('#modalPlayerRatingBadge').textContent = 'Loading…';
-        playerStatsModal.style.display = 'flex';
+                // ── Player Stats Modal ─────────────────────────────────────
+                async function openPlayerStats(username) {
+                    $('#modalPlayerUsername').textContent = username;
+                    $('#modalPlayerRatingBadge').textContent = 'Loading…';
+                    playerStatsModal.style.display = 'flex';
 
-        try {
-            const data = await apiFetch('/index.php', { 'player-stats': '', username });
-            if (data.success && data.stats) {
-                const s = data.stats;
-                const p = s.player || {};
-                $('#modalPlayerRatingBadge').textContent = `Rating: ${s.current_rating || p.rating || 400}`;
-                $('#statGames').textContent = s.games || 0;
-                $('#statWins').textContent = s.wins || 0;
-                $('#statDraws').textContent = s.draws || 0;
-                $('#statLosses').textContent = s.losses || 0;
-                $('#statValidMatches').textContent = s.valid_matches || 0;
-                $('#statInvalidMatches').textContent = s.invalid_matches || 0;
+                    try {
+                        const data = await apiFetch('/index.php', { 'player-stats': '', username });
+                        if (data.success && data.stats) {
+                            const s = data.stats;
+                            const p = s.player || {};
+                            $('#modalPlayerRatingBadge').textContent = `Rating: ${s.current_rating || p.rating || 400}`;
+                            $('#statGames').textContent = s.games || 0;
+                            $('#statWins').textContent = s.wins || 0;
+                            $('#statDraws').textContent = s.draws || 0;
+                            $('#statLosses').textContent = s.losses || 0;
+                            $('#statValidMatches').textContent = s.valid_matches || 0;
+                            $('#statInvalidMatches').textContent = s.invalid_matches || 0;
 
-                const games = parseInt(s.games) || 0;
-                const wins = parseInt(s.wins) || 0;
-                const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
-                $('#statWinRatePercent').textContent = `${winRate}%`;
-                $('#statWinRateBar').style.width = `${winRate}%`;
-            }
-        } catch (e) {
-            toast('Failed to load stats: ' + e.message, 'error');
-        }
-    }
+                            const games = parseInt(s.games) || 0;
+                            const wins = parseInt(s.wins) || 0;
+                            const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+                            $('#statWinRatePercent').textContent = `${winRate}%`;
+                            $('#statWinRateBar').style.width = `${winRate}%`;
+                        }
+                    } catch (e) {
+                        toast('Failed to load stats: ' + e.message, 'error');
+                    }
+                }
 
-    // ── Utility ────────────────────────────────────────────────
-    function escHtml(str) {
-        if (str === null || str === undefined) return '';
-        const div = document.createElement('div');
-        div.textContent = String(str);
-        return div.innerHTML;
-    }
+                // ── Utility ────────────────────────────────────────────────
+                function escHtml(str) {
+                    if (str === null || str === undefined) return '';
+                    const div = document.createElement('div');
+                    div.textContent = String(str);
+                    return div.innerHTML;
+                }
 
-    function closeAllModals() {
-        playerStatsModal.style.display = 'none';
-    }
+                function closeAllModals() {
+                    playerStatsModal.style.display = 'none';
+                }
 
-    // ── Tab Navigation ─────────────────────────────────────────
-    function initTabs() {
-        $$('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const tabName = btn.dataset.tab;
+                // ── Tab Navigation ─────────────────────────────────────────
+                function initTabs() {
+                    $$('.tab-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const tabName = btn.dataset.tab;
 
-                $$('.tab-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
+                            $$('.tab-btn').forEach(b => b.classList.remove('active'));
+                            btn.classList.add('active');
 
-                $$('.tab-content').forEach(c => c.classList.remove('active'));
-                $(`#tab-${tabName}`).classList.add('active');
-            });
-        });
-    }
+                            $$('.tab-content').forEach(c => c.classList.remove('active'));
+                            $(`#tab-${tabName}`).classList.add('active');
+                        });
+                    });
+                }
 
-    // ── Event Bindings ─────────────────────────────────────────
-    function init() {
-        initTabs();
+                // ── Event Bindings ─────────────────────────────────────────
+                function init() {
+                    initTabs();
 
-        // Player Stats Modal
-        $('#btnClosePlayerStats').addEventListener('click', () => {
-            playerStatsModal.style.display = 'none';
-        });
-        $('#btnClosePlayerStatsBtn').addEventListener('click', () => {
-            playerStatsModal.style.display = 'none';
-        });
+                    // Player Stats Modal
+                    $('#btnClosePlayerStats').addEventListener('click', () => {
+                        playerStatsModal.style.display = 'none';
+                    });
+                    $('#btnClosePlayerStatsBtn').addEventListener('click', () => {
+                        playerStatsModal.style.display = 'none';
+                    });
 
-        // Close modal on background click
-        playerStatsModal.addEventListener('click', (e) => {
-            if (e.target === playerStatsModal) {
-                playerStatsModal.style.display = 'none';
-            }
-        });
+                    // Close modal on background click
+                    playerStatsModal.addEventListener('click', (e) => {
+                        if (e.target === playerStatsModal) {
+                            playerStatsModal.style.display = 'none';
+                        }
+                    });
 
-        // Refresh buttons
-        $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
-        $('#btnRefreshMatches').addEventListener('click', () => fetchMatches(false));
+                    // Refresh buttons
+                    $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
+                    $('#btnRefreshMatches').addEventListener('click', () => fetchMatches(false));
 
-        // Player search
-        $('#playerSearch').addEventListener('input', (e) => {
-            renderLeaderboard(e.target.value);
-        });
+                    // Player search
+                    $('#playerSearch').addEventListener('input', (e) => {
+                        renderLeaderboard(e.target.value);
+                    });
 
-        // Keyboard shortcut: Escape closes modals
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeAllModals();
-        });
+                    // Keyboard shortcut: Escape closes modals
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape') closeAllModals();
+                    });
 
-        // Initial connection check
-        checkConnection();
-    }
+                    // Initial connection check
+                    checkConnection();
+                }
 
-    // ── Boot ───────────────────────────────────────────────────
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+                // ── Boot ───────────────────────────────────────────────────
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', init);
+                } else {
+                    init();
+                }
 
-})();
-</script>
-</body>
+            })();
+        </script>
+    </body>
+
 </html>
