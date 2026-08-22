@@ -6,10 +6,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
         <!-- ── Basic Meta Tags ── -->
-        <title>VRChess Indonesia — Peringkat Catur & Match Management</title>
+        <title>VRChess Indonesia — Peringkat Catur &amp; Admin Panel</title>
         <meta name="description"
-            content="VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan statistik pemain.">
-        <meta name="keywords" content="catur, chess, VR, Indonesia, rating, peringkat, turnamen, match management">
+            content="VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan kelola API token.">
+        <meta name="keywords" content="catur, chess, VR, Indonesia, rating, peringkat, turnamen, API tokens">
         <meta name="author" content="VRChess Indonesia">
         <meta name="robots" content="index, follow">
         <link rel="canonical" href="https://chess.cvar1984.net/">
@@ -17,9 +17,9 @@
         <!-- ── Open Graph / Facebook ── -->
         <meta property="og:type" content="website">
         <meta property="og:url" content="https://chess.cvar1984.net/">
-        <meta property="og:title" content="VRChess Indonesia — Peringkat Catur & Match Management">
+        <meta property="og:title" content="VRChess Indonesia — Peringkat Catur &amp; API Token Management">
         <meta property="og:description"
-            content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan statistik pemain.">
+            content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan kelola API token.">
         <meta property="og:image" content="https://chess.cvar1984.net/thumbnail.png">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
@@ -30,7 +30,7 @@
         <!-- ── Twitter Card ── -->
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:url" content="https://chess.cvar1984.net/">
-        <meta name="twitter:title" content="VRChess Indonesia — Peringkat Catur & Match Management">
+        <meta name="twitter:title" content="VRChess Indonesia — Peringkat Catur &amp; API Token Management">
         <meta name="twitter:description"
             content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia.">
         <meta name="twitter:image" content="https://chess.cvar1984.net/thumbnail.png">
@@ -39,101 +39,103 @@
         <!-- ── Favicon ── -->
         <link rel="icon" type="image/svg+xml"
             href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>♚</text></svg>">
-        <link rel="apple-touch-icon" href="https://chess.cvar1984.net/images/apple-touch-icon.png">
-        <link rel="manifest" href="https://chess.cvar1984.net/site.webmanifest">
+
+        <!-- ── Chess libraries (no SRI – CDN bytes vary) ── -->
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+        <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
         <link rel="stylesheet" href="style.css">
         <style>
-            /* View-Only Overrides */
-            .btn--danger,
-            .btn--primary:not(#btnRefreshPlayers):not(#btnRefreshMatches),
-            .btn--secondary:not(#btnRefreshPlayers):not(#btnRefreshMatches) {
+            /* Fix chessboard dragging z-index so it doesn't fall behind UI */
+            body > img[data-piece] {
+                z-index: 100000 !important;
+            }
+            .auth-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 14px;
+                border-radius: 20px;
+                font-size: 0.72rem;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+                transition: all var(--transition-normal);
+            }
+
+            .auth-badge--visitor {
+                background: rgba(148, 163, 184, 0.15);
+                color: var(--text-secondary);
+                border: 1px solid rgba(148, 163, 184, 0.25);
+            }
+
+            .auth-badge--admin {
+                background: linear-gradient(135deg, rgba(124, 92, 255, 0.25), rgba(92, 225, 230, 0.15));
+                color: var(--accent-secondary);
+                border: 1px solid var(--accent-primary);
+                box-shadow: 0 0 12px rgba(124, 92, 255, 0.2);
+            }
+
+            .admin-only {
                 display: none !important;
             }
 
-            #btnRefreshPlayers,
-            #btnRefreshMatches {
+            body.is-admin .admin-only {
                 display: inline-flex !important;
             }
 
-            .match-actions,
-            .match-card__actions {
+            body.is-admin div.admin-only,
+            body.is-admin section.admin-only,
+            body.is-admin button.admin-only,
+            body.is-admin table.admin-only {
+                display: flex !important;
+            }
+
+            body.is-admin .admin-only-block {
+                display: block !important;
+            }
+
+            body:not(.is-admin) .visitor-only {
+                display: inline-flex !important;
+            }
+
+            body.is-admin .visitor-only {
                 display: none !important;
             }
 
-            #btnEditPlayerFromModal,
-            #btnDeletePlayerFromModal {
-                display: none !important;
+            .match-actions-btn {
+                opacity: 0.8;
+                transition: all 0.2s ease;
             }
 
-            .leaderboard-row {
-                cursor: default !important;
+            .match-actions-btn:hover {
+                opacity: 1;
+                transform: scale(1.05);
             }
 
-            .leaderboard-row:hover {
-                background: rgba(255, 255, 255, 0.03) !important;
-                transform: none !important;
-            }
-
-            .tab-btn[data-tab="play"] {
-                display: none !important;
-            }
-
-            .view-only-badge {
-                display: inline-block;
-                background: #e74c3c;
-                color: #fff;
-                font-size: 0.65rem;
-                padding: 2px 12px;
-                border-radius: 20px;
-                margin-left: 10px;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-
-            .view-only-notice {
-                background: rgba(231, 76, 60, 0.12);
-                border: 1px solid rgba(231, 76, 60, 0.25);
-                border-radius: 8px;
-                padding: 10px 16px;
-                margin-bottom: 16px;
+            .admin-banner {
+                background: linear-gradient(135deg, rgba(124, 92, 255, 0.15), rgba(92, 225, 230, 0.08));
+                border: 1px solid rgba(124, 92, 255, 0.3);
+                border-radius: var(--radius-lg);
+                padding: 12px 20px;
+                margin-bottom: 20px;
                 display: flex;
                 align-items: center;
-                gap: 10px;
-                color: #e74c3c;
+                justify-content: space-between;
                 font-size: 0.85rem;
             }
 
-            .view-only-notice .icon {
-                font-size: 1.2rem;
-            }
-
-            /* Settings button hidden */
-            #btnSettings {
-                display: none !important;
-            }
-
-            /* API URL display hidden */
-            .connection-bar__url {
-                display: none !important;
-            }
-
-            /* Config modal hidden */
-            #settingsModal {
-                display: none !important;
-            }
-
-            /* Edit modals hidden */
-            #editPlayerModal,
-            #editMatchModal,
-            #confirmModal {
-                display: none !important;
-            }
-
-            /* Hide match filter bar */
-            .filter-bar {
-                display: none !important;
+            .token-code {
+                font-family: var(--font-mono);
+                background: rgba(0, 0, 0, 0.4);
+                padding: 4px 8px;
+                border-radius: 4px;
+                border: 1px solid var(--border-subtle);
+                font-size: 0.78rem;
+                color: var(--accent-secondary);
+                word-break: break-all;
             }
         </style>
     </head>
@@ -151,36 +153,50 @@
                         <p class="app-header__subtitle">Rating &amp; Match Management System</p>
                     </div>
                 </div>
-                <div style="margin-left: auto;">
-                    <span class="view-only-badge">🔒 VIEW ONLY</span>
+                <div style="position: absolute; right: 0; top: 28px; display: flex; align-items: center; gap: 10px;">
+                    <span id="authBadge" class="auth-badge auth-badge--visitor">🔒 Visitor Mode</span>
+                    <button class="btn btn--primary btn--sm visitor-only" id="btnOpenLoginModal" type="button">🔑 Admin Login</button>
+                    <button class="btn btn--secondary btn--sm admin-only" id="btnLogoutBtn" type="button">🚪 Logout</button>
                 </div>
             </header>
 
-            <!-- ── View Only Notice ── -->
-            <div class="view-only-notice">
-                <span class="icon">🔒</span>
-                <span><strong>View Only Mode</strong> — This instance is in read-only mode. All submission, editing, and
-                    deletion features are disabled.</span>
+            <!-- ── Admin Status Banner ── -->
+            <div class="admin-banner admin-only" id="adminBanner">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.2rem;">👑</span>
+                    <span><strong>Mode Admin Aktif (<span id="currentAdminName"></span>)</strong> — Penuh kontrol: kelola Users Admin, API Tokens, catat &amp; edit pertandingan.</span>
+                </div>
             </div>
 
             <!-- ── Connection Status ── -->
             <div class="connection-bar" id="connectionBar">
                 <span class="connection-bar__dot" id="statusDot"></span>
-                <span id="statusText">Connecting…</span>
-                <button class="connection-bar__btn" id="btnSettings" style="display:none;">⚙ Config</button>
+                <span id="statusText">Menghubungkan ke server…</span>
             </div>
 
             <!-- ── Tab Navigation ── -->
             <nav class="tab-nav" id="tabNav">
-                <button class="tab-btn active" data-tab="leaderboard">
+                <button class="tab-btn active" data-tab="leaderboard" id="tabBtnLeaderboard">
                     <span class="tab-btn__icon">🏆</span>
                     <span class="tab-btn__label">Leaderboard</span>
                     <span class="tab-btn__count" id="playerCount">0</span>
                 </button>
-                <button class="tab-btn" data-tab="matches">
+                <button class="tab-btn" data-tab="matches" id="tabBtnMatches">
                     <span class="tab-btn__icon">⚔</span>
                     <span class="tab-btn__label">Match History</span>
                     <span class="tab-btn__count" id="matchCount">0</span>
+                </button>
+                <button class="tab-btn admin-only" data-tab="play" id="tabBtnPlay">
+                    <span class="tab-btn__icon">🎮</span>
+                    <span class="tab-btn__label">Submit Match</span>
+                </button>
+                <button class="tab-btn admin-only" data-tab="admin" id="tabBtnAdmin">
+                    <span class="tab-btn__icon">⚙</span>
+                    <span class="tab-btn__label">Admin Panel</span>
+                </button>
+                <button class="tab-btn" data-tab="analysis" id="tabBtnAnalysis">
+                    <span class="tab-btn__icon">🧠</span>
+                    <span class="tab-btn__label">Analisis (Stockfish)</span>
                 </button>
             </nav>
 
@@ -191,20 +207,22 @@
                 <div class="card">
                     <div class="card__header">
                         <div class="card__title">🏆 Player Rankings</div>
-                        <button class="btn btn--secondary" id="btnRefreshPlayers" title="Refresh leaderboard">↻
-                            Refresh</button>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn--primary btn--sm admin-only" id="btnAddPlayerBtn" type="button">➕ Tambah Pemain</button>
+                            <button class="btn btn--secondary btn--sm" id="btnRefreshPlayers" title="Refresh leaderboard" type="button">↻ Refresh</button>
+                        </div>
                     </div>
 
                     <div class="search-wrapper">
                         <span class="search-wrapper__icon">🔍</span>
-                        <input type="text" class="search-input" id="playerSearch" placeholder="Search player…">
+                        <input type="text" class="search-input" id="playerSearch" placeholder="Cari pemain...">
                     </div>
 
                     <div id="leaderboardContainer">
                         <div class="empty-state">
                             <div class="empty-state__icon">♟</div>
-                            <div class="empty-state__text">No players yet</div>
-                            <div class="empty-state__sub">Submit a match to create players automatically</div>
+                            <div class="empty-state__text">Belum ada pemain</div>
+                            <div class="empty-state__sub">Pertandingan pertama akan otomatis mendaftarkan pemain</div>
                         </div>
                     </div>
                 </div>
@@ -217,29 +235,410 @@
                 <div class="card">
                     <div class="card__header">
                         <div class="card__title">⚔ Match History</div>
-                        <button class="btn btn--secondary" id="btnRefreshMatches" title="Refresh matches">↻
-                            Refresh</button>
+                        <button class="btn btn--secondary btn--sm" id="btnRefreshMatches" title="Refresh matches" type="button">↻ Refresh</button>
+                    </div>
+
+                    <!-- Match Filters -->
+                    <div class="filter-bar">
+                        <button class="filter-btn active" data-filter="all" id="filterAllMatches">Semua Pertandingan</button>
+                        <button class="filter-btn" data-filter="valid" id="filterValidMatches">✅ Valid</button>
+                        <button class="filter-btn" data-filter="invalid" id="filterInvalidMatches">🚫 Invalidated</button>
                     </div>
 
                     <div id="matchesContainer">
                         <div class="empty-state">
                             <div class="empty-state__icon">📋</div>
-                            <div class="empty-state__text">No matches recorded</div>
-                            <div class="empty-state__sub">Submit a match result to see it here</div>
+                            <div class="empty-state__text">Belum ada riwayat pertandingan</div>
                         </div>
                     </div>
                 </div>
             </section>
 
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- TAB 3: Submit Match (Admin Only)                       -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <section class="tab-content" id="tab-play">
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">🎮 Catat Pertandingan Baru</div>
+                        <span class="card__badge card__badge--purple">ADMIN ACTION</span>
+                    </div>
+
+                    <form id="playMatchForm">
+                        <div class="form-row">
+                            <div class="form-group autocomplete-wrapper">
+                                <label class="form-label" for="playWhite">⬜ Pemain Putih (White)</label>
+                                <input type="text" class="form-input" id="playWhite" placeholder="Ketik nama pemain..." required autocomplete="off">
+                            </div>
+                            <div class="form-group autocomplete-wrapper">
+                                <label class="form-label" for="playBlack">⬛ Pemain Hitam (Black)</label>
+                                <input type="text" class="form-input" id="playBlack" placeholder="Ketik nama pemain..." required autocomplete="off">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="playResult">🏆 Hasil Pertandingan</label>
+                            <select class="form-select" id="playResult" required>
+                                <option value="1">1 - 0 (White Menang)</option>
+                                <option value="0">½ - ½ (Draw / Seri)</option>
+                                <option value="-1">0 - 1 (Black Menang)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="playUrl">📊 URL Analisis / Chessigma (Opsional)</label>
+                            <input type="url" class="form-input" id="playUrl" placeholder="https://www.chessigma.com/games/...">
+                        </div>
+
+                        <button type="submit" class="btn btn--primary btn--full" id="btnSubmitMatch">
+                            ⚡ Catat Pertandingan &amp; Hitung Ulang Rating
+                        </button>
+                    </form>
+
+                    <!-- Match Result Reveal -->
+                    <div class="result-panel" id="playResultPanel" style="display:none;">
+                        <div class="result-panel__title">🎉 Pertandingan Berhasil Dicatat!</div>
+                        <div class="result-panel__grid">
+                            <div class="result-player">
+                                <div class="result-player__name" id="resWhiteName">White</div>
+                                <div class="result-player__rating">
+                                    <span id="resWhiteOld">400</span> ➔ <strong id="resWhiteNew">430</strong>
+                                    <span class="result-player__change positive" id="resWhiteChange">+30</span>
+                                </div>
+                            </div>
+                            <div class="result-player">
+                                <div class="result-player__name" id="resBlackName">Black</div>
+                                <div class="result-player__rating">
+                                    <span id="resBlackOld">400</span> ➔ <strong id="resBlackNew">395</strong>
+                                    <span class="result-player__change negative" id="resBlackChange">-5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- TAB 4: Admin Panel (Tokens & Admins)                    -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <section class="tab-content" id="tab-admin">
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">⚙ Dashboard Kontrol Admin</div>
+                        <span class="card__badge card__badge--green">SYSTEM CONTROL</span>
+                    </div>
+
+                    <div class="stats-overview-grid">
+                        <div class="stat-box">
+                            <div class="stat-box__val" id="adminStatPlayers">0</div>
+                            <div class="stat-box__lbl">Total Pemain</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-box__val" id="adminStatMatches">0</div>
+                            <div class="stat-box__lbl">Total Pertandingan</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-box__val" id="adminStatTokens">0</div>
+                            <div class="stat-box__lbl">API Tokens</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-box__val" id="adminStatAdmins">0</div>
+                            <div class="stat-box__lbl">User Admins</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kelola Admin Users Card -->
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">🛡️ Kelola User Admins</div>
+                        <button class="btn btn--primary btn--sm" id="btnShowCreateAdminModal" type="button">➕ Tambah Admin</button>
+                    </div>
+                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
+                        Daftar pengguna dengan akses admin ke sistem VRChess Indonesia.
+                    </p>
+
+                    <div id="adminsContainer">
+                        <div class="empty-state">
+                            <div class="empty-state__icon">🛡️</div>
+                            <div class="empty-state__text">Memuat Admin Users...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Tokens Management Card -->
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">🔑 Kelola API Access Tokens</div>
+                        <button class="btn btn--primary btn--sm" id="btnShowCreateTokenModal" type="button">➕ Buat Token Baru</button>
+                    </div>
+                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
+                        Setiap request API dapat diautentikasi menggunakan Header <code>X-API-Token: &lt;token&gt;</code> atau <code>Authorization: Bearer &lt;token&gt;</code>.
+                    </p>
+
+                    <div id="tokensContainer">
+                        <div class="empty-state">
+                            <div class="empty-state__icon">🔑</div>
+                            <div class="empty-state__text">Memuat API Tokens...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- TAB 5: Stockfish Analysis                               -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <section class="tab-content" id="tab-analysis">
+
+                <!-- Import PGN Card -->
+                <div class="card" id="analysisPgnImportCard">
+                    <div class="card__header">
+                        <div class="card__title">🧠 Stockfish PGN Analysis</div>
+                        <span class="card__badge card__badge--green">Powered by Stockfish 18</span>
+                    </div>
+                    <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
+                        Import file PGN untuk menganalisis seluruh permainan dengan Stockfish. Setiap posisi akan dievaluasi dan ditampilkan secara interaktif.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label" for="pgnInput">Teks PGN</label>
+                        <textarea class="form-input" id="pgnInput" rows="6" placeholder="[Event &quot;?&quot;]&#10;[White &quot;Player1&quot;]&#10;[Black &quot;Player2&quot;]&#10;&#10;1. e4 e5 2. Nf3 ..." style="font-family: var(--font-mono); font-size: 0.8rem; resize: vertical;"></textarea>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <label class="btn btn--secondary btn--sm" style="cursor:pointer;" for="pgnFileInput">📂 Buka File PGN</label>
+                        <input type="file" id="pgnFileInput" accept=".pgn" style="display:none;">
+                        <div class="form-group" style="margin:0; display:flex; align-items:center; gap:8px;">
+                            <label class="form-label" style="margin:0; white-space:nowrap;" for="analysisDepth2">Depth</label>
+                            <input type="number" class="form-input" id="analysisDepth2" value="12" min="1" max="20" style="width:70px;">
+                        </div>
+                        <button class="btn btn--primary" id="btnStartPgnAnalysis" type="button">⚡ Mulai Analisis PGN</button>
+                        <button class="btn btn--secondary" id="btnStartFreeAnalysis" type="button">Mulai Kosong (Free Play)</button>
+                    </div>
+                    <!-- Progress -->
+                    <div id="analysisProgress" style="display:none; margin-top:16px;">
+                        <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px;">
+                            Menganalisis posisi <span id="analysisCurrent">0</span> / <span id="analysisTotal">0</span>…
+                        </div>
+                        <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:8px; overflow:hidden;">
+                            <div id="analysisProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); border-radius:6px; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Analysis Layout (shown after import) -->
+                <div id="analysisMainLayout" style="display:none;">
+                    <!-- Game Info Row -->
+                    <div class="card" id="analysisGameInfo" style="padding: 12px 20px;">
+                        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center; font-size:0.85rem;">
+                            <span>⬜ <strong id="infoWhite">White</strong></span>
+                            <span style="color:var(--text-secondary);">vs</span>
+                            <span>⬛ <strong id="infoBlack">Black</strong></span>
+                            <span style="color:var(--text-secondary);">|</span>
+                            <span id="infoEvent" style="color:var(--text-secondary);"></span>
+                            <span id="infoDate" style="color:var(--text-secondary);"></span>
+                            <span id="infoResult" style="font-weight:700;"></span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
+                        <!-- Left: Board + Eval Bar -->
+                        <div style="flex:0 0 auto; width:100%; max-width:440px;">
+                            <!-- Eval Bar + Board -->
+                            <div style="display:flex; gap:10px; align-items:stretch;">
+                                <!-- Eval Bar (vertical) -->
+                                <div id="evalBarOuter" style="width:20px; min-height:400px; border-radius:6px; overflow:hidden; background:#111; border:1px solid var(--border-subtle); position:relative; display:flex; flex-direction:column; align-items:center;">
+                                    <div id="evalBarWhite" style="background:#f0f0f0; width:100%; transition: height 0.5s ease;" title="White advantage"></div>
+                                    <div id="evalBarBlack" style="background:#222; width:100%; flex:1;" title="Black advantage"></div>
+                                    <span id="evalBarLabel" style="position:absolute; bottom:4px; left:50%; transform:translateX(-50%); font-size:0.6rem; color:#888; white-space:nowrap;">0.00</span>
+                                </div>
+                                <!-- Board -->
+                                <div style="flex:1; position:relative;">
+                                    <div id="analysisBoard" style="width:100%;"></div>
+                                    <svg id="boardArrows" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">
+                                        <defs>
+                                            <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto">
+                                                <polygon points="0 0, 4 2, 0 4" fill="rgba(255, 170, 0, 0.8)" />
+                                            </marker>
+                                        </defs>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Board Controls -->
+                            <div style="margin-top:10px; display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap;">
+                                <button class="btn btn--secondary btn--sm" id="btnAnalysisFirst" title="First move">⏮</button>
+                                <button class="btn btn--secondary btn--sm" id="btnAnalysisPrev" title="Previous move">◀</button>
+                                <span id="analysisMoveLabel" style="font-size:0.82rem; color:var(--text-secondary); min-width:70px; text-align:center;">Start</span>
+                                <button class="btn btn--secondary btn--sm" id="btnAnalysisNext" title="Next move">▶</button>
+                                <button class="btn btn--secondary btn--sm" id="btnAnalysisLast" title="Last move">⏭</button>
+                                <button class="btn btn--secondary btn--sm" id="btnAnalysisFlip2" title="Flip board">⇅</button>
+                            </div>
+
+                            <!-- Eval box for current position -->
+                            <div id="positionEvalBox" style="margin-top:12px; padding:12px 16px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px solid var(--border-subtle);">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:baseline;">
+                                    <span style="font-size:0.8rem; color:var(--text-secondary);">Evaluasi Stockfish</span>
+                                    <strong id="posEvalScore" style="font-family:monospace; font-size:1.4rem; color:var(--accent-primary);">+0.00</strong>
+                                </div>
+                                <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:4px;">
+                                    Best: <span id="posEvalBest" style="color:var(--text-primary); font-weight:600; font-family:monospace;">—</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:var(--text-muted); font-family:monospace; word-break:break-all; line-height:1.5;">
+                                    <span id="posEvalPv">—</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Move List -->
+                        <div style="flex:1; min-width:280px;">
+                            <div class="card" style="padding:0; overflow:hidden;">
+                                <div class="card__header" style="padding:10px 16px;">
+                                    <div class="card__title" style="font-size:0.9rem;">📋 Riwayat Langkah</div>
+                                    <button class="btn btn--secondary btn--xs" id="btnNewAnalysis">🔄 Analisis Baru</button>
+                                </div>
+                                <div id="moveListContainer" style="max-height:420px; overflow-y:auto; padding:6px;"></div>
+                            </div>
+
+                            <!-- Eval Chart -->
+                            <div class="card" style="padding:12px 16px; margin-top:14px;">
+                                <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:8px;">📈 Grafik Evaluasi</div>
+                                <canvas id="evalChart" height="80" style="width:100%;"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
             <!-- ── Footer ── -->
             <footer class="app-footer">
                 VRChess Indonesia &copy; 2026 — Built with ♥ for the Indonesian Chess Community
-                <span style="color: #e74c3c; margin-left: 12px;">🔒 View Only</span>
             </footer>
 
         </div>
 
-        <!-- ── Player Stats Modal (View-Only) ── -->
+        <!-- ── Modal 1: Admin Login Modal ── -->
+        <div class="modal-overlay" id="loginModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🔑 Admin Authentication</h3>
+                    <button class="modal-close-btn" id="btnCloseLoginModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label class="form-label" for="loginUsername">Username Admin</label>
+                        <input type="text" class="form-input" id="loginUsername" placeholder="Username (default: admin)" autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="loginPassword">Password</label>
+                        <input type="password" class="form-input" id="loginPassword" placeholder="Masukkan password admin..." required>
+                    </div>
+                    <div id="loginErrorMsg" style="color:var(--accent-red); font-size:0.8rem; margin-bottom:12px; display:none;"></div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelLogin">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitLogin">Masuk Admin</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal 2: Create Token Modal ── -->
+        <div class="modal-overlay" id="createTokenModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>➕ Buat API Token Baru</h3>
+                    <button class="modal-close-btn" id="btnCloseCreateTokenModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="createTokenForm">
+                    <div class="form-group">
+                        <label class="form-label" for="tokenName">Nama / Deskripsi Token</label>
+                        <input type="text" class="form-input" id="tokenName" placeholder="Contoh: Mobile App, Discord Bot, VR Client..." required>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelCreateToken">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitCreateToken">Generate Token</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal 3: Edit Token Modal ── -->
+        <div class="modal-overlay" id="editTokenModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>✏ Edit API Token</h3>
+                    <button class="modal-close-btn" id="btnCloseEditTokenModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="editTokenForm">
+                    <input type="hidden" id="editTokenId">
+                    <div class="form-group">
+                        <label class="form-label" for="editTokenName">Nama / Deskripsi Token</label>
+                        <input type="text" class="form-input" id="editTokenName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editTokenActive">Status Aktif</label>
+                        <select class="form-select" id="editTokenActive">
+                            <option value="1">Aktif</option>
+                            <option value="0">Tidak Aktif</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelEditToken">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitEditToken">Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal 4: Create Admin Modal ── -->
+        <div class="modal-overlay" id="createAdminModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>➕ Tambah User Admin Baru</h3>
+                    <button class="modal-close-btn" id="btnCloseCreateAdminModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="createAdminForm">
+                    <div class="form-group">
+                        <label class="form-label" for="createAdminUsername">Username Admin</label>
+                        <input type="text" class="form-input" id="createAdminUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="createAdminPassword">Password</label>
+                        <input type="password" class="form-input" id="createAdminPassword" minlength="4" required>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelCreateAdmin">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitCreateAdmin">Buat Admin</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal 5: Edit Admin Modal ── -->
+        <div class="modal-overlay" id="editAdminModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>✏ Ubah Password Admin</h3>
+                    <button class="modal-close-btn" id="btnCloseEditAdminModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="editAdminForm">
+                    <input type="hidden" id="editAdminUsernameHidden">
+                    <div class="form-group">
+                        <label class="form-label">Username Admin</label>
+                        <input type="text" class="form-input" id="editAdminUsernameDisplay" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editAdminPassword">Password Baru</label>
+                        <input type="password" class="form-input" id="editAdminPassword" minlength="4" required>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelEditAdmin">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitEditAdmin">Simpan Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal 6: Player Stats Modal ── -->
         <div class="modal-overlay" id="playerStatsModal" style="display:none;">
             <div class="modal-content modal-content--wide">
                 <div class="modal-header">
@@ -256,27 +655,27 @@
                 <div class="stats-overview-grid" id="modalPlayerStatsGrid">
                     <div class="stat-box">
                         <div class="stat-box__val" id="statGames">0</div>
-                        <div class="stat-box__lbl">Games Played</div>
+                        <div class="stat-box__lbl">Main</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-box__val stat-win" id="statWins">0</div>
-                        <div class="stat-box__lbl">Wins</div>
+                        <div class="stat-box__lbl">Menang</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-box__val stat-draw" id="statDraws">0</div>
-                        <div class="stat-box__lbl">Draws</div>
+                        <div class="stat-box__lbl">Seri</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-box__val stat-loss" id="statLosses">0</div>
-                        <div class="stat-box__lbl">Losses</div>
+                        <div class="stat-box__lbl">Kalah</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-box__val" id="statValidMatches">0</div>
-                        <div class="stat-box__lbl">Valid Matches</div>
+                        <div class="stat-box__lbl">Valid</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-box__val" id="statInvalidMatches">0</div>
-                        <div class="stat-box__lbl">Invalid Matches</div>
+                        <div class="stat-box__lbl">Invalid</div>
                     </div>
                 </div>
 
@@ -290,116 +689,196 @@
                     </div>
                 </div>
 
-                <div class="modal-footer"
-                    style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
-                    <button class="btn btn--secondary btn--sm" id="btnClosePlayerStatsBtn">Close</button>
+                <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
+                    <button class="btn btn--secondary btn--sm admin-only" id="btnEditPlayerModalAction" type="button">✏ Edit Pemain</button>
+                    <button class="btn btn--danger btn--sm admin-only" id="btnDeletePlayerModalAction" type="button">🗑 Hapus Pemain</button>
+                    <button class="btn btn--secondary btn--sm" id="btnClosePlayerStatsBtn" type="button">Tutup</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- ── Modal 7: Edit Player Modal ── -->
+        <div class="modal-overlay" id="editPlayerModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>✏ Edit Data Pemain</h3>
+                    <button class="modal-close-btn" id="btnCloseEditPlayerModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="editPlayerForm">
+                    <input type="hidden" id="editPlayerOldUsername">
+                    <div class="form-group">
+                        <label class="form-label" for="editPlayerUsername">Username</label>
+                        <input type="text" class="form-input" id="editPlayerUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editPlayerRating">Rating</label>
+                        <input type="number" class="form-input" id="editPlayerRating" required min="100" max="3000">
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelEditPlayer">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSavePlayer">Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal 8: Edit Match Modal ── -->
+        <div class="modal-overlay" id="editMatchModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>✏ Edit Pertandingan #<span id="editMatchIdTitle"></span></h3>
+                    <button class="modal-close-btn" id="btnCloseEditMatchModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="editMatchForm">
+                    <input type="hidden" id="editMatchId">
+                    <div class="form-group">
+                        <label class="form-label" for="editMatchResult">Hasil Pertandingan</label>
+                        <select class="form-select" id="editMatchResult" required>
+                            <option value="1-0">1 - 0 (White Menang)</option>
+                            <option value="1/2-1/2">½ - ½ (Draw)</option>
+                            <option value="0-1">0 - 1 (Black Menang)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editMatchUrl">URL Analisis</label>
+                        <input type="url" class="form-input" id="editMatchUrl" placeholder="https://www.chessigma.com/...">
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelEditMatch">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSaveMatch">Simpan &amp; Hitung Ulang Rating</button>
+                    </div>
+                </form>
             </div>
         </div>
 
         <!-- ── Toast Container ── -->
         <div class="toast-container" id="toastContainer"></div>
 
+        <!-- ── JavaScript Application ── -->
         <script>
-            /**
-             * VRChess Indonesia — Frontend Application (View-Only)
-             * Pure vanilla JavaScript, no dependencies.
-             */
-
             (function () {
                 'use strict';
 
-                // ── Configuration ──────────────────────────────────────────
-                // 👇 FIX: Set your actual API URL here
-                const API_URL = 'https://chess.cvar1984.net';
-                let isOnline = false;
-
-                // Cached data
+                // ── State Variables ──
+                let isAdminState = false;
+                let activeApiToken = '';
+                let currentAdminName = '';
                 let playersCache = [];
                 let matchesCache = [];
+                let tokensCache = [];
+                let adminsCache = [];
                 let playerIdMap = {};
+                let currentMatchFilter = 'all';
+                let activePlayerUsername = null;
 
-                // ── DOM References ─────────────────────────────────────────
+                // ── DOM Helpers ──
                 const $ = sel => document.querySelector(sel);
                 const $$ = sel => document.querySelectorAll(sel);
 
-                const statusDot = $('#statusDot');
-                const statusText = $('#statusText');
-                const playerCountEl = $('#playerCount');
-                const matchCountEl = $('#matchCount');
-                const leaderboardContainer = $('#leaderboardContainer');
-                const matchesContainer = $('#matchesContainer');
+                function escHtml(str) {
+                    if (str === null || str === undefined) return '';
+                    return String(str)
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&#039;");
+                }
 
-                // Modals
-                const playerStatsModal = $('#playerStatsModal');
-
-                // ── Toast Notifications ────────────────────────────────────
+                // ── Toast Notifications ──
                 function toast(message, type = 'info') {
                     const container = $('#toastContainer');
                     const el = document.createElement('div');
                     el.className = `toast toast--${type}`;
                     el.textContent = message;
                     container.appendChild(el);
-                    setTimeout(() => el.remove(), 4000);
+                    setTimeout(() => {
+                        el.remove();
+                    }, 4000);
                 }
 
-                // ── API Helpers ────────────────────────────────────────────
-                function buildUrl(endpoint, params = {}) {
-                    let base = API_URL.replace(/\/+$/, '');
-                    if (!endpoint.startsWith('/')) endpoint = '/' + endpoint;
-                    const url = new URL(base + endpoint);
-                    Object.entries(params).forEach(([k, v]) => {
-                        if (v !== undefined && v !== null) {
-                            url.searchParams.set(k, v);
-                        }
-                    });
-                    return url;
-                }
-
-                async function apiFetch(endpoint, params = {}) {
-                    const url = buildUrl(endpoint, params);
-                    const response = await fetch(url.toString(), {
-                        method: 'GET',
-                        headers: { 'Accept': 'application/json' }
-                    });
-                    const data = await response.json();
-                    if (!response.ok) {
-                        throw new Error(data.error || `HTTP ${response.status}`);
+                // ── API Fetch Wrapper ──
+                async function apiCall(url, options = {}) {
+                    options.headers = options.headers || {};
+                    if (activeApiToken) {
+                        options.headers['X-API-Token'] = activeApiToken;
                     }
-                    return data;
+                    try {
+                        const response = await fetch(url, options);
+                        const data = await response.json();
+                        if (!response.ok) {
+                            throw new Error(data.error || `HTTP ${response.status}`);
+                        }
+                        return data;
+                    } catch (err) {
+                        throw err;
+                    }
                 }
 
-                // ── Connection Check ───────────────────────────────────────
+                // ── Auth Status Check ──
+                async function checkAuthStatus() {
+                    try {
+                        const res = await apiCall('/index.php?auth-status=1');
+                        if (res.default_token) {
+                            activeApiToken = res.default_token;
+                        }
+                        if (res.username) {
+                            currentAdminName = res.username;
+                        }
+                        setAdminState(res.authenticated === true);
+                    } catch (e) {
+                        setAdminState(false);
+                    }
+                }
+
+                function setAdminState(isAdmin) {
+                    isAdminState = isAdmin;
+                    if (isAdmin) {
+                        document.body.classList.add('is-admin');
+                        $('#authBadge').className = 'auth-badge auth-badge--admin';
+                        $('#authBadge').textContent = '👑 Admin Mode';
+                        $('#currentAdminName').textContent = currentAdminName;
+                        fetchTokens(true);
+                        fetchAdmins(true);
+                    } else {
+                        document.body.classList.remove('is-admin');
+                        $('#authBadge').className = 'auth-badge auth-badge--visitor';
+                        $('#authBadge').textContent = '🔒 Visitor Mode';
+                    }
+                }
+
+                // ── Server Connection Health Check ──
                 async function checkConnection() {
-                    statusText.textContent = 'Connecting…';
-                    statusDot.className = 'connection-bar__dot';
+                    $('#statusText').textContent = 'Menghubungkan ke server…';
+                    $('#statusDot').className = 'connection-bar__dot';
 
                     try {
-                        const data = await apiFetch('/index.php', { players: '' });
+                        await checkAuthStatus();
+                        const data = await apiCall('/index.php?players=1');
                         if (data.success) {
-                            setOnline(true);
+                            $('#statusDot').className = 'connection-bar__dot online';
+                            $('#statusText').textContent = 'Terhubung ke MongoDB Atlas';
                             playersCache = data.players || [];
                             buildPlayerIdMap();
-                            playerCountEl.textContent = data.count || playersCache.length;
+                            $('#playerCount').textContent = data.count || playersCache.length;
+                            $('#adminStatPlayers').textContent = playersCache.length;
                             renderLeaderboard();
                             await fetchMatches(true);
                         } else {
-                            setOnline(false);
+                            setOffline();
                         }
                     } catch (e) {
-                        console.error('Connection error:', e);
-                        setOnline(false);
-                        toast('Failed to connect to server: ' + e.message, 'error');
+                        setOffline();
+                        toast('Gagal terhubung ke database: ' + e.message, 'error');
                     }
                 }
 
-                function setOnline(online) {
-                    isOnline = online;
-                    statusDot.className = 'connection-bar__dot ' + (online ? 'online' : 'offline');
-                    statusText.textContent = online ? 'Connected' : 'Offline — check server';
+                function setOffline() {
+                    $('#statusDot').className = 'connection-bar__dot offline';
+                    $('#statusText').textContent = 'Terputus dari server database';
                 }
 
-                // ── Build player id→username map ───────────────────────────
+                // ── Build ID Map ──
                 function buildPlayerIdMap() {
                     playerIdMap = {};
                     playersCache.forEach(p => {
@@ -407,39 +886,161 @@
                     });
                 }
 
-                // ── Fetch Players ──────────────────────────────────────────
+                // ── Fetch Models ──
                 async function fetchPlayers(silent = false) {
                     try {
-                        const data = await apiFetch('/index.php', { players: '' });
+                        const data = await apiCall('/index.php?players=1');
                         if (data.success) {
                             playersCache = data.players || [];
                             buildPlayerIdMap();
-                            playerCountEl.textContent = data.count || playersCache.length;
+                            $('#playerCount').textContent = data.count || playersCache.length;
+                            $('#adminStatPlayers').textContent = playersCache.length;
                             renderLeaderboard($('#playerSearch') ? $('#playerSearch').value : '');
-                            if (!silent) toast('Leaderboard refreshed', 'success');
+                            if (!silent) toast('Leaderboard diperbarui', 'success');
                         }
                     } catch (e) {
-                        if (!silent) toast('Failed to fetch players: ' + e.message, 'error');
+                        if (!silent) toast('Gagal mengambil data pemain: ' + e.message, 'error');
                     }
                 }
 
-                // ── Fetch Matches ──────────────────────────────────────────
                 async function fetchMatches(silent = false) {
                     try {
-                        const data = await apiFetch('/index.php', { matches: '' });
+                        const data = await apiCall('/index.php?matches=1');
                         if (data.success) {
                             matchesCache = data.matches || [];
-                            matchCountEl.textContent = data.count || matchesCache.length;
+                            $('#matchCount').textContent = data.count || matchesCache.length;
+                            $('#adminStatMatches').textContent = matchesCache.length;
                             renderMatches();
-                            if (!silent) toast('Matches refreshed', 'success');
+                            if (!silent) toast('Riwayat pertandingan diperbarui', 'success');
                         }
                     } catch (e) {
-                        if (!silent) toast('Failed to fetch matches: ' + e.message, 'error');
+                        console.error("fetchMatches Error:", e);
+                        if (!silent) toast('Gagal mengambil data pertandingan: ' + e.message, 'error');
                     }
                 }
 
-                // ── Render Leaderboard ─────────────────────────────────────
+                async function fetchTokens(silent = false) {
+                    if (!isAdminState) return;
+                    try {
+                        const data = await apiCall('/index.php?tokens=1');
+                        if (data.success) {
+                            tokensCache = data.tokens || [];
+                            $('#adminStatTokens').textContent = tokensCache.length;
+                            renderTokens();
+                            if (!silent) toast('Daftar API Token diperbarui', 'success');
+                        }
+                    } catch (e) {
+                        if (!silent) toast('Gagal mengambil token: ' + e.message, 'error');
+                    }
+                }
+                
+                async function fetchAdmins(silent = false) {
+                    if (!isAdminState) return;
+                    try {
+                        const data = await apiCall('/index.php?admins=1');
+                        if (data.success) {
+                            adminsCache = data.admins || [];
+                            $('#adminStatAdmins').textContent = adminsCache.length;
+                            renderAdmins();
+                        }
+                    } catch (e) {
+                        if (!silent) toast('Gagal mengambil data admin: ' + e.message, 'error');
+                    }
+                }
+
+                // ── Render Views ──
+                function renderTokens() {
+                    const container = $('#tokensContainer');
+                    if (tokensCache.length === 0) {
+                        container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state__icon">🔑</div>
+                            <div class="empty-state__text">Belum ada API Token</div>
+                        </div>`;
+                        return;
+                    }
+
+                    let html = `
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>Nama Token</th>
+                                <th>Status</th>
+                                <th>API Token Secret</th>
+                                <th>Tgl Dibuat</th>
+                                <th>Terakhir Dipakai</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+                    tokensCache.forEach(t => {
+                        const isActive = t.is_active !== false && t.is_active !== "0";
+                        const statusTag = isActive ? `<span class="card__badge card__badge--green">Aktif</span>` : `<span class="card__badge card__badge--red">Tidak Aktif</span>`;
+                        html += `
+                        <tr>
+                            <td><strong>${escHtml(t.name)}</strong></td>
+                            <td>${statusTag}</td>
+                            <td>
+                                <span class="token-code">${escHtml(t.token)}</span>
+                                <button class="btn btn--icon btn--xs" onclick="navigator.clipboard.writeText('${escHtml(t.token)}'); alert('Token berhasil di-copy!');" title="Copy Token">📋</button>
+                            </td>
+                            <td><span class="stat-value">${escHtml(t.created_at)}</span></td>
+                            <td><span class="stat-value">${escHtml(t.last_used)}</span></td>
+                            <td>
+                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditToken('${escHtml(t.id)}', '${escHtml(t.name)}', ${isActive})" title="Edit Token">✏</button>
+                                <button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appRevokeToken('${escHtml(t.id)}')" title="Cabut Token">🗑</button>
+                            </td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                }
+                
+                function renderAdmins() {
+                    const container = $('#adminsContainer');
+                    if (adminsCache.length === 0) {
+                        container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state__icon">🛡️</div>
+                            <div class="empty-state__text">Belum ada Admin User</div>
+                        </div>`;
+                        return;
+                    }
+
+                    let html = `
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Tgl Dibuat</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+                    adminsCache.forEach(a => {
+                        const isSelf = a.username === currentAdminName;
+                        const meTag = isSelf ? ` <span class="card__badge card__badge--purple">You</span>` : '';
+                        
+                        html += `
+                        <tr>
+                            <td><strong>${escHtml(a.username)}</strong>${meTag}</td>
+                            <td><span class="stat-value">${escHtml(a.created_at)}</span></td>
+                            <td>
+                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditAdmin('${escHtml(a.username)}')" title="Ubah Password">✏ Password</button>
+                                ${!isSelf ? `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteAdmin('${escHtml(a.username)}')" title="Hapus Admin">🗑</button>` : ''}
+                            </td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                }
+
                 function renderLeaderboard(filter = '') {
+                    const container = $('#leaderboardContainer');
                     let players = playersCache;
 
                     if (filter) {
@@ -448,30 +1049,30 @@
                     }
 
                     if (players.length === 0) {
-                        leaderboardContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state__icon">♟</div>
-                    <div class="empty-state__text">${filter ? 'No players match your search' : 'No players yet'}</div>
-                    <div class="empty-state__sub">${filter ? 'Try a different search term' : 'Submit a match to create players automatically'}</div>
-                </div>`;
+                        container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state__icon">♟</div>
+                            <div class="empty-state__text">${filter ? 'Tidak ada pemain yang cocok' : 'Belum ada pemain'}</div>
+                        </div>`;
                         return;
                     }
 
                     let html = `
-            <table class="leaderboard-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Player</th>
-                        <th>Rating</th>
-                        <th class="hide-mobile">W</th>
-                        <th class="hide-mobile">D</th>
-                        <th class="hide-mobile">L</th>
-                        <th>Games</th>
-                        <th class="hide-mobile">Win Rate</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Pemain</th>
+                                <th>Rating</th>
+                                <th class="hide-mobile">W</th>
+                                <th class="hide-mobile">D</th>
+                                <th class="hide-mobile">L</th>
+                                <th>Games</th>
+                                <th class="hide-mobile">Win Rate</th>
+                                ${isAdminState ? '<th>Aksi Admin</th>' : ''}
+                            </tr>
+                        </thead>
+                        <tbody>`;
 
                     players.forEach((p, i) => {
                         const rank = i + 1;
@@ -480,26 +1081,33 @@
                         const wins = parseInt(p.wins) || 0;
                         const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
 
+                        const adminActionsTd = isAdminState ? `
+                            <td onclick="event.stopPropagation();">
+                                <button class="btn btn--icon btn--xs" onclick="window.appOpenEditPlayer('${escHtml(p.username)}', ${p.rating})" title="Edit Pemain">✏</button>
+                                <button class="btn btn--danger btn--xs" onclick="window.appDeletePlayer('${escHtml(p.username)}')" title="Hapus Pemain">🗑</button>
+                            </td>` : '';
+
                         html += `
-                <tr class="leaderboard-row" data-username="${escHtml(p.username)}" title="Click to view player stats">
-                    <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
-                    <td><span class="player-name">${escHtml(p.username)}</span></td>
-                    <td><span class="player-rating">${p.rating}</span></td>
-                    <td class="hide-mobile"><span class="stat-value stat-win">${p.wins}</span></td>
-                    <td class="hide-mobile"><span class="stat-value stat-draw">${p.draws}</span></td>
-                    <td class="hide-mobile"><span class="stat-value stat-loss">${p.losses}</span></td>
-                    <td><span class="stat-value">${p.games}</span></td>
-                    <td class="hide-mobile">
-                        <span class="stat-value">${winRate}%</span>
-                        <span class="winrate-bar"><span class="winrate-bar__fill" style="width:${winRate}%"></span></span>
-                    </td>
-                </tr>`;
+                        <tr class="leaderboard-row" data-username="${escHtml(p.username)}">
+                            <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
+                            <td><span class="player-name">${escHtml(p.username)}</span></td>
+                            <td><span class="player-rating">${p.rating}</span></td>
+                            <td class="hide-mobile"><span class="stat-value stat-win">${p.wins}</span></td>
+                            <td class="hide-mobile"><span class="stat-value stat-draw">${p.draws}</span></td>
+                            <td class="hide-mobile"><span class="stat-value stat-loss">${p.losses}</span></td>
+                            <td><span class="stat-value">${p.games}</span></td>
+                            <td class="hide-mobile">
+                                <span class="stat-value">${winRate}%</span>
+                                <span class="winrate-bar"><span class="winrate-bar__fill" style="width:${winRate}%"></span></span>
+                            </td>
+                            ${adminActionsTd}
+                        </tr>`;
                     });
 
                     html += '</tbody></table>';
-                    leaderboardContainer.innerHTML = html;
+                    container.innerHTML = html;
 
-                    leaderboardContainer.querySelectorAll('.leaderboard-row').forEach(row => {
+                    container.querySelectorAll('.leaderboard-row').forEach(row => {
                         row.addEventListener('click', () => {
                             const username = row.dataset.username;
                             if (username) openPlayerStats(username);
@@ -507,24 +1115,31 @@
                     });
                 }
 
-                // ── Render Matches ─────────────────────────────────────────
                 function renderMatches() {
-                    if (matchesCache.length === 0) {
-                        matchesContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state__icon">📋</div>
-                    <div class="empty-state__text">No matches recorded</div>
-                    <div class="empty-state__sub">Submit a match result to see it here</div>
-                </div>`;
+                    const container = $('#matchesContainer');
+                    let matches = [...matchesCache];
+
+                    if (currentMatchFilter === 'valid') {
+                        matches = matches.filter(m => !('is_valid' in m) || m.is_valid === true);
+                    } else if (currentMatchFilter === 'invalid') {
+                        matches = matches.filter(m => 'is_valid' in m && m.is_valid === false);
+                    }
+
+                    if (matches.length === 0) {
+                        container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state__icon">📋</div>
+                            <div class="empty-state__text">Tidak ada pertandingan dalam kategori ini</div>
+                        </div>`;
                         return;
                     }
 
-                    const sorted = [...matchesCache].reverse();
+                    const sorted = matches.reverse();
 
                     let html = '';
                     sorted.forEach(m => {
-                        const whiteName = playerIdMap[m.white_id] || `Player #${m.white_id}`;
-                        const blackName = playerIdMap[m.black_id] || `Player #${m.black_id}`;
+                        const whiteName = playerIdMap[m.white_id] || `Pemain #${m.white_id}`;
+                        const blackName = playerIdMap[m.black_id] || `Pemain #${m.black_id}`;
                         const isValid = !('is_valid' in m) || m.is_valid === true;
 
                         let resultClass = 'draw';
@@ -533,43 +1148,55 @@
                         else if (m.result === '0-1') { resultClass = 'black'; resultLabel = '0-1'; }
 
                         const analysisLink = m.analysis_url
-                            ? `<a class="match-card__link" href="${escHtml(m.analysis_url)}" target="_blank" rel="noopener">📊 Analysis</a>`
+                            ? `<a class="match-card__link" href="${escHtml(m.analysis_url)}" target="_blank" rel="noopener">📊 Analisis</a>`
                             : '';
 
                         const statusBadge = !isValid
-                            ? `<span class="match-card__status-tag match-card__status-tag--invalid">🚫 Invalidated</span>`
+                            ? `<span class="match-card__status-tag match-card__status-tag--invalid">🚫 Anulir (Invalid)</span>`
                             : '';
 
+                        let adminButtons = '';
+                        if (isAdminState) {
+                            if (isValid) {
+                                adminButtons += `<button class="btn btn--warning btn--xs match-actions-btn" onclick="window.appInvalidateMatch(${m.id})" title="Anulir Pertandingan">🚫 Anulir</button>`;
+                            } else {
+                                adminButtons += `<button class="btn btn--success btn--xs match-actions-btn" onclick="window.appRevalidateMatch(${m.id})" title="Pulihkan Pertandingan">🔄 Pulihkan</button>`;
+                            }
+                            adminButtons += `<button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditMatch(${m.id}, '${m.result}', '${escHtml(m.analysis_url || '')}')" title="Edit Match">✏ Edit</button>`;
+                            adminButtons += `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteMatch(${m.id})" title="Hapus Match">🗑 Hapus</button>`;
+                        }
+
                         html += `
-                <div class="match-card ${!isValid ? 'is-invalid' : ''}">
-                    <div class="match-card__player match-card__player--white">
-                        <span class="match-card__player-label">⬜ White</span>
-                        <span class="match-card__player-name">${escHtml(whiteName)}</span>
-                    </div>
-                    <div class="match-card__vs">
-                        <span class="match-card__result match-card__result--${resultClass}">${resultLabel}</span>
-                        ${statusBadge}
-                        <span class="match-card__date">${escHtml(m.date || '')}</span>
-                        ${analysisLink}
-                    </div>
-                    <div class="match-card__player match-card__player--black">
-                        <span class="match-card__player-label">⬛ Black</span>
-                        <span class="match-card__player-name">${escHtml(blackName)}</span>
-                    </div>
-                </div>`;
+                        <div class="match-card ${!isValid ? 'is-invalid' : ''}">
+                            <div class="match-card__player match-card__player--white">
+                                <span class="match-card__player-label">⬜ White (#${m.white_id})</span>
+                                <span class="match-card__player-name">${escHtml(whiteName)}</span>
+                            </div>
+                            <div class="match-card__vs">
+                                <span class="match-card__result match-card__result--${resultClass}">${resultLabel}</span>
+                                ${statusBadge}
+                                <span class="match-card__date">${escHtml(m.date || '')}</span>
+                                ${analysisLink}
+                            </div>
+                            <div class="match-card__player match-card__player--black">
+                                <span class="match-card__player-label">⬛ Black (#${m.black_id})</span>
+                                <span class="match-card__player-name">${escHtml(blackName)}</span>
+                            </div>
+                            ${isAdminState ? `<div class="match-card__actions">${adminButtons}</div>` : ''}
+                        </div>`;
                     });
 
-                    matchesContainer.innerHTML = html;
+                    container.innerHTML = html;
                 }
 
-                // ── Player Stats Modal ─────────────────────────────────────
                 async function openPlayerStats(username) {
+                    activePlayerUsername = username;
                     $('#modalPlayerUsername').textContent = username;
                     $('#modalPlayerRatingBadge').textContent = 'Loading…';
-                    playerStatsModal.style.display = 'flex';
+                    $('#playerStatsModal').style.display = 'flex';
 
                     try {
-                        const data = await apiFetch('/index.php', { 'player-stats': '', username });
+                        const data = await apiCall(`/index.php?player-stats=1&username=${encodeURIComponent(username)}`);
                         if (data.success && data.stats) {
                             const s = data.stats;
                             const p = s.player || {};
@@ -588,75 +1215,1169 @@
                             $('#statWinRateBar').style.width = `${winRate}%`;
                         }
                     } catch (e) {
-                        toast('Failed to load stats: ' + e.message, 'error');
+                        toast('Gagal memuat statistik: ' + e.message, 'error');
                     }
                 }
 
-                // ── Utility ────────────────────────────────────────────────
-                function escHtml(str) {
-                    if (str === null || str === undefined) return '';
-                    const div = document.createElement('div');
-                    div.textContent = String(str);
-                    return div.innerHTML;
-                }
+                // ── Global Handlers for Admins ──
+                window.appDeleteAdmin = async function (username) {
+                    if (!confirm(`Hapus admin user '${username}'?`)) return;
+                    try {
+                        const res = await apiCall(`/index.php?action=delete-admin&username=${encodeURIComponent(username)}`, { method: 'DELETE' });
+                        if (res.success) {
+                            toast(`Admin '${username}' berhasil dihapus.`, 'success');
+                            await fetchAdmins(true);
+                        } else {
+                            toast(res.error || 'Gagal menghapus admin', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
 
-                function closeAllModals() {
-                    playerStatsModal.style.display = 'none';
-                }
+                window.appOpenEditAdmin = function (username) {
+                    $('#editAdminUsernameHidden').value = username;
+                    $('#editAdminUsernameDisplay').value = username;
+                    $('#editAdminPassword').value = '';
+                    $('#editAdminModal').style.display = 'flex';
+                };
 
-                // ── Tab Navigation ─────────────────────────────────────────
-                function initTabs() {
+                // ── Global Handlers for Tokens ──
+                window.appOpenEditToken = function (tokenId, name, isActive) {
+                    $('#editTokenId').value = tokenId;
+                    $('#editTokenName').value = name;
+                    $('#editTokenActive').value = isActive ? '1' : '0';
+                    $('#editTokenModal').style.display = 'flex';
+                };
+
+                window.appRevokeToken = async function (tokenId) {
+                    if (!confirm('Cabut dan hapus API Token ini? Aplikasi/bot yang menggunakannya akan kehilangan akses.')) return;
+                    try {
+                        const res = await apiCall(`/index.php?revoke-token=1&id=${encodeURIComponent(tokenId)}`, { method: 'DELETE' });
+                        if (res.success) {
+                            toast('API Token berhasil dicabut.', 'success');
+                            await fetchTokens(true);
+                        } else {
+                            toast(res.error || 'Gagal mencabut token', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                // ── Global Handlers for Players/Matches ──
+                window.appOpenEditPlayer = function (username, rating) {
+                    $('#editPlayerOldUsername').value = username;
+                    $('#editPlayerUsername').value = username;
+                    $('#editPlayerRating').value = rating;
+                    $('#editPlayerModal').style.display = 'flex';
+                };
+
+                window.appDeletePlayer = async function (username) {
+                    if (!confirm(`Hapus pemain '${username}'?`)) return;
+                    try {
+                        const res = await apiCall(`/index.php?player=${encodeURIComponent(username)}`, { method: 'DELETE' });
+                        if (res.success) {
+                            toast(`Pemain '${username}' telah dihapus.`, 'success');
+                            $('#playerStatsModal').style.display = 'none';
+                            await fetchPlayers(true);
+                            await fetchMatches(true);
+                        } else {
+                            toast(res.error || 'Gagal menghapus pemain', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                window.appOpenEditMatch = function (matchId, result, url) {
+                    $('#editMatchIdTitle').textContent = matchId;
+                    $('#editMatchId').value = matchId;
+                    $('#editMatchResult').value = result;
+                    $('#editMatchUrl').value = url;
+                    $('#editMatchModal').style.display = 'flex';
+                };
+
+                window.appInvalidateMatch = async function (matchId) {
+                    if (!confirm(`Anulir pertandingan #${matchId}?`)) return;
+                    try {
+                        const res = await apiCall(`/index.php?invalidate=1&match=${matchId}`, { method: 'PUT' });
+                        if (res.success) {
+                            toast(`Match #${matchId} berhasil di-anulir!`, 'success');
+                            await fetchPlayers(true);
+                            await fetchMatches(true);
+                        } else {
+                            toast(res.error || 'Gagal anulir match', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                window.appRevalidateMatch = async function (matchId) {
+                    try {
+                        const res = await apiCall(`/index.php?revalidate=1&match=${matchId}`, { method: 'PUT' });
+                        if (res.success) {
+                            toast(`Match #${matchId} berhasil dipulihkan!`, 'success');
+                            await fetchPlayers(true);
+                            await fetchMatches(true);
+                        } else {
+                            toast(res.error || 'Gagal memulihkan match', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                window.appDeleteMatch = async function (matchId) {
+                    if (!confirm(`Hapus pertandingan #${matchId}?`)) return;
+                    try {
+                        const res = await apiCall(`/index.php?match=${matchId}`, { method: 'DELETE' });
+                        if (res.success) {
+                            toast(`Match #${matchId} telah dihapus.`, 'success');
+                            await fetchPlayers(true);
+                            await fetchMatches(true);
+                        } else {
+                            toast(res.error || 'Gagal menghapus match', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                // ── Event Handlers Setup ──
+                function setupEvents() {
+                    // Login Modal
+                    $('#btnOpenLoginModal').addEventListener('click', () => {
+                        $('#loginUsername').value = '';
+                        $('#loginPassword').value = '';
+                        $('#loginErrorMsg').style.display = 'none';
+                        $('#loginModal').style.display = 'flex';
+                    });
+                    $('#btnCloseLoginModal').addEventListener('click', () => { $('#loginModal').style.display = 'none'; });
+                    $('#btnCancelLogin').addEventListener('click', () => { $('#loginModal').style.display = 'none'; });
+
+                    $('#loginForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const username = $('#loginUsername').value || 'admin';
+                        const password = $('#loginPassword').value;
+                        $('#loginErrorMsg').style.display = 'none';
+
+                        try {
+                            const res = await apiCall('/index.php?action=login', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username, password })
+                            });
+
+                            if (res.success) {
+                                currentAdminName = res.username;
+                                setAdminState(true);
+                                $('#loginModal').style.display = 'none';
+                                toast('Selamat datang! Login admin berhasil.', 'success');
+                                renderLeaderboard();
+                                renderMatches();
+                                fetchTokens(true);
+                            } else {
+                                $('#loginErrorMsg').textContent = res.error || 'Login gagal!';
+                                $('#loginErrorMsg').style.display = 'block';
+                            }
+                        } catch (err) {
+                            $('#loginErrorMsg').textContent = err.message || 'Login gagal!';
+                            $('#loginErrorMsg').style.display = 'block';
+                        }
+                    });
+
+                    // Logout Handler
+                    $('#btnLogoutBtn').addEventListener('click', async () => {
+                        try {
+                            await apiCall('/index.php?logout=1');
+                        } catch (e) { }
+                        setAdminState(false);
+                        currentAdminName = '';
+                        toast('Logout berhasil.', 'info');
+                        renderLeaderboard();
+                        renderMatches();
+                    });
+
+                    // Create Admin
+                    $('#btnShowCreateAdminModal').addEventListener('click', () => {
+                        $('#createAdminUsername').value = '';
+                        $('#createAdminPassword').value = '';
+                        $('#createAdminModal').style.display = 'flex';
+                    });
+                    $('#btnCloseCreateAdminModal').addEventListener('click', () => { $('#createAdminModal').style.display = 'none'; });
+                    $('#btnCancelCreateAdmin').addEventListener('click', () => { $('#createAdminModal').style.display = 'none'; });
+
+                    $('#createAdminForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const username = $('#createAdminUsername').value.trim();
+                        const password = $('#createAdminPassword').value;
+                        try {
+                            const res = await apiCall('/index.php?action=create-admin', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username, password })
+                            });
+
+                            if (res.success) {
+                                toast(`Admin '${username}' berhasil dibuat!`, 'success');
+                                $('#createAdminModal').style.display = 'none';
+                                fetchAdmins(true);
+                            } else {
+                                toast(res.error || 'Gagal membuat admin', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+                    
+                    // Edit Admin Password
+                    $('#btnCloseEditAdminModal').addEventListener('click', () => { $('#editAdminModal').style.display = 'none'; });
+                    $('#btnCancelEditAdmin').addEventListener('click', () => { $('#editAdminModal').style.display = 'none'; });
+
+                    $('#editAdminForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const username = $('#editAdminUsernameHidden').value;
+                        const password = $('#editAdminPassword').value;
+                        try {
+                            const res = await apiCall('/index.php?action=update-admin', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username, password })
+                            });
+
+                            if (res.success) {
+                                toast(`Password admin '${username}' berhasil diubah!`, 'success');
+                                $('#editAdminModal').style.display = 'none';
+                            } else {
+                                toast(res.error || 'Gagal mengubah password', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    // Create Token
+                    $('#btnShowCreateTokenModal').addEventListener('click', () => {
+                        $('#tokenName').value = '';
+                        $('#createTokenModal').style.display = 'flex';
+                    });
+                    $('#btnCloseCreateTokenModal').addEventListener('click', () => { $('#createTokenModal').style.display = 'none'; });
+                    $('#btnCancelCreateToken').addEventListener('click', () => { $('#createTokenModal').style.display = 'none'; });
+
+                    $('#createTokenForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const name = $('#tokenName').value.trim();
+                        try {
+                            const res = await apiCall('/index.php?action=create-token', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name })
+                            });
+
+                            if (res.success && res.token) {
+                                toast(`API Token '${res.token.name}' berhasil dibuat!`, 'success');
+                                $('#createTokenModal').style.display = 'none';
+                                fetchTokens(true);
+                            } else {
+                                toast(res.error || 'Gagal membuat token', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    // Edit Token
+                    $('#btnCloseEditTokenModal').addEventListener('click', () => { $('#editTokenModal').style.display = 'none'; });
+                    $('#btnCancelEditToken').addEventListener('click', () => { $('#editTokenModal').style.display = 'none'; });
+
+                    $('#editTokenForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const id = $('#editTokenId').value;
+                        const name = $('#editTokenName').value.trim();
+                        const isActive = $('#editTokenActive').value === '1';
+                        
+                        try {
+                            const res = await apiCall('/index.php?update-token=1', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id, name, is_active: isActive })
+                            });
+
+                            if (res.success) {
+                                toast(`Token berhasil diperbarui!`, 'success');
+                                $('#editTokenModal').style.display = 'none';
+                                fetchTokens(true);
+                            } else {
+                                toast(res.error || 'Gagal mengedit token', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    // Edit Player Form
+                    $('#editPlayerForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const oldName = $('#editPlayerOldUsername').value;
+                        const newName = $('#editPlayerUsername').value;
+                        const newRating = parseInt($('#editPlayerRating').value) || 400;
+
+                        try {
+                            const res = await apiCall(`/index.php?player=${encodeURIComponent(oldName)}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username: newName, rating: newRating })
+                            });
+
+                            if (res.success) {
+                                toast('Data pemain berhasil diperbarui.', 'success');
+                                $('#editPlayerModal').style.display = 'none';
+                                await fetchPlayers(true);
+                                await fetchMatches(true);
+                            } else {
+                                toast(res.error || 'Gagal memperbarui pemain', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    $('#btnCloseEditPlayerModal').addEventListener('click', () => { $('#editPlayerModal').style.display = 'none'; });
+                    $('#btnCancelEditPlayer').addEventListener('click', () => { $('#editPlayerModal').style.display = 'none'; });
+
+                    // Edit Match Form
+                    $('#editMatchForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const matchId = $('#editMatchId').value;
+                        const result = $('#editMatchResult').value;
+                        const url = $('#editMatchUrl').value;
+
+                        try {
+                            const res = await apiCall(`/index.php?match=${matchId}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ result: result, analysis_url: url })
+                            });
+
+                            if (res.success) {
+                                toast(`Match #${matchId} berhasil diperbarui.`, 'success');
+                                $('#editMatchModal').style.display = 'none';
+                                await fetchPlayers(true);
+                                await fetchMatches(true);
+                            } else {
+                                toast(res.error || 'Gagal memperbarui match', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    $('#btnCloseEditMatchModal').addEventListener('click', () => { $('#editMatchModal').style.display = 'none'; });
+                    $('#btnCancelEditMatch').addEventListener('click', () => { $('#editMatchModal').style.display = 'none'; });
+
+                    // Submit Play Match Form
+                    $('#playMatchForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const white = $('#playWhite').value.trim();
+                        const black = $('#playBlack').value.trim();
+                        const result = $('#playResult').value;
+                        const url = $('#playUrl').value.trim();
+
+                        if (white.toLowerCase() === black.toLowerCase()) {
+                            toast('Pemain Putih dan Hitam harus berbeda!', 'error');
+                            return;
+                        }
+
+                        try {
+                            const params = new URLSearchParams({
+                                play: '1',
+                                white: white,
+                                black: black,
+                                result: result,
+                                url: url
+                            });
+
+                            const res = await apiCall(`/index.php?${params.toString()}`);
+                            if (res.success && res.match) {
+                                const m = res.match;
+                                $('#playResultPanel').style.display = 'block';
+                                $('#resWhiteName').textContent = m.white.username;
+                                $('#resWhiteOld').textContent = m.white.old_rating;
+                                $('#resWhiteNew').textContent = m.white.new_rating;
+                                const wDiff = m.white.change;
+                                $('#resWhiteChange').textContent = (wDiff >= 0 ? '+' : '') + wDiff;
+                                $('#resWhiteChange').className = `result-player__change ${wDiff > 0 ? 'positive' : wDiff < 0 ? 'negative' : 'neutral'}`;
+
+                                $('#resBlackName').textContent = m.black.username;
+                                $('#resBlackOld').textContent = m.black.old_rating;
+                                $('#resBlackNew').textContent = m.black.new_rating;
+                                const bDiff = m.black.change;
+                                $('#resBlackChange').textContent = (bDiff >= 0 ? '+' : '') + bDiff;
+                                $('#resBlackChange').className = `result-player__change ${bDiff > 0 ? 'positive' : bDiff < 0 ? 'negative' : 'neutral'}`;
+
+                                toast('Pertandingan berhasil dicatat!', 'success');
+                                $('#playWhite').value = '';
+                                $('#playBlack').value = '';
+                                $('#playUrl').value = '';
+
+                                await fetchPlayers(true);
+                                await fetchMatches(true);
+                            }
+                        } catch (err) {
+                            toast(err.message || 'Gagal mencatat pertandingan', 'error');
+                        }
+                    });
+
+                    // Add Player Button
+                    $('#btnAddPlayerBtn').addEventListener('click', () => {
+                        window.appOpenEditPlayer('', 400);
+                    });
+
+                    // Modals Close Event Handlers
+                    $('#btnClosePlayerStats').addEventListener('click', () => { $('#playerStatsModal').style.display = 'none'; });
+                    $('#btnClosePlayerStatsBtn').addEventListener('click', () => { $('#playerStatsModal').style.display = 'none'; });
+                    $('#btnEditPlayerModalAction').addEventListener('click', () => {
+                        if (activePlayerUsername) {
+                            const p = playersCache.find(x => x.username === activePlayerUsername);
+                            if (p) window.appOpenEditPlayer(p.username, p.rating);
+                        }
+                    });
+                    $('#btnDeletePlayerModalAction').addEventListener('click', () => {
+                        if (activePlayerUsername) window.appDeletePlayer(activePlayerUsername);
+                    });
+
+                    // Search & Filters
+                    $('#playerSearch').addEventListener('input', (e) => renderLeaderboard(e.target.value));
+
+                    $('#filterAllMatches').addEventListener('click', () => {
+                        currentMatchFilter = 'all';
+                        $$('.filter-btn').forEach(b => b.classList.remove('active'));
+                        $('#filterAllMatches').classList.add('active');
+                        renderMatches();
+                    });
+
+                    $('#filterValidMatches').addEventListener('click', () => {
+                        currentMatchFilter = 'valid';
+                        $$('.filter-btn').forEach(b => b.classList.remove('active'));
+                        $('#filterValidMatches').classList.add('active');
+                        renderMatches();
+                    });
+
+                    $('#filterInvalidMatches').addEventListener('click', () => {
+                        currentMatchFilter = 'invalid';
+                        $$('.filter-btn').forEach(b => b.classList.remove('active'));
+                        $('#filterInvalidMatches').classList.add('active');
+                        renderMatches();
+                    });
+
+                    // Tab Navigation
                     $$('.tab-btn').forEach(btn => {
                         btn.addEventListener('click', () => {
-                            const tabName = btn.dataset.tab;
-
+                            const tab = btn.dataset.tab;
                             $$('.tab-btn').forEach(b => b.classList.remove('active'));
                             btn.classList.add('active');
 
                             $$('.tab-content').forEach(c => c.classList.remove('active'));
-                            $(`#tab-${tabName}`).classList.add('active');
+                            $(`#tab-${tab}`).classList.add('active');
+                            
+                            // Cleanup chessboard ghost pieces and stuck animations if leaving analysis tab
+                            if (tab !== 'analysis') {
+                                document.querySelectorAll('body > img[data-piece]').forEach(el => el.remove());
+                                if (typeof window.syncAnalysisBoard === 'function') window.syncAnalysisBoard();
+                            }
                         });
-                    });
-                }
-
-                // ── Event Bindings ─────────────────────────────────────────
-                function init() {
-                    initTabs();
-
-                    // Player Stats Modal
-                    $('#btnClosePlayerStats').addEventListener('click', () => {
-                        playerStatsModal.style.display = 'none';
-                    });
-                    $('#btnClosePlayerStatsBtn').addEventListener('click', () => {
-                        playerStatsModal.style.display = 'none';
-                    });
-
-                    // Close modal on background click
-                    playerStatsModal.addEventListener('click', (e) => {
-                        if (e.target === playerStatsModal) {
-                            playerStatsModal.style.display = 'none';
-                        }
                     });
 
                     // Refresh buttons
                     $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
                     $('#btnRefreshMatches').addEventListener('click', () => fetchMatches(false));
 
-                    // Player search
-                    $('#playerSearch').addEventListener('input', (e) => {
-                        renderLeaderboard(e.target.value);
-                    });
+                    // ── Analysis Tab Logic ──────────────────────────────────────
+                    let analysisBoard = null;
+                    let analysisChess = null;
+                    let mainPositions = [];       // Backup of the main PGN line
+                    let variantPositions = null;  // Backup of the active variant line
+                    let analysisPositions = [];   // Currently active line [{fen, move_san, score, score_cp, bestmove, pv}]
+                    let analysisHeaders = {};
+                    let analysisMovesSan = [];
+                    let currentMoveIdx = 0;       // 0 = starting position
+                    let evalChartInstance = null;
+                    let liveAnalysisAbort = null;
 
-                    // Keyboard shortcut: Escape closes modals
-                    document.addEventListener('keydown', (e) => {
-                        if (e.key === 'Escape') closeAllModals();
-                    });
+                    function initAnalysisTab() {
+                        if (typeof window.Chess === 'undefined' || typeof window.Chessboard === 'undefined') {
+                            setTimeout(initAnalysisTab, 200);
+                            return;
+                        }
 
-                    // Initial connection check
+                        analysisChess = new window.Chess();
+
+                        // Init board
+                        analysisBoard = window.Chessboard('analysisBoard', {
+                            position: 'start',
+                            draggable: true,
+                            onDragStart: handleAnalysisDragStart,
+                            onDrop: handleAnalysisDrop,
+                            onSnapEnd: handleAnalysisSnapEnd,
+                            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+                        });
+
+                        // Expose for tab switching cleanup
+                        window.syncAnalysisBoard = () => {
+                            if (analysisBoard) {
+                                if (analysisPositions.length > 0) {
+                                    analysisBoard.position(analysisPositions[currentMoveIdx].fen, false);
+                                } else {
+                                    analysisBoard.position('start', false);
+                                }
+                            }
+                        };
+
+                        // File input
+                        $('#pgnFileInput').addEventListener('change', (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (ev) => { $('#pgnInput').value = ev.target.result; };
+                            reader.readAsText(file);
+                            e.target.value = '';
+                        });
+
+                        // Start analysis button
+                        $('#btnStartPgnAnalysis').addEventListener('click', startPgnAnalysis);
+                        $('#btnStartFreeAnalysis').addEventListener('click', () => {
+                            // Start free analysis from starting position
+                            analysisPositions = [{
+                                fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                                move_san: null,
+                                score: null, score_cp: null, bestmove: null, pv: []
+                            }];
+                            analysisMovesSan = [];
+                            currentMoveIdx = 0;
+                            analysisHeaders = { White: 'Player', Black: 'Player', Event: 'Free Analysis' };
+                            
+                            $('#analysisPgnImportCard').style.display = 'none';
+                            $('#analysisMainLayout').style.display = 'block';
+                            if (analysisBoard && analysisBoard.resize) analysisBoard.resize();
+                            
+                            $('#infoWhite').textContent = 'Pemain Bebas';
+                            $('#infoBlack').textContent = 'Pemain Bebas';
+                            $('#infoEvent').textContent = 'Analisis Live';
+                            $('#infoDate').textContent = '';
+                            $('#infoResult').textContent = '';
+                            
+                            analysisChess.reset();
+                            gotoMove(0);
+                            analyzeLivePosition(0, analysisPositions[0].fen);
+                        });
+
+                        // Nav buttons
+                        $('#btnAnalysisFirst').addEventListener('click', () => gotoMove(0));
+                        $('#btnAnalysisPrev').addEventListener('click', () => gotoMove(currentMoveIdx - 1));
+                        $('#btnAnalysisNext').addEventListener('click', () => gotoMove(currentMoveIdx + 1));
+                        $('#btnAnalysisLast').addEventListener('click', () => gotoMove(analysisPositions.length - 1));
+                        $('#btnAnalysisFlip2').addEventListener('click', () => {
+                            analysisBoard.flip();
+                            drawBestMoveArrow();
+                        });
+
+                        // New analysis
+                        $('#btnNewAnalysis').addEventListener('click', () => {
+                            // Cleanup any active drag
+                            document.querySelectorAll('body > img[data-piece]').forEach(el => el.remove());
+                            if (analysisBoard) analysisBoard.position('start', false);
+                            
+                            $('#analysisMainLayout').style.display = 'none';
+                            $('#analysisPgnImportCard').style.display = '';
+                            analysisPositions = [];
+                            mainPositions = [];
+                            variantPositions = null;
+                            clearArrows();
+                        });
+
+                        // Keyboard navigation
+                        document.addEventListener('keydown', (e) => {
+                            if ($('#tab-analysis').classList.contains('active') && analysisPositions.length > 0) {
+                                if (e.key === 'ArrowLeft') { e.preventDefault(); gotoMove(currentMoveIdx - 1); }
+                                if (e.key === 'ArrowRight') { e.preventDefault(); gotoMove(currentMoveIdx + 1); }
+                                if (e.key === 'ArrowUp') { e.preventDefault(); gotoMove(0); }
+                                if (e.key === 'ArrowDown') { e.preventDefault(); gotoMove(analysisPositions.length - 1); }
+                            }
+                        });
+                        
+                        // Resize observer to flawlessly redraw arrows and resize board when container size changes
+                        const resizeObserver = new ResizeObserver(() => {
+                            if ($('#tab-analysis').classList.contains('active') && analysisBoard) {
+                                analysisBoard.resize();
+                                drawBestMoveArrow();
+                            }
+                        });
+                        resizeObserver.observe($('#analysisBoard'));
+                    }
+
+                    function handleAnalysisDragStart(source, piece, position, orientation) {
+                        if (analysisPositions.length === 0) return false;
+                        // Sync chess to current state
+                        analysisChess.load(analysisPositions[currentMoveIdx].fen);
+                        
+                        // Do not pick up pieces if the game is over
+                        if (analysisChess.game_over()) return false;
+
+                        // Only pick up pieces for the side to move
+                        if ((analysisChess.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                            (analysisChess.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                            return false;
+                        }
+                    }
+
+                    function handleAnalysisDrop(source, target) {
+                        if (source === target) return 'snapback';
+
+                        // Sync chess instance to current fen before moving
+                        analysisChess.load(analysisPositions[currentMoveIdx].fen);
+
+                        const move = analysisChess.move({
+                            from: source,
+                            to: target,
+                            promotion: 'q' // simplify promotion for now
+                        });
+
+                        if (move === null) return 'snapback';
+
+                        // Valid move.
+                        currentMoveIdx++;
+                        variantPositions = analysisPositions.slice(0, currentMoveIdx);
+                        
+                        const newFen = analysisChess.fen();
+                        variantPositions.push({
+                            fen: newFen,
+                            move_san: move.san,
+                            score: null,
+                            score_cp: null,
+                            score_type: null,
+                            bestmove: null,
+                            pv: []
+                        });
+                        
+                        analysisPositions = [...variantPositions];
+
+                        analyzeLivePosition(currentMoveIdx, newFen);
+                        // IMPORTANT: Do NOT call gotoMove(currentMoveIdx) here!
+                        // chessboard.js will glitch the dragged piece if we update the board before it snaps.
+                    }
+
+                    function handleAnalysisSnapEnd() {
+                        gotoMove(currentMoveIdx);
+                    }
+
+                    async function analyzeLivePosition(idx, fen) {
+                        if (liveAnalysisAbort) liveAnalysisAbort.abort();
+                        liveAnalysisAbort = new AbortController();
+
+                        const depth = parseInt($('#analysisDepth2').value) || 15;
+                        $('#posEvalBest').textContent = "Menghitung...";
+                        $('#posEvalPv').textContent = "—";
+                        clearArrows();
+
+                        try {
+                            const res = await fetch('/stockfish.php', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-API-Token': activeApiToken },
+                                body: JSON.stringify({ fen: fen, depth: depth }),
+                                signal: liveAnalysisAbort.signal
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.error);
+
+                            if (analysisPositions[idx]) {
+                                let scoreDisplay = null;
+                                let scoreCp = null;
+                                if (data.score_type === 'cp') {
+                                    scoreCp = data.score;
+                                    const turn = fen.split(' ')[1] || 'w';
+                                    if (turn === 'b') scoreCp = -scoreCp;
+                                    scoreDisplay = scoreCp / 100;
+                                } else if (data.score_type === 'mate') {
+                                    scoreCp = data.score > 0 ? 9999 : -9999;
+                                    const turn = fen.split(' ')[1] || 'w';
+                                    if (turn === 'b') scoreCp = -scoreCp;
+                                    scoreDisplay = "M" + Math.abs(data.score);
+                                }
+
+                                analysisPositions[idx].score = scoreDisplay;
+                                analysisPositions[idx].score_cp = scoreCp;
+                                analysisPositions[idx].score_type = data.score_type;
+                                analysisPositions[idx].bestmove = data.bestmove;
+                                analysisPositions[idx].pv = data.pv || [];
+                                
+                                if (currentMoveIdx === idx) {
+                                    gotoMove(idx); // Update UI
+                                }
+                                renderMoveList();
+                            }
+                        } catch (e) {
+                            if (e.name !== 'AbortError') {
+                                console.error('Live analysis error:', e);
+                            }
+                        }
+                    }
+
+                    function clearArrows() {
+                        const svg = $('#boardArrows');
+                        if (!svg) return;
+                        svg.innerHTML = `
+                            <defs>
+                                <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto">
+                                    <polygon points="0 0, 4 2, 0 4" fill="rgba(255, 170, 0, 0.8)" />
+                                </marker>
+                            </defs>`;
+                    }
+
+                    function drawBestMoveArrow() {
+                        clearArrows();
+                        if (analysisPositions.length === 0) return;
+                        const pos = analysisPositions[currentMoveIdx];
+                        if (!pos || !pos.bestmove || pos.bestmove.length < 4 || pos.bestmove.includes('(none)')) return;
+
+                        const fromSq = pos.bestmove.substring(0, 2);
+                        const toSq = pos.bestmove.substring(2, 4);
+
+                        const boardEl = $('#analysisBoard');
+                        const svgEl = $('#boardArrows');
+                        const sq1 = boardEl.querySelector('.square-' + fromSq);
+                        const sq2 = boardEl.querySelector('.square-' + toSq);
+
+                        if (!sq1 || !sq2) return;
+
+                        const br = boardEl.getBoundingClientRect();
+                        const r1 = sq1.getBoundingClientRect();
+                        const r2 = sq2.getBoundingClientRect();
+
+                        const x1 = r1.left - br.left + r1.width / 2;
+                        const y1 = r1.top - br.top + r1.height / 2;
+                        const x2 = r2.left - br.left + r2.width / 2;
+                        const y2 = r2.top - br.top + r2.height / 2;
+
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', x1);
+                        line.setAttribute('y1', y1);
+                        line.setAttribute('x2', x2);
+                        line.setAttribute('y2', y2);
+                        line.setAttribute('stroke', 'rgba(255, 170, 0, 0.8)');
+                        line.setAttribute('stroke-width', (r1.width / 5).toString());
+                        line.setAttribute('stroke-linecap', 'round');
+                        line.setAttribute('marker-end', 'url(#arrowhead)');
+                        
+                        svgEl.appendChild(line);
+                    }
+
+                    async function startPgnAnalysis() {
+                        const pgn = $('#pgnInput').value.trim();
+                        if (!pgn) { toast('Masukkan PGN terlebih dahulu.', 'error'); return; }
+                        const depth = parseInt($('#analysisDepth2').value) || 12;
+
+                        // Parse PGN client-side to get FENs using chess.js
+                        let chess;
+                        try {
+                            chess = new window.Chess();
+                            // chess.js load_pgn
+                            if (!chess.load_pgn(pgn, { sloppy: true })) {
+                                toast('Format PGN tidak valid.', 'error');
+                                return;
+                            }
+                        } catch (err) {
+                            toast('Gagal parse PGN: ' + err.message, 'error');
+                            return;
+                        }
+
+                        // Extract headers
+                        analysisHeaders = chess.header() || {};
+                        const moves = chess.history({ verbose: true });
+                        analysisMovesSan = chess.history();
+
+                        // Build FEN list: start + after each move
+                        const fenList = [];
+                        const tempChess = new window.Chess();
+                        fenList.push(tempChess.fen());
+                        for (const move of moves) {
+                            tempChess.move(move);
+                            fenList.push(tempChess.fen());
+                        }
+
+                        const total = fenList.length;
+                        if (total > 121) {
+                            toast('Permainan terlalu panjang (max 120 langkah).', 'error');
+                            return;
+                        }
+
+                        // Show progress
+                        $('#analysisProgress').style.display = 'block';
+                        $('#analysisCurrent').textContent = '0';
+                        $('#analysisTotal').textContent = total;
+                        $('#analysisProgressBar').style.width = '0%';
+                        $('#btnStartPgnAnalysis').disabled = true;
+
+                        // Send batch to server (analyse in chunks of 20 to show progress)
+                        analysisPositions = [];
+                        const chunkSize = 20;
+                        for (let start = 0; start < total; start += chunkSize) {
+                            const chunk = fenList.slice(start, start + chunkSize);
+                            try {
+                                const res = await fetch('/stockfish.php', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-API-Token': activeApiToken },
+                                    body: JSON.stringify({ fens: chunk, depth })
+                                });
+                                const data = await res.json();
+                                if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
+
+                                for (const pos of data.positions) {
+                                    const globalIdx = start + pos.move_index;
+                                    analysisPositions.push({
+                                        fen:       pos.fen,
+                                        move_san:  globalIdx === 0 ? null : analysisMovesSan[globalIdx - 1],
+                                        score:     pos.score,
+                                        score_cp:  pos.score_cp,
+                                        score_type: pos.score_type,
+                                        bestmove:  pos.bestmove,
+                                        pv:        pos.pv || [],
+                                    });
+                                }
+                                mainPositions = [...analysisPositions];
+                                $('#analysisCurrent').textContent = Math.min(start + chunkSize, total);
+                                $('#analysisProgressBar').style.width = Math.min(100, Math.round(((start + chunkSize) / total) * 100)) + '%';
+
+                            } catch (err) {
+                                toast('Analisis gagal: ' + err.message, 'error');
+                                $('#btnStartPgnAnalysis').disabled = false;
+                                $('#analysisProgress').style.display = 'none';
+                                return;
+                            }
+                        }
+
+                        $('#btnStartPgnAnalysis').disabled = false;
+                        $('#analysisProgress').style.display = 'none';
+
+                        // Show main layout
+                        $('#analysisPgnImportCard').style.display = 'none';
+                        $('#analysisMainLayout').style.display = 'block';
+                        
+                        // Force resize since it was initialized while hidden
+                        if (analysisBoard && analysisBoard.resize) {
+                            analysisBoard.resize();
+                        }
+
+                        // Populate game info
+                        $('#infoWhite').textContent = analysisHeaders.White || '?';
+                        $('#infoBlack').textContent = analysisHeaders.Black || '?';
+                        $('#infoEvent').textContent = analysisHeaders.Event && analysisHeaders.Event !== '?' ? analysisHeaders.Event : '';
+                        $('#infoDate').textContent = analysisHeaders.Date || '';
+                        $('#infoResult').textContent = analysisHeaders.Result || '';
+
+                        renderMoveList();
+                        renderEvalChart();
+                        gotoMove(0);
+                    }
+
+                    function gotoMove(idx) {
+                        if (analysisPositions.length === 0) return;
+                        idx = Math.max(0, Math.min(idx, analysisPositions.length - 1));
+                        
+                        currentMoveIdx = idx;
+
+                        const pos = analysisPositions[idx];
+                        analysisBoard.position(pos.fen, false);
+
+                        // Move label
+                        if (idx === 0) {
+                            $('#analysisMoveLabel').textContent = 'Start';
+                        } else {
+                            const moveNum = Math.ceil(idx / 2);
+                            const side = idx % 2 === 1 ? 'W' : 'B';
+                            $('#analysisMoveLabel').textContent = `${moveNum}. ${side}: ${pos.move_san || '?'}`;
+                        }
+
+                        // Eval box
+                        if (pos.score !== null && pos.score !== undefined) {
+                            const sc = pos.score;
+                            const isNum = typeof sc === 'number';
+                            let display = isNum ? (sc >= 0 ? `+${sc.toFixed(2)}` : sc.toFixed(2)) : String(sc);
+                            $('#posEvalScore').textContent = display;
+                            $('#posEvalScore').style.color = isNum
+                                ? (sc > 0.2 ? 'var(--accent-primary)' : sc < -0.2 ? 'var(--accent-red)' : 'var(--text-primary)')
+                                : 'var(--accent-primary)';
+                            updateEvalBar(pos.score_cp);
+                            $('#evalBarLabel').textContent = display;
+                        }
+                        $('#posEvalBest').textContent = pos.bestmove || '—';
+                        $('#posEvalPv').textContent = pos.pv && pos.pv.length ? pos.pv.join(' ') : '—';
+
+                        renderMoveList();
+                        drawBestMoveArrow();
+                    }
+
+                    function updateEvalBar(scoreCp) {
+                        const bar = $('#evalBarWhite');
+                        if (scoreCp === null || scoreCp === undefined) {
+                            bar.style.height = '50%';
+                            return;
+                        }
+                        // Clamp to ±500cp for display
+                        const clamped = Math.max(-500, Math.min(500, scoreCp));
+                        // White% = 50 + (clamped/500)*50  => 0%-100%
+                        const whitePct = 50 + (clamped / 500) * 50;
+                        bar.style.height = whitePct + '%';
+                    }
+
+                    function renderMoveList() {
+                        const container = $('#moveListContainer');
+                        let html = `<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">`;
+                        html += `<tr><th style="padding:4px 8px; text-align:left; color:var(--text-muted); font-weight:500;">#</th>
+                                     <th style="padding:4px 8px; text-align:left;">⬜ White</th>
+                                     <th style="padding:4px 8px; text-align:left; color:var(--text-muted);">Eval</th>
+                                     <th style="padding:4px 8px; text-align:left;">⬛ Black</th>
+                                     <th style="padding:4px 8px; text-align:left; color:var(--text-muted);">Eval</th></tr>`;
+
+                        // Find divergence point
+                        let splitIdx = mainPositions.length;
+                        for (let i = 0; i < analysisPositions.length; i++) {
+                            if (!mainPositions[i] || mainPositions[i].fen !== analysisPositions[i].fen) {
+                                splitIdx = i;
+                                break;
+                            }
+                        }
+                        // If no divergence but analysisPositions is shorter, it hasn't technically diverged, 
+                        // but we are just walking back on the main line. splitIdx will be analysisPositions.length
+
+                        // 1. Render Main Line
+                        for (let i = 1; i < mainPositions.length; i += 2) {
+                            const moveNum = Math.ceil(i / 2);
+                            const white = mainPositions[i];
+                            const black = mainPositions[i + 1];
+
+                            const wEval = formatEvalCell(white);
+                            const bEval = black ? formatEvalCell(black) : { text: '', color: '' };
+
+                            let wClass = (currentMoveIdx === i && analysisPositions[i] && analysisPositions[i].fen === mainPositions[i].fen) ? 'active' : '';
+                            let bClass = (currentMoveIdx === i + 1 && analysisPositions[i+1] && analysisPositions[i+1].fen === mainPositions[i+1].fen) ? 'active' : '';
+
+                            html += `<tr style="border-top:1px solid rgba(255,255,255,0.04);">
+                                <td style="padding:4px 8px; color:var(--text-muted);">${moveNum}.</td>
+                                <td style="padding:4px 6px;">
+                                    <button class="analysis-move-btn ${wClass}" data-main-idx="${i}" 
+                                        style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                        onclick="window.gotoMainMove(${i})">${white.move_san || ''}</button>
+                                </td>
+                                <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
+
+                            if (black) {
+                                html += `<td style="padding:4px 6px;">
+                                    <button class="analysis-move-btn ${bClass}" data-main-idx="${i + 1}"
+                                        style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                        onclick="window.gotoMainMove(${i + 1})">${black.move_san || ''}</button>
+                                </td>
+                                <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
+                            } else {
+                                html += `<td></td><td></td>`;
+                            }
+                            html += `</tr>`;
+                        }
+
+                        // 2. Render Variant (if deviated)
+                        if (splitIdx < analysisPositions.length) {
+                            html += `<tr><td colspan="5"><div style="background:rgba(255,170,0,0.1); padding:4px 8px; margin:4px 0; border-left:3px solid orange; color:orange; font-size:0.75rem;"><strong>Variant Aktif</strong></div></td></tr>`;
+                            
+                            // Variant moves (we list them sequentially, adapting move numbers)
+                            let currentTurn = splitIdx % 2 !== 0 ? 'w' : 'b'; // splitIdx is the index in analysisPositions
+                            let moveNum = Math.ceil(splitIdx / 2);
+                            
+                            // To make rendering easy, we step through the variant indices
+                            for (let i = splitIdx; i < analysisPositions.length; ) {
+                                let moveNumStr = Math.ceil(i / 2) + '.';
+                                let white = null, black = null;
+                                let wIdx = null, bIdx = null;
+
+                                if (i % 2 !== 0) { // White move
+                                    white = analysisPositions[i];
+                                    wIdx = i;
+                                    i++;
+                                    if (i < analysisPositions.length) {
+                                        black = analysisPositions[i];
+                                        bIdx = i;
+                                        i++;
+                                    }
+                                } else { // Black move (variant started on black's turn)
+                                    moveNumStr += '..';
+                                    black = analysisPositions[i];
+                                    bIdx = i;
+                                    i++;
+                                }
+
+                                const wEval = white ? formatEvalCell(white) : { text: '', color: '' };
+                                const bEval = black ? formatEvalCell(black) : { text: '', color: '' };
+                                
+                                let wClass = (wIdx !== null && currentMoveIdx === wIdx) ? 'active' : '';
+                                let bClass = (bIdx !== null && currentMoveIdx === bIdx) ? 'active' : '';
+
+                                html += `<tr style="border-top:1px solid rgba(255,255,255,0.04);">
+                                    <td style="padding:4px 8px; color:orange;">${moveNumStr}</td>`;
+                                
+                                if (white) {
+                                    html += `<td style="padding:4px 6px;">
+                                        <button class="analysis-move-btn variant-move ${wClass}" data-var-idx="${wIdx}" 
+                                            style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                            onclick="window.gotoVariantMove(${wIdx})">${white.move_san || ''}</button>
+                                    </td>
+                                    <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
+                                } else {
+                                    html += `<td></td><td></td>`;
+                                }
+                                
+                                if (black) {
+                                    html += `<td style="padding:4px 6px;">
+                                        <button class="analysis-move-btn variant-move ${bClass}" data-var-idx="${bIdx}" 
+                                            style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                            onclick="window.gotoVariantMove(${bIdx})">${black.move_san || ''}</button>
+                                    </td>
+                                    <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
+                                } else {
+                                    html += `<td></td><td></td>`;
+                                }
+                                html += `</tr>`;
+                            }
+                        }
+                        
+                        html += `</table>`;
+                        container.innerHTML = html;
+
+                        // CSS for active move highlight
+                        if (!document.getElementById('analysisMoveStyle')) {
+                            const s = document.createElement('style');
+                            s.id = 'analysisMoveStyle';
+                            s.textContent = `.analysis-move-btn:hover{background:rgba(124,92,255,0.2)!important}
+                                .analysis-move-btn.active{background:rgba(124,92,255,0.35)!important;color:white!important}
+                                .analysis-move-btn.variant-move.active{background:rgba(255,170,0,0.35)!important;color:white!important}`;
+                            document.head.appendChild(s);
+                        }
+                        
+                        // Scroll active into view
+                        const activeBtn = container.querySelector('.analysis-move-btn.active');
+                        if (activeBtn) {
+                            activeBtn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                        }
+                    }
+
+                    function formatEvalCell(pos) {
+                        if (pos.score === null || pos.score === undefined) return { text: '—', color: 'var(--text-muted)' };
+                        const sc = pos.score;
+                        const isNum = typeof sc === 'number';
+                        const text = isNum ? (sc >= 0 ? `+${sc.toFixed(2)}` : sc.toFixed(2)) : String(sc);
+                        const color = isNum
+                            ? (sc > 0.3 ? '#4ade80' : sc < -0.3 ? '#f87171' : 'var(--text-secondary)')
+                            : '#4ade80';
+                        return { text, color };
+                    }
+
+                    function renderEvalChart() {
+                        const canvas = $('#evalChart');
+                        if (!canvas) return;
+                        const ctx = canvas.getContext('2d');
+
+                        const labels = analysisPositions.map((p, i) => i === 0 ? 'Start' : p.move_san || `#${i}`);
+                        const rawData = analysisPositions.map(p => {
+                            if (p.score_cp === null || p.score_cp === undefined) return 0;
+                            return Math.max(-800, Math.min(800, p.score_cp)) / 100;
+                        });
+
+                        canvas.width = canvas.offsetWidth;
+
+                        if (evalChartInstance) evalChartInstance = null;
+
+                        // Simple canvas chart
+                        const w = canvas.width, h = canvas.height;
+                        ctx.clearRect(0, 0, w, h);
+
+                        // Draw zero line
+                        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                        ctx.lineWidth = 1;
+                        ctx.setLineDash([4, 4]);
+                        ctx.beginPath();
+                        ctx.moveTo(0, h / 2);
+                        ctx.lineTo(w, h / 2);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        if (rawData.length < 2) return;
+
+                        const stepX = w / (rawData.length - 1);
+                        const maxVal = 8; // ±8.00
+
+                        const toY = (v) => h / 2 - (v / maxVal) * (h / 2 - 4);
+                        const toX = (i) => i * stepX;
+
+                        // Fill area
+                        ctx.beginPath();
+                        ctx.moveTo(toX(0), h / 2);
+                        for (let i = 0; i < rawData.length; i++) {
+                            ctx.lineTo(toX(i), toY(rawData[i]));
+                        }
+                        ctx.lineTo(toX(rawData.length - 1), h / 2);
+                        ctx.closePath();
+                        const grad = ctx.createLinearGradient(0, 0, 0, h);
+                        grad.addColorStop(0, 'rgba(124,92,255,0.5)');
+                        grad.addColorStop(0.5, 'rgba(124,92,255,0.1)');
+                        grad.addColorStop(1, 'rgba(239,68,68,0.4)');
+                        ctx.fillStyle = grad;
+                        ctx.fill();
+
+                        // Line
+                        ctx.beginPath();
+                        ctx.strokeStyle = 'rgba(124,92,255,0.9)';
+                        ctx.lineWidth = 2;
+                        for (let i = 0; i < rawData.length; i++) {
+                            i === 0 ? ctx.moveTo(toX(i), toY(rawData[i])) : ctx.lineTo(toX(i), toY(rawData[i]));
+                        }
+                        ctx.stroke();
+
+                        // Current position dot
+                        ctx.beginPath();
+                        ctx.arc(toX(currentMoveIdx), toY(rawData[currentMoveIdx]), 5, 0, Math.PI * 2);
+                        ctx.fillStyle = '#fff';
+                        ctx.fill();
+
+                        // Click on chart to jump to move
+                        canvas.onclick = (e) => {
+                            const rect = canvas.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const idx = Math.round(x / stepX);
+                            gotoMove(Math.max(0, Math.min(idx, analysisPositions.length - 1)));
+                        };
+                    }
+
+                    // Global function for inline onclick in move list
+                    window.gotoMainMove = (idx) => {
+                        if (mainPositions.length > 0) analysisPositions = [...mainPositions];
+                        gotoMove(idx);
+                        renderEvalChart();
+                    };
+                    
+                    window.gotoVariantMove = (idx) => {
+                        if (variantPositions) analysisPositions = [...variantPositions];
+                        gotoMove(idx);
+                        renderEvalChart();
+                    };
+
+                    initAnalysisTab();
+                }
+
+                // ── Initialize App ──
+                function init() {
+                    setupEvents();
                     checkConnection();
                 }
 
-                // ── Boot ───────────────────────────────────────────────────
                 if (document.readyState === 'loading') {
                     document.addEventListener('DOMContentLoaded', init);
                 } else {
@@ -665,6 +2386,8 @@
 
             })();
         </script>
+        
+        <!-- Chess libs moved to <head> -->
     </body>
 
 </html>

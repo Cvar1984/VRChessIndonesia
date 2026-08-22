@@ -2,6 +2,7 @@
 error_log
 *.phar
 composer.phar
+.env
 
 /data/*csv
 /data/*sql

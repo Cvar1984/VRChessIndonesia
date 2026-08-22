@@ -1,6 +1,7 @@
 <?php
 
-use VRchessIndo\Connection\CSVDatabaseManager;
+use Dotenv\Dotenv;
+use VRchessIndo\Connection\MongoDBDatabaseManager;
 use VRchessIndo\Logic\MatchManager;
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -16,18 +17,38 @@ class RatingSystemTest
     private $passed = 0;
     private $failed = 0;
     private $matchHistory = [];
+    private ?string $testDbName = null;
+
     private function resetDatabase(): void
     {
-        unlink(__DIR__ . '/data/test_player.csv');
-        unlink(__DIR__ . '/data/test_match.csv');
+        if (file_exists(__DIR__ . '/.env')) {
+            $dotenv = Dotenv::createImmutable(__DIR__);
+            $dotenv->safeLoad();
+        }
 
-        $db = new CSVDatabaseManager(
-            __DIR__ . '/data/test_player.csv',
-            __DIR__ . '/data/test_match.csv'
-        );
+        if ($this->testDbName === null) {
+            $this->testDbName = 'vrchessindo_test_' . time();
+        }
+
+        $db = new MongoDBDatabaseManager(null, $this->testDbName);
+        $db->savePlayers([]);
+        $db->saveMatches([]);
 
         $this->manager = new MatchManager($db);
         $this->matchHistory = [];
+    }
+
+    public function __destruct()
+    {
+        if ($this->testDbName !== null && !empty($_ENV['MONGODB_URI'] ?? getenv('MONGODB_URI'))) {
+            try {
+                $uri = $_ENV['MONGODB_URI'] ?? getenv('MONGODB_URI');
+                $client = new MongoDB\Client($uri);
+                $client->dropDatabase($this->testDbName);
+            } catch (\Throwable $e) {
+                // Ignore cleanup errors
+            }
+        }
     }
 
     public function __construct()
