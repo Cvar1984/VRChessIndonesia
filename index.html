@@ -40,18 +40,35 @@
         <link rel="icon" type="image/svg+xml"
             href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>♚</text></svg>">
 
-        <!-- ── Chess libraries (no SRI – CDN bytes vary) ── -->
+        <!-- ── Chess libraries ── -->
         <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-        <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-        <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/chessground/assets/chessground.base.css">
+        <link rel="stylesheet" href="https://unpkg.com/chessground/assets/chessground.brown.css">
+        <link rel="stylesheet" href="https://unpkg.com/chessground/assets/chessground.cburnett.css">
+        <script type="module">
+            import { Chessground } from 'https://unpkg.com/chessground/dist/chessground.js';
+            window.Chessground = Chessground;
+        </script>
 
         <link rel="stylesheet" href="style.css">
         <style>
-            /* Fix chessboard dragging z-index so it doesn't fall behind UI */
-            body > img[data-piece] {
-                z-index: 100000 !important;
+            /* Base fixes for chessground */
+            .cg-wrap {
+                width: 100%;
+                height: 100%;
+                display: block;
             }
+
+            #analysisBoard {
+                aspect-ratio: 1 / 1;
+            }
+
+            /* Hide any piece clone that leaked outside of a drag gesture */
+            body:not(.piece-dragging)>img[data-piece] {
+                display: none !important;
+            }
+
             .auth-badge {
                 display: inline-flex;
                 align-items: center;
@@ -63,12 +80,6 @@
                 letter-spacing: 0.5px;
                 text-transform: uppercase;
                 transition: all var(--transition-normal);
-            }
-
-            .auth-badge--visitor {
-                background: rgba(148, 163, 184, 0.15);
-                color: var(--text-secondary);
-                border: 1px solid rgba(148, 163, 184, 0.25);
             }
 
             .auth-badge--admin {
@@ -154,9 +165,11 @@
                     </div>
                 </div>
                 <div style="position: absolute; right: 0; top: 28px; display: flex; align-items: center; gap: 10px;">
-                    <span id="authBadge" class="auth-badge auth-badge--visitor">🔒 Visitor Mode</span>
-                    <button class="btn btn--primary btn--sm visitor-only" id="btnOpenLoginModal" type="button">🔑 Admin Login</button>
-                    <button class="btn btn--secondary btn--sm admin-only" id="btnLogoutBtn" type="button">🚪 Logout</button>
+                    <span id="authBadge" class="auth-badge admin-only"></span>
+                    <button class="btn btn--primary btn--sm visitor-only" id="btnOpenLoginModal" type="button">🔑 Admin
+                        Login</button>
+                    <button class="btn btn--secondary btn--sm admin-only" id="btnLogoutBtn" type="button">🚪
+                        Logout</button>
                 </div>
             </header>
 
@@ -164,7 +177,8 @@
             <div class="admin-banner admin-only" id="adminBanner">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <span style="font-size:1.2rem;">👑</span>
-                    <span><strong>Mode Admin Aktif (<span id="currentAdminName"></span>)</strong> — Penuh kontrol: kelola Users Admin, API Tokens, catat &amp; edit pertandingan.</span>
+                    <span><strong>Mode Admin Aktif (<span id="currentAdminName"></span>)</strong> — Penuh kontrol:
+                        kelola Users Admin, API Tokens, catat &amp; edit pertandingan.</span>
                 </div>
             </div>
 
@@ -208,8 +222,10 @@
                     <div class="card__header">
                         <div class="card__title">🏆 Player Rankings</div>
                         <div style="display:flex; gap:8px;">
-                            <button class="btn btn--primary btn--sm admin-only" id="btnAddPlayerBtn" type="button">➕ Tambah Pemain</button>
-                            <button class="btn btn--secondary btn--sm" id="btnRefreshPlayers" title="Refresh leaderboard" type="button">↻ Refresh</button>
+                            <button class="btn btn--primary btn--sm admin-only" id="btnAddPlayerBtn" type="button">➕
+                                Tambah Pemain</button>
+                            <button class="btn btn--secondary btn--sm" id="btnRefreshPlayers"
+                                title="Refresh leaderboard" type="button">↻ Refresh</button>
                         </div>
                     </div>
 
@@ -235,14 +251,17 @@
                 <div class="card">
                     <div class="card__header">
                         <div class="card__title">⚔ Match History</div>
-                        <button class="btn btn--secondary btn--sm" id="btnRefreshMatches" title="Refresh matches" type="button">↻ Refresh</button>
+                        <button class="btn btn--secondary btn--sm" id="btnRefreshMatches" title="Refresh matches"
+                            type="button">↻ Refresh</button>
                     </div>
 
                     <!-- Match Filters -->
                     <div class="filter-bar">
-                        <button class="filter-btn active" data-filter="all" id="filterAllMatches">Semua Pertandingan</button>
+                        <button class="filter-btn active" data-filter="all" id="filterAllMatches">Semua
+                            Pertandingan</button>
                         <button class="filter-btn" data-filter="valid" id="filterValidMatches">✅ Valid</button>
-                        <button class="filter-btn" data-filter="invalid" id="filterInvalidMatches">🚫 Invalidated</button>
+                        <button class="filter-btn" data-filter="invalid" id="filterInvalidMatches">🚫
+                            Invalidated</button>
                     </div>
 
                     <div id="matchesContainer">
@@ -268,11 +287,13 @@
                         <div class="form-row">
                             <div class="form-group autocomplete-wrapper">
                                 <label class="form-label" for="playWhite">⬜ Pemain Putih (White)</label>
-                                <input type="text" class="form-input" id="playWhite" placeholder="Ketik nama pemain..." required autocomplete="off">
+                                <input type="text" class="form-input" id="playWhite" placeholder="Ketik nama pemain..."
+                                    required autocomplete="off">
                             </div>
                             <div class="form-group autocomplete-wrapper">
                                 <label class="form-label" for="playBlack">⬛ Pemain Hitam (Black)</label>
-                                <input type="text" class="form-input" id="playBlack" placeholder="Ketik nama pemain..." required autocomplete="off">
+                                <input type="text" class="form-input" id="playBlack" placeholder="Ketik nama pemain..."
+                                    required autocomplete="off">
                             </div>
                         </div>
 
@@ -287,7 +308,8 @@
 
                         <div class="form-group">
                             <label class="form-label" for="playUrl">📊 URL Analisis / Chessigma (Opsional)</label>
-                            <input type="url" class="form-input" id="playUrl" placeholder="https://www.chessigma.com/games/...">
+                            <input type="url" class="form-input" id="playUrl"
+                                placeholder="https://www.chessigma.com/games/...">
                         </div>
 
                         <button type="submit" class="btn btn--primary btn--full" id="btnSubmitMatch">
@@ -352,7 +374,8 @@
                 <div class="card">
                     <div class="card__header">
                         <div class="card__title">🛡️ Kelola User Admins</div>
-                        <button class="btn btn--primary btn--sm" id="btnShowCreateAdminModal" type="button">➕ Tambah Admin</button>
+                        <button class="btn btn--primary btn--sm" id="btnShowCreateAdminModal" type="button">➕ Tambah
+                            Admin</button>
                     </div>
                     <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
                         Daftar pengguna dengan akses admin ke sistem VRChess Indonesia.
@@ -370,10 +393,12 @@
                 <div class="card">
                     <div class="card__header">
                         <div class="card__title">🔑 Kelola API Access Tokens</div>
-                        <button class="btn btn--primary btn--sm" id="btnShowCreateTokenModal" type="button">➕ Buat Token Baru</button>
+                        <button class="btn btn--primary btn--sm" id="btnShowCreateTokenModal" type="button">➕ Buat Token
+                            Baru</button>
                     </div>
                     <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
-                        Setiap request API dapat diautentikasi menggunakan Header <code>X-API-Token: &lt;token&gt;</code> atau <code>Authorization: Bearer &lt;token&gt;</code>.
+                        Setiap request API dapat diautentikasi menggunakan Header
+                        <code>X-API-Token: &lt;token&gt;</code> atau <code>Authorization: Bearer &lt;token&gt;</code>.
                     </p>
 
                     <div id="tokensContainer">
@@ -397,21 +422,29 @@
                         <span class="card__badge card__badge--green">Powered by Stockfish 18</span>
                     </div>
                     <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
-                        Import file PGN untuk menganalisis seluruh permainan dengan Stockfish. Setiap posisi akan dievaluasi dan ditampilkan secara interaktif.
+                        Import file PGN untuk menganalisis seluruh permainan dengan Stockfish. Setiap posisi akan
+                        dievaluasi dan ditampilkan secara interaktif.
                     </p>
                     <div class="form-group">
                         <label class="form-label" for="pgnInput">Teks PGN</label>
-                        <textarea class="form-input" id="pgnInput" rows="6" placeholder="[Event &quot;?&quot;]&#10;[White &quot;Player1&quot;]&#10;[Black &quot;Player2&quot;]&#10;&#10;1. e4 e5 2. Nf3 ..." style="font-family: var(--font-mono); font-size: 0.8rem; resize: vertical;"></textarea>
+                        <textarea class="form-input" id="pgnInput" rows="6"
+                            placeholder="[Event &quot;?&quot;]&#10;[White &quot;Player1&quot;]&#10;[Black &quot;Player2&quot;]&#10;&#10;1. e4 e5 2. Nf3 ..."
+                            style="font-family: var(--font-mono); font-size: 0.8rem; resize: vertical;"></textarea>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <label class="btn btn--secondary btn--sm" style="cursor:pointer;" for="pgnFileInput">📂 Buka File PGN</label>
+                        <label class="btn btn--secondary btn--sm" style="cursor:pointer;" for="pgnFileInput">📂 Buka
+                            File PGN</label>
                         <input type="file" id="pgnFileInput" accept=".pgn" style="display:none;">
                         <div class="form-group" style="margin:0; display:flex; align-items:center; gap:8px;">
-                            <label class="form-label" style="margin:0; white-space:nowrap;" for="analysisDepth2">Depth</label>
-                            <input type="number" class="form-input" id="analysisDepth2" value="12" min="1" max="20" style="width:70px;">
+                            <label class="form-label" style="margin:0; white-space:nowrap;"
+                                for="analysisDepth2">Depth</label>
+                            <input type="number" class="form-input" id="analysisDepth2" value="12" min="1" max="20"
+                                style="width:70px;">
                         </div>
-                        <button class="btn btn--primary" id="btnStartPgnAnalysis" type="button">⚡ Mulai Analisis PGN</button>
-                        <button class="btn btn--secondary" id="btnStartFreeAnalysis" type="button">Mulai Kosong (Free Play)</button>
+                        <button class="btn btn--primary" id="btnStartPgnAnalysis" type="button">⚡ Mulai Analisis
+                            PGN</button>
+                        <button class="btn btn--secondary" id="btnStartFreeAnalysis" type="button">Mulai Kosong (Free
+                            Play)</button>
                     </div>
                     <!-- Progress -->
                     <div id="analysisProgress" style="display:none; margin-top:16px;">
@@ -419,89 +452,180 @@
                             Menganalisis posisi <span id="analysisCurrent">0</span> / <span id="analysisTotal">0</span>…
                         </div>
                         <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:8px; overflow:hidden;">
-                            <div id="analysisProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); border-radius:6px; transition: width 0.3s ease;"></div>
+                            <div id="analysisProgressBar"
+                                style="width:0%; height:100%; background:linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); border-radius:6px; transition: width 0.3s ease;">
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Main Analysis Layout (shown after import) -->
-                <div id="analysisMainLayout" style="display:none;">
-                    <!-- Game Info Row -->
-                    <div class="card" id="analysisGameInfo" style="padding: 12px 20px;">
-                        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center; font-size:0.85rem;">
-                            <span>⬜ <strong id="infoWhite">White</strong></span>
-                            <span style="color:var(--text-secondary);">vs</span>
-                            <span>⬛ <strong id="infoBlack">Black</strong></span>
-                            <span style="color:var(--text-secondary);">|</span>
-                            <span id="infoEvent" style="color:var(--text-secondary);"></span>
-                            <span id="infoDate" style="color:var(--text-secondary);"></span>
-                            <span id="infoResult" style="font-weight:700;"></span>
-                        </div>
-                    </div>
+                <div id="analysisMainLayout" style="display:none; max-width: 1000px; margin: 0 auto;">
 
-                    <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
-                        <!-- Left: Board + Eval Bar -->
-                        <div style="flex:0 0 auto; width:100%; max-width:440px;">
+                    <style>
+                        .btn-cc {
+                            background: transparent;
+                            border: none;
+                            color: #b3b3b2;
+                            padding: 10px 16px;
+                            font-size: 1.2rem;
+                            cursor: pointer;
+                            transition: background 0.15s, color 0.15s;
+                        }
+
+                        .btn-cc:hover {
+                            background: #363430;
+                            color: #fff;
+                        }
+
+                        #moveListContainer table {
+                            border-collapse: collapse;
+                            width: 100%;
+                            font-size: 0.85rem;
+                        }
+
+                        #moveListContainer tr {
+                            border-bottom: 1px solid #33312e !important;
+                            border-top: none !important;
+                        }
+
+                        #moveListContainer tr:nth-child(even) {
+                            background: #2a2825;
+                        }
+
+                        #moveListContainer td {
+                            padding: 0 !important;
+                        }
+
+                        .analysis-move-btn {
+                            padding: 8px 12px !important;
+                            border-radius: 0 !important;
+                            font-weight: 700 !important;
+                        }
+                    </style>
+
+                    <div class="chesscom-layout"
+                        style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
+
+                        <!-- Left: Board Area -->
+                        <div
+                            style="flex:1 1 450px; min-width:320px; max-width:600px; display:flex; flex-direction:column; gap:8px; position: sticky; top: 20px; z-index: 100;">
+
+                            <!-- Player Top (Black) -->
+                            <div
+                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd;">
+                                <div style="display:flex; gap:10px; align-items:center;">
+                                    <div
+                                        style="width:28px; height:28px; background:#222; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #444; font-size:0.8rem;">
+                                        ⬛</div>
+                                    <span id="infoBlack">Black</span>
+                                </div>
+                            </div>
+
                             <!-- Eval Bar + Board -->
-                            <div style="display:flex; gap:10px; align-items:stretch;">
+                            <div
+                                style="display:flex; gap:0; align-items:stretch; border-radius:6px; overflow:hidden; box-shadow:var(--shadow-lg); background: #2f2e2c;">
                                 <!-- Eval Bar (vertical) -->
-                                <div id="evalBarOuter" style="width:20px; min-height:400px; border-radius:6px; overflow:hidden; background:#111; border:1px solid var(--border-subtle); position:relative; display:flex; flex-direction:column; align-items:center;">
-                                    <div id="evalBarWhite" style="background:#f0f0f0; width:100%; transition: height 0.5s ease;" title="White advantage"></div>
-                                    <div id="evalBarBlack" style="background:#222; width:100%; flex:1;" title="Black advantage"></div>
-                                    <span id="evalBarLabel" style="position:absolute; bottom:4px; left:50%; transform:translateX(-50%); font-size:0.6rem; color:#888; white-space:nowrap;">0.00</span>
+                                <div id="evalBarOuter"
+                                    style="width:24px; background:#302e2c; position:relative; display:flex; flex-direction:column; align-items:center;">
+                                    <div id="evalBarBlack" style="background:#302e2c; width:100%; flex:1;"
+                                        title="Black advantage"></div>
+                                    <div id="evalBarWhite"
+                                        style="background:#fff; width:100%; transition: height 0.5s ease;"
+                                        title="White advantage"></div>
+                                    <span id="evalBarLabel"
+                                        style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:0.6rem; color:#888; font-weight:800; white-space:nowrap; background:rgba(0,0,0,0.65); padding:2px 4px; border-radius:3px; pointer-events:none;">0.00</span>
                                 </div>
                                 <!-- Board -->
-                                <div style="flex:1; position:relative;">
-                                    <div id="analysisBoard" style="width:100%;"></div>
-                                    <svg id="boardArrows" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">
-                                        <defs>
-                                            <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto">
-                                                <polygon points="0 0, 4 2, 0 4" fill="rgba(255, 170, 0, 0.8)" />
-                                            </marker>
-                                        </defs>
-                                    </svg>
+                                <div style="flex:1; position:relative; line-height: 0; aspect-ratio: 1 / 1;">
+                                    <div id="analysisBoard" class="cg-wrap"></div>
+                                </div>
+                            </div>
+
+                            <!-- Player Bottom (White) -->
+                            <div
+                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd;">
+                                <div style="display:flex; gap:10px; align-items:center;">
+                                    <div
+                                        style="width:28px; height:28px; background:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #ddd; font-size:0.8rem; color:#000;">
+                                        ⬜</div>
+                                    <span id="infoWhite">White</span>
                                 </div>
                             </div>
 
                             <!-- Board Controls -->
-                            <div style="margin-top:10px; display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap;">
-                                <button class="btn btn--secondary btn--sm" id="btnAnalysisFirst" title="First move">⏮</button>
-                                <button class="btn btn--secondary btn--sm" id="btnAnalysisPrev" title="Previous move">◀</button>
-                                <span id="analysisMoveLabel" style="font-size:0.82rem; color:var(--text-secondary); min-width:70px; text-align:center;">Start</span>
-                                <button class="btn btn--secondary btn--sm" id="btnAnalysisNext" title="Next move">▶</button>
-                                <button class="btn btn--secondary btn--sm" id="btnAnalysisLast" title="Last move">⏭</button>
-                                <button class="btn btn--secondary btn--sm" id="btnAnalysisFlip2" title="Flip board">⇅</button>
+                            <div
+                                style="display:flex; justify-content:center; gap:0; background:#262421; border-radius:6px; overflow:hidden; margin-top:4px; border: 1px solid #33312e;">
+                                <button class="btn-cc" id="btnAnalysisFlip2" title="Flip board">⇅</button>
+                                <button class="btn-cc" id="btnAnalysisFirst" title="First move">⏮</button>
+                                <button class="btn-cc" id="btnAnalysisPrev" title="Previous move">◀</button>
+                                <div class="btn-cc-text" id="analysisMoveLabel"
+                                    style="width:120px; text-align:center; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700; color:#aaa; font-family:var(--font-mono);">
+                                    Start</div>
+                                <button class="btn-cc" id="btnAnalysisNext" title="Next move">▶</button>
+                                <button class="btn-cc" id="btnAnalysisLast" title="Last move">⏭</button>
                             </div>
 
-                            <!-- Eval box for current position -->
-                            <div id="positionEvalBox" style="margin-top:12px; padding:12px 16px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px solid var(--border-subtle);">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:baseline;">
-                                    <span style="font-size:0.8rem; color:var(--text-secondary);">Evaluasi Stockfish</span>
-                                    <strong id="posEvalScore" style="font-family:monospace; font-size:1.4rem; color:var(--accent-primary);">+0.00</strong>
-                                </div>
-                                <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:4px;">
-                                    Best: <span id="posEvalBest" style="color:var(--text-primary); font-weight:600; font-family:monospace;">—</span>
-                                </div>
-                                <div style="font-size:0.78rem; color:var(--text-muted); font-family:monospace; word-break:break-all; line-height:1.5;">
-                                    <span id="posEvalPv">—</span>
-                                </div>
-                            </div>
                         </div>
 
-                        <!-- Right: Move List -->
-                        <div style="flex:1; min-width:280px;">
-                            <div class="card" style="padding:0; overflow:hidden;">
-                                <div class="card__header" style="padding:10px 16px;">
-                                    <div class="card__title" style="font-size:0.9rem;">📋 Riwayat Langkah</div>
-                                    <button class="btn btn--secondary btn--xs" id="btnNewAnalysis">🔄 Analisis Baru</button>
+                        <!-- Right: Analysis Panel -->
+                        <div
+                            style="flex:1 1 300px; max-width:400px; display:flex; flex-direction:column; gap:12px; height: calc(100vh - 40px); position: sticky; top: 20px;">
+
+                            <!-- Engine Evaluation Panel -->
+                            <div
+                                style="background:#262421; border-radius:6px; border: 1px solid #33312e; overflow:hidden; display:flex; flex-direction:column;">
+                                <!-- Tabs -->
+                                <div style="display:flex; background:#1f1e1b; border-bottom: 1px solid #33312e;">
+                                    <div
+                                        style="padding:12px 20px; font-weight:800; color:#fff; border-bottom:3px solid #7fa650; font-size:0.85rem; background:#262421;">
+                                        Analysis</div>
+                                    <div style="padding:12px 20px; font-weight:700; color:#888; font-size:0.85rem;">
+                                        Details</div>
+                                    <div
+                                        style="margin-left:auto; display:flex; align-items:center; padding-right:12px;">
+                                        <button class="btn btn--secondary btn--xs" id="btnNewAnalysis"
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600;">➕
+                                            New</button>
+                                    </div>
                                 </div>
-                                <div id="moveListContainer" style="max-height:420px; overflow-y:auto; padding:6px;"></div>
+
+                                <!-- Evaluation & Engine Lines -->
+                                <div style="padding:16px 20px; display:flex; flex-direction:column; gap:10px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                                        <div style="display:flex; align-items:baseline; gap:12px;">
+                                            <span id="posEvalScore"
+                                                style="font-size:2rem; font-weight:800; font-family:var(--font-mono); color:#fff; line-height:1;">+0.00</span>
+                                            <span style="font-size:0.8rem; color:#7fa650; font-weight:700;"><span
+                                                    class="depth-val">15</span> Depth</span>
+                                        </div>
+                                    </div>
+                                    <div
+                                        style="display:flex; gap:10px; align-items:center; background:#1f1e1b; padding:8px 12px; border-radius:4px; border: 1px solid #33312e;">
+                                        <span id="posEvalBest"
+                                            style="font-family:var(--font-mono); font-weight:800; font-size:0.9rem; color:#fff; min-width:45px;">—</span>
+                                        <div id="posEvalPv"
+                                            style="font-size:0.8rem; color:#888; font-family:var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            —</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Move List -->
+                            <div
+                                style="background:#262421; border-radius:6px; border: 1px solid #33312e; flex:1; display:flex; flex-direction:column; overflow: hidden; min-height: 150px;">
+                                <div id="moveListContainer" style="overflow-y:auto; flex:1; padding:0;">
+                                </div>
                             </div>
 
                             <!-- Eval Chart -->
-                            <div class="card" style="padding:12px 16px; margin-top:14px;">
-                                <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:8px;">📈 Grafik Evaluasi</div>
-                                <canvas id="evalChart" height="80" style="width:100%;"></canvas>
+                            <div
+                                style="background:#262421; border-radius:6px; border: 1px solid #33312e; padding:16px;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                                    <span
+                                        style="font-size:0.8rem; font-weight:800; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Evaluation</span>
+                                </div>
+                                <canvas id="evalChart" height="60" style="width:100%;"></canvas>
                             </div>
                         </div>
                     </div>
@@ -526,13 +650,16 @@
                 <form id="loginForm">
                     <div class="form-group">
                         <label class="form-label" for="loginUsername">Username Admin</label>
-                        <input type="text" class="form-input" id="loginUsername" placeholder="Username (default: admin)" autofocus>
+                        <input type="text" class="form-input" id="loginUsername" placeholder="Username (default: admin)"
+                            autofocus>
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="loginPassword">Password</label>
-                        <input type="password" class="form-input" id="loginPassword" placeholder="Masukkan password admin..." required>
+                        <input type="password" class="form-input" id="loginPassword"
+                            placeholder="Masukkan password admin..." required>
                     </div>
-                    <div id="loginErrorMsg" style="color:var(--accent-red); font-size:0.8rem; margin-bottom:12px; display:none;"></div>
+                    <div id="loginErrorMsg"
+                        style="color:var(--accent-red); font-size:0.8rem; margin-bottom:12px; display:none;"></div>
                     <div style="display:flex; gap:10px; justify-content:flex-end;">
                         <button type="button" class="btn btn--secondary" id="btnCancelLogin">Batal</button>
                         <button type="submit" class="btn btn--primary" id="btnSubmitLogin">Masuk Admin</button>
@@ -551,7 +678,8 @@
                 <form id="createTokenForm">
                     <div class="form-group">
                         <label class="form-label" for="tokenName">Nama / Deskripsi Token</label>
-                        <input type="text" class="form-input" id="tokenName" placeholder="Contoh: Mobile App, Discord Bot, VR Client..." required>
+                        <input type="text" class="form-input" id="tokenName"
+                            placeholder="Contoh: Mobile App, Discord Bot, VR Client..." required>
                     </div>
                     <div style="display:flex; gap:10px; justify-content:flex-end;">
                         <button type="button" class="btn btn--secondary" id="btnCancelCreateToken">Batal</button>
@@ -689,9 +817,12 @@
                     </div>
                 </div>
 
-                <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
-                    <button class="btn btn--secondary btn--sm admin-only" id="btnEditPlayerModalAction" type="button">✏ Edit Pemain</button>
-                    <button class="btn btn--danger btn--sm admin-only" id="btnDeletePlayerModalAction" type="button">🗑 Hapus Pemain</button>
+                <div class="modal-footer"
+                    style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
+                    <button class="btn btn--secondary btn--sm admin-only" id="btnEditPlayerModalAction" type="button">✏
+                        Edit Pemain</button>
+                    <button class="btn btn--danger btn--sm admin-only" id="btnDeletePlayerModalAction" type="button">🗑
+                        Hapus Pemain</button>
                     <button class="btn btn--secondary btn--sm" id="btnClosePlayerStatsBtn" type="button">Tutup</button>
                 </div>
             </div>
@@ -741,11 +872,13 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="editMatchUrl">URL Analisis</label>
-                        <input type="url" class="form-input" id="editMatchUrl" placeholder="https://www.chessigma.com/...">
+                        <input type="url" class="form-input" id="editMatchUrl"
+                            placeholder="https://www.chessigma.com/...">
                     </div>
                     <div style="display:flex; gap:10px; justify-content:flex-end;">
                         <button type="button" class="btn btn--secondary" id="btnCancelEditMatch">Batal</button>
-                        <button type="submit" class="btn btn--primary" id="btnSaveMatch">Simpan &amp; Hitung Ulang Rating</button>
+                        <button type="submit" class="btn btn--primary" id="btnSaveMatch">Simpan &amp; Hitung Ulang
+                            Rating</button>
                     </div>
                 </form>
             </div>
@@ -835,15 +968,15 @@
                     isAdminState = isAdmin;
                     if (isAdmin) {
                         document.body.classList.add('is-admin');
-                        $('#authBadge').className = 'auth-badge auth-badge--admin';
+                        $('#authBadge').className = 'auth-badge auth-badge--admin admin-only';
                         $('#authBadge').textContent = '👑 Admin Mode';
                         $('#currentAdminName').textContent = currentAdminName;
                         fetchTokens(true);
                         fetchAdmins(true);
                     } else {
                         document.body.classList.remove('is-admin');
-                        $('#authBadge').className = 'auth-badge auth-badge--visitor';
-                        $('#authBadge').textContent = '🔒 Visitor Mode';
+                        $('#authBadge').className = 'auth-badge admin-only';
+                        $('#authBadge').textContent = '';
                     }
                 }
 
@@ -933,7 +1066,7 @@
                         if (!silent) toast('Gagal mengambil token: ' + e.message, 'error');
                     }
                 }
-                
+
                 async function fetchAdmins(silent = false) {
                     if (!isAdminState) return;
                     try {
@@ -997,7 +1130,7 @@
                     html += '</tbody></table>';
                     container.innerHTML = html;
                 }
-                
+
                 function renderAdmins() {
                     const container = $('#adminsContainer');
                     if (adminsCache.length === 0) {
@@ -1023,7 +1156,7 @@
                     adminsCache.forEach(a => {
                         const isSelf = a.username === currentAdminName;
                         const meTag = isSelf ? ` <span class="card__badge card__badge--purple">You</span>` : '';
-                        
+
                         html += `
                         <tr>
                             <td><strong>${escHtml(a.username)}</strong>${meTag}</td>
@@ -1431,7 +1564,7 @@
                             toast(err.message, 'error');
                         }
                     });
-                    
+
                     // Edit Admin Password
                     $('#btnCloseEditAdminModal').addEventListener('click', () => { $('#editAdminModal').style.display = 'none'; });
                     $('#btnCancelEditAdmin').addEventListener('click', () => { $('#editAdminModal').style.display = 'none'; });
@@ -1497,7 +1630,7 @@
                         const id = $('#editTokenId').value;
                         const name = $('#editTokenName').value.trim();
                         const isActive = $('#editTokenActive').value === '1';
-                        
+
                         try {
                             const res = await apiCall('/index.php?update-token=1', {
                                 method: 'PATCH',
@@ -1681,11 +1814,12 @@
 
                             $$('.tab-content').forEach(c => c.classList.remove('active'));
                             $(`#tab-${tab}`).classList.add('active');
-                            
-                            // Cleanup chessboard ghost pieces and stuck animations if leaving analysis tab
-                            if (tab !== 'analysis') {
-                                document.querySelectorAll('body > img[data-piece]').forEach(el => el.remove());
-                                if (typeof window.syncAnalysisBoard === 'function') window.syncAnalysisBoard();
+
+                            if (tab === 'analysis') {
+                                document.body.classList.add('analysis-tab-active');
+                            } else {
+                                document.body.classList.remove('analysis-tab-active');
+                                clearArrows();
                             }
                         });
                     });
@@ -1706,34 +1840,58 @@
                     let evalChartInstance = null;
                     let liveAnalysisAbort = null;
 
+                    function getLegalMoves() {
+                        const dests = new Map();
+                        analysisChess.SQUARES.forEach(s => {
+                            const ms = analysisChess.moves({ square: s, verbose: true });
+                            if (ms.length) dests.set(s, ms.map(m => m.to));
+                        });
+                        return dests;
+                    }
+
+                    function toColor(chess) { return chess.turn() === 'w' ? 'white' : 'black'; }
+
+                    function handleAnalysisMove(orig, dest, metadata) {
+                        analysisChess.load(analysisPositions[currentMoveIdx].fen);
+                        const move = analysisChess.move({ from: orig, to: dest, promotion: 'q' });
+                        if (!move) {
+                            analysisBoard.set({ fen: analysisPositions[currentMoveIdx].fen });
+                            return;
+                        }
+
+                        currentMoveIdx++;
+                        variantPositions = analysisPositions.slice(0, currentMoveIdx);
+                        const newFen = analysisChess.fen();
+                        variantPositions.push({
+                            fen: newFen, move_san: move.san,
+                            score: null, score_cp: null, score_type: null, bestmove: null, pv: []
+                        });
+
+                        analysisPositions = [...variantPositions];
+                        analyzeLivePosition(currentMoveIdx, newFen);
+                        gotoMove(currentMoveIdx);
+                    }
+
                     function initAnalysisTab() {
-                        if (typeof window.Chess === 'undefined' || typeof window.Chessboard === 'undefined') {
+                        if (typeof window.Chess === 'undefined' || typeof window.Chessground === 'undefined') {
                             setTimeout(initAnalysisTab, 200);
                             return;
                         }
 
                         analysisChess = new window.Chess();
 
-                        // Init board
-                        analysisBoard = window.Chessboard('analysisBoard', {
-                            position: 'start',
-                            draggable: true,
-                            onDragStart: handleAnalysisDragStart,
-                            onDrop: handleAnalysisDrop,
-                            onSnapEnd: handleAnalysisSnapEnd,
-                            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-                        });
-
-                        // Expose for tab switching cleanup
-                        window.syncAnalysisBoard = () => {
-                            if (analysisBoard) {
-                                if (analysisPositions.length > 0) {
-                                    analysisBoard.position(analysisPositions[currentMoveIdx].fen, false);
-                                } else {
-                                    analysisBoard.position('start', false);
+                        // Init board with Chessground
+                        analysisBoard = window.Chessground(document.getElementById('analysisBoard'), {
+                            fen: 'start',
+                            movable: {
+                                color: 'white',
+                                free: false,
+                                dests: getLegalMoves(),
+                                events: {
+                                    after: handleAnalysisMove
                                 }
                             }
-                        };
+                        });
 
                         // File input
                         $('#pgnFileInput').addEventListener('change', (e) => {
@@ -1748,26 +1906,23 @@
                         // Start analysis button
                         $('#btnStartPgnAnalysis').addEventListener('click', startPgnAnalysis);
                         $('#btnStartFreeAnalysis').addEventListener('click', () => {
-                            // Start free analysis from starting position
                             analysisPositions = [{
                                 fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-                                move_san: null,
-                                score: null, score_cp: null, bestmove: null, pv: []
+                                move_san: null, score: null, score_cp: null, bestmove: null, pv: []
                             }];
                             analysisMovesSan = [];
                             currentMoveIdx = 0;
                             analysisHeaders = { White: 'Player', Black: 'Player', Event: 'Free Analysis' };
-                            
+
                             $('#analysisPgnImportCard').style.display = 'none';
                             $('#analysisMainLayout').style.display = 'block';
-                            if (analysisBoard && analysisBoard.resize) analysisBoard.resize();
-                            
+
                             $('#infoWhite').textContent = 'Pemain Bebas';
                             $('#infoBlack').textContent = 'Pemain Bebas';
                             $('#infoEvent').textContent = 'Analisis Live';
                             $('#infoDate').textContent = '';
                             $('#infoResult').textContent = '';
-                            
+
                             analysisChess.reset();
                             gotoMove(0);
                             analyzeLivePosition(0, analysisPositions[0].fen);
@@ -1779,16 +1934,12 @@
                         $('#btnAnalysisNext').addEventListener('click', () => gotoMove(currentMoveIdx + 1));
                         $('#btnAnalysisLast').addEventListener('click', () => gotoMove(analysisPositions.length - 1));
                         $('#btnAnalysisFlip2').addEventListener('click', () => {
-                            analysisBoard.flip();
+                            analysisBoard.toggleOrientation();
                             drawBestMoveArrow();
                         });
 
                         // New analysis
                         $('#btnNewAnalysis').addEventListener('click', () => {
-                            // Cleanup any active drag
-                            document.querySelectorAll('body > img[data-piece]').forEach(el => el.remove());
-                            if (analysisBoard) analysisBoard.position('start', false);
-                            
                             $('#analysisMainLayout').style.display = 'none';
                             $('#analysisPgnImportCard').style.display = '';
                             analysisPositions = [];
@@ -1806,70 +1957,6 @@
                                 if (e.key === 'ArrowDown') { e.preventDefault(); gotoMove(analysisPositions.length - 1); }
                             }
                         });
-                        
-                        // Resize observer to flawlessly redraw arrows and resize board when container size changes
-                        const resizeObserver = new ResizeObserver(() => {
-                            if ($('#tab-analysis').classList.contains('active') && analysisBoard) {
-                                analysisBoard.resize();
-                                drawBestMoveArrow();
-                            }
-                        });
-                        resizeObserver.observe($('#analysisBoard'));
-                    }
-
-                    function handleAnalysisDragStart(source, piece, position, orientation) {
-                        if (analysisPositions.length === 0) return false;
-                        // Sync chess to current state
-                        analysisChess.load(analysisPositions[currentMoveIdx].fen);
-                        
-                        // Do not pick up pieces if the game is over
-                        if (analysisChess.game_over()) return false;
-
-                        // Only pick up pieces for the side to move
-                        if ((analysisChess.turn() === 'w' && piece.search(/^b/) !== -1) ||
-                            (analysisChess.turn() === 'b' && piece.search(/^w/) !== -1)) {
-                            return false;
-                        }
-                    }
-
-                    function handleAnalysisDrop(source, target) {
-                        if (source === target) return 'snapback';
-
-                        // Sync chess instance to current fen before moving
-                        analysisChess.load(analysisPositions[currentMoveIdx].fen);
-
-                        const move = analysisChess.move({
-                            from: source,
-                            to: target,
-                            promotion: 'q' // simplify promotion for now
-                        });
-
-                        if (move === null) return 'snapback';
-
-                        // Valid move.
-                        currentMoveIdx++;
-                        variantPositions = analysisPositions.slice(0, currentMoveIdx);
-                        
-                        const newFen = analysisChess.fen();
-                        variantPositions.push({
-                            fen: newFen,
-                            move_san: move.san,
-                            score: null,
-                            score_cp: null,
-                            score_type: null,
-                            bestmove: null,
-                            pv: []
-                        });
-                        
-                        analysisPositions = [...variantPositions];
-
-                        analyzeLivePosition(currentMoveIdx, newFen);
-                        // IMPORTANT: Do NOT call gotoMove(currentMoveIdx) here!
-                        // chessboard.js will glitch the dragged piece if we update the board before it snaps.
-                    }
-
-                    function handleAnalysisSnapEnd() {
-                        gotoMove(currentMoveIdx);
                     }
 
                     async function analyzeLivePosition(idx, fen) {
@@ -1884,7 +1971,7 @@
                         try {
                             const res = await fetch('/stockfish.php', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'X-API-Token': activeApiToken },
+                                headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ fen: fen, depth: depth }),
                                 signal: liveAnalysisAbort.signal
                             });
@@ -1911,11 +1998,12 @@
                                 analysisPositions[idx].score_type = data.score_type;
                                 analysisPositions[idx].bestmove = data.bestmove;
                                 analysisPositions[idx].pv = data.pv || [];
-                                
+
                                 if (currentMoveIdx === idx) {
                                     gotoMove(idx); // Update UI
                                 }
                                 renderMoveList();
+                                renderEvalChart();
                             }
                         } catch (e) {
                             if (e.name !== 'AbortError') {
@@ -1925,52 +2013,23 @@
                     }
 
                     function clearArrows() {
-                        const svg = $('#boardArrows');
-                        if (!svg) return;
-                        svg.innerHTML = `
-                            <defs>
-                                <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto">
-                                    <polygon points="0 0, 4 2, 0 4" fill="rgba(255, 170, 0, 0.8)" />
-                                </marker>
-                            </defs>`;
+                        if (analysisBoard) analysisBoard.set({ drawable: { shapes: [] } });
                     }
 
                     function drawBestMoveArrow() {
                         clearArrows();
-                        if (analysisPositions.length === 0) return;
+                        if (analysisPositions.length === 0 || !analysisBoard) return;
                         const pos = analysisPositions[currentMoveIdx];
                         if (!pos || !pos.bestmove || pos.bestmove.length < 4 || pos.bestmove.includes('(none)')) return;
 
-                        const fromSq = pos.bestmove.substring(0, 2);
-                        const toSq = pos.bestmove.substring(2, 4);
+                        const orig = pos.bestmove.substring(0, 2);
+                        const dest = pos.bestmove.substring(2, 4);
 
-                        const boardEl = $('#analysisBoard');
-                        const svgEl = $('#boardArrows');
-                        const sq1 = boardEl.querySelector('.square-' + fromSq);
-                        const sq2 = boardEl.querySelector('.square-' + toSq);
-
-                        if (!sq1 || !sq2) return;
-
-                        const br = boardEl.getBoundingClientRect();
-                        const r1 = sq1.getBoundingClientRect();
-                        const r2 = sq2.getBoundingClientRect();
-
-                        const x1 = r1.left - br.left + r1.width / 2;
-                        const y1 = r1.top - br.top + r1.height / 2;
-                        const x2 = r2.left - br.left + r2.width / 2;
-                        const y2 = r2.top - br.top + r2.height / 2;
-
-                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                        line.setAttribute('x1', x1);
-                        line.setAttribute('y1', y1);
-                        line.setAttribute('x2', x2);
-                        line.setAttribute('y2', y2);
-                        line.setAttribute('stroke', 'rgba(255, 170, 0, 0.8)');
-                        line.setAttribute('stroke-width', (r1.width / 5).toString());
-                        line.setAttribute('stroke-linecap', 'round');
-                        line.setAttribute('marker-end', 'url(#arrowhead)');
-                        
-                        svgEl.appendChild(line);
+                        analysisBoard.set({
+                            drawable: {
+                                shapes: [{ orig: orig, dest: dest, brush: 'paleBlue' }]
+                            }
+                        });
                     }
 
                     async function startPgnAnalysis() {
@@ -2027,7 +2086,7 @@
                             try {
                                 const res = await fetch('/stockfish.php', {
                                     method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', 'X-API-Token': activeApiToken },
+                                    headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ fens: chunk, depth })
                                 });
                                 const data = await res.json();
@@ -2036,13 +2095,13 @@
                                 for (const pos of data.positions) {
                                     const globalIdx = start + pos.move_index;
                                     analysisPositions.push({
-                                        fen:       pos.fen,
-                                        move_san:  globalIdx === 0 ? null : analysisMovesSan[globalIdx - 1],
-                                        score:     pos.score,
-                                        score_cp:  pos.score_cp,
+                                        fen: pos.fen,
+                                        move_san: globalIdx === 0 ? null : analysisMovesSan[globalIdx - 1],
+                                        score: pos.score,
+                                        score_cp: pos.score_cp,
                                         score_type: pos.score_type,
-                                        bestmove:  pos.bestmove,
-                                        pv:        pos.pv || [],
+                                        bestmove: pos.bestmove,
+                                        pv: pos.pv || [],
                                     });
                                 }
                                 mainPositions = [...analysisPositions];
@@ -2063,11 +2122,11 @@
                         // Show main layout
                         $('#analysisPgnImportCard').style.display = 'none';
                         $('#analysisMainLayout').style.display = 'block';
-                        
-                        // Force resize since it was initialized while hidden
-                        if (analysisBoard && analysisBoard.resize) {
-                            analysisBoard.resize();
-                        }
+
+                        // Force resize if needed
+                        // chessground adapts to CSS, but we can call a redraw just in case if we want
+                        // analysisBoard.redrawAll() is available, but usually not needed when container is displayed
+
 
                         // Populate game info
                         $('#infoWhite').textContent = analysisHeaders.White || '?';
@@ -2084,11 +2143,22 @@
                     function gotoMove(idx) {
                         if (analysisPositions.length === 0) return;
                         idx = Math.max(0, Math.min(idx, analysisPositions.length - 1));
-                        
-                        currentMoveIdx = idx;
 
+                        currentMoveIdx = idx;
                         const pos = analysisPositions[idx];
-                        analysisBoard.position(pos.fen, false);
+
+                        analysisChess.load(pos.fen);
+
+                        analysisBoard.set({
+                            fen: pos.fen,
+                            movable: {
+                                color: toColor(analysisChess),
+                                dests: getLegalMoves(),
+                                events: {
+                                    after: handleAnalysisMove
+                                }
+                            }
+                        });
 
                         // Move label
                         if (idx === 0) {
@@ -2106,8 +2176,8 @@
                             let display = isNum ? (sc >= 0 ? `+${sc.toFixed(2)}` : sc.toFixed(2)) : String(sc);
                             $('#posEvalScore').textContent = display;
                             $('#posEvalScore').style.color = isNum
-                                ? (sc > 0.2 ? 'var(--accent-primary)' : sc < -0.2 ? 'var(--accent-red)' : 'var(--text-primary)')
-                                : 'var(--accent-primary)';
+                                ? (sc > 0.2 ? '#fff' : sc < -0.2 ? 'var(--accent-red)' : '#fff')
+                                : '#fff';
                             updateEvalBar(pos.score_cp);
                             $('#evalBarLabel').textContent = display;
                         }
@@ -2115,6 +2185,7 @@
                         $('#posEvalPv').textContent = pos.pv && pos.pv.length ? pos.pv.join(' ') : '—';
 
                         renderMoveList();
+                        renderEvalChart();
                         drawBestMoveArrow();
                     }
 
@@ -2133,12 +2204,12 @@
 
                     function renderMoveList() {
                         const container = $('#moveListContainer');
-                        let html = `<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">`;
-                        html += `<tr><th style="padding:4px 8px; text-align:left; color:var(--text-muted); font-weight:500;">#</th>
-                                     <th style="padding:4px 8px; text-align:left;">⬜ White</th>
-                                     <th style="padding:4px 8px; text-align:left; color:var(--text-muted);">Eval</th>
-                                     <th style="padding:4px 8px; text-align:left;">⬛ Black</th>
-                                     <th style="padding:4px 8px; text-align:left; color:var(--text-muted);">Eval</th></tr>`;
+                        let html = `<table>`;
+                        html += `<tr><th style="padding:8px; text-align:left; color:#888; font-weight:600; width:10%;">#</th>
+                                     <th style="padding:8px; text-align:left; color:#ccc;">White</th>
+                                     <th style="padding:8px; text-align:left; color:#888;">Eval</th>
+                                     <th style="padding:8px; text-align:left; color:#ccc;">Black</th>
+                                     <th style="padding:8px; text-align:left; color:#888;">Eval</th></tr>`;
 
                         // Find divergence point
                         let splitIdx = mainPositions.length;
@@ -2161,24 +2232,24 @@
                             const bEval = black ? formatEvalCell(black) : { text: '', color: '' };
 
                             let wClass = (currentMoveIdx === i && analysisPositions[i] && analysisPositions[i].fen === mainPositions[i].fen) ? 'active' : '';
-                            let bClass = (currentMoveIdx === i + 1 && analysisPositions[i+1] && analysisPositions[i+1].fen === mainPositions[i+1].fen) ? 'active' : '';
+                            let bClass = (currentMoveIdx === i + 1 && analysisPositions[i + 1] && analysisPositions[i + 1].fen === mainPositions[i + 1].fen) ? 'active' : '';
 
-                            html += `<tr style="border-top:1px solid rgba(255,255,255,0.04);">
-                                <td style="padding:4px 8px; color:var(--text-muted);">${moveNum}.</td>
-                                <td style="padding:4px 6px;">
+                            html += `<tr>
+                                <td style="padding:8px; color:#666; font-weight:600;">${moveNum}.</td>
+                                <td>
                                     <button class="analysis-move-btn ${wClass}" data-main-idx="${i}" 
-                                        style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                        style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
                                         onclick="window.gotoMainMove(${i})">${white.move_san || ''}</button>
                                 </td>
-                                <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
+                                <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
 
                             if (black) {
-                                html += `<td style="padding:4px 6px;">
+                                html += `<td>
                                     <button class="analysis-move-btn ${bClass}" data-main-idx="${i + 1}"
-                                        style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                        style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
                                         onclick="window.gotoMainMove(${i + 1})">${black.move_san || ''}</button>
                                 </td>
-                                <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
+                                <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
                             } else {
                                 html += `<td></td><td></td>`;
                             }
@@ -2188,13 +2259,13 @@
                         // 2. Render Variant (if deviated)
                         if (splitIdx < analysisPositions.length) {
                             html += `<tr><td colspan="5"><div style="background:rgba(255,170,0,0.1); padding:4px 8px; margin:4px 0; border-left:3px solid orange; color:orange; font-size:0.75rem;"><strong>Variant Aktif</strong></div></td></tr>`;
-                            
+
                             // Variant moves (we list them sequentially, adapting move numbers)
                             let currentTurn = splitIdx % 2 !== 0 ? 'w' : 'b'; // splitIdx is the index in analysisPositions
                             let moveNum = Math.ceil(splitIdx / 2);
-                            
+
                             // To make rendering easy, we step through the variant indices
-                            for (let i = splitIdx; i < analysisPositions.length; ) {
+                            for (let i = splitIdx; i < analysisPositions.length;) {
                                 let moveNumStr = Math.ceil(i / 2) + '.';
                                 let white = null, black = null;
                                 let wIdx = null, bIdx = null;
@@ -2217,38 +2288,38 @@
 
                                 const wEval = white ? formatEvalCell(white) : { text: '', color: '' };
                                 const bEval = black ? formatEvalCell(black) : { text: '', color: '' };
-                                
+
                                 let wClass = (wIdx !== null && currentMoveIdx === wIdx) ? 'active' : '';
                                 let bClass = (bIdx !== null && currentMoveIdx === bIdx) ? 'active' : '';
 
-                                html += `<tr style="border-top:1px solid rgba(255,255,255,0.04);">
-                                    <td style="padding:4px 8px; color:orange;">${moveNumStr}</td>`;
-                                
+                                html += `<tr>
+                                    <td style="padding:8px; color:#ff9e00; font-weight:600;">${moveNumStr}</td>`;
+
                                 if (white) {
-                                    html += `<td style="padding:4px 6px;">
+                                    html += `<td>
                                         <button class="analysis-move-btn variant-move ${wClass}" data-var-idx="${wIdx}" 
-                                            style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                            style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
                                             onclick="window.gotoVariantMove(${wIdx})">${white.move_san || ''}</button>
                                     </td>
-                                    <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
+                                    <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
                                 } else {
                                     html += `<td></td><td></td>`;
                                 }
-                                
+
                                 if (black) {
-                                    html += `<td style="padding:4px 6px;">
+                                    html += `<td>
                                         <button class="analysis-move-btn variant-move ${bClass}" data-var-idx="${bIdx}" 
-                                            style="background:none;border:none;color:var(--text-primary);cursor:pointer;padding:3px 6px;border-radius:4px;font-size:0.82rem;font-weight:600;width:100%;text-align:left;"
+                                            style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
                                             onclick="window.gotoVariantMove(${bIdx})">${black.move_san || ''}</button>
                                     </td>
-                                    <td style="padding:4px 6px; font-family:monospace; font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
+                                    <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
                                 } else {
                                     html += `<td></td><td></td>`;
                                 }
                                 html += `</tr>`;
                             }
                         }
-                        
+
                         html += `</table>`;
                         container.innerHTML = html;
 
@@ -2256,12 +2327,12 @@
                         if (!document.getElementById('analysisMoveStyle')) {
                             const s = document.createElement('style');
                             s.id = 'analysisMoveStyle';
-                            s.textContent = `.analysis-move-btn:hover{background:rgba(124,92,255,0.2)!important}
-                                .analysis-move-btn.active{background:rgba(124,92,255,0.35)!important;color:white!important}
-                                .analysis-move-btn.variant-move.active{background:rgba(255,170,0,0.35)!important;color:white!important}`;
+                            s.textContent = `.analysis-move-btn:hover{background:#363430 !important;}
+                                .analysis-move-btn.active{background:#45433d !important;color:white!important; border-bottom: 2px solid #7fa650 !important;}
+                                .analysis-move-btn.variant-move.active{background:#45433d !important;color:white!important; border-bottom: 2px solid #ff9e00 !important;}`;
                             document.head.appendChild(s);
                         }
-                        
+
                         // Scroll active into view
                         const activeBtn = container.querySelector('.analysis-move-btn.active');
                         if (activeBtn) {
@@ -2360,13 +2431,11 @@
                     window.gotoMainMove = (idx) => {
                         if (mainPositions.length > 0) analysisPositions = [...mainPositions];
                         gotoMove(idx);
-                        renderEvalChart();
                     };
-                    
+
                     window.gotoVariantMove = (idx) => {
                         if (variantPositions) analysisPositions = [...variantPositions];
                         gotoMove(idx);
-                        renderEvalChart();
                     };
 
                     initAnalysisTab();
@@ -2386,7 +2455,7 @@
 
             })();
         </script>
-        
+
         <!-- Chess libs moved to <head> -->
     </body>
 

@@ -56,6 +56,44 @@ class MongoDBDatabaseManager implements DatabaseManager
         $this->client = null;
     }
 
+    private function getCache(string $key)
+    {
+        if (function_exists('apcu_fetch')) {
+            $val = apcu_fetch($key, $success);
+            if ($success) return $val;
+        } else {
+            $file = sys_get_temp_dir() . '/' . md5('vrchess_' . $key) . '.cache';
+            if (file_exists($file)) {
+                $data = @unserialize(file_get_contents($file));
+                if (is_array($data) && $data['expires'] > time()) {
+                    return $data['value'];
+                }
+            }
+        }
+        return null;
+    }
+
+    private function setCache(string $key, $value, int $ttl = 300): void
+    {
+        if (function_exists('apcu_store')) {
+            apcu_store($key, $value, $ttl);
+        } else {
+            $file = sys_get_temp_dir() . '/' . md5('vrchess_' . $key) . '.cache';
+            $data = ['expires' => time() + $ttl, 'value' => $value];
+            @file_put_contents($file, serialize($data));
+        }
+    }
+
+    private function clearCache(string $key): void
+    {
+        if (function_exists('apcu_delete')) {
+            apcu_delete($key);
+        } else {
+            $file = sys_get_temp_dir() . '/' . md5('vrchess_' . $key) . '.cache';
+            if (file_exists($file)) @unlink($file);
+        }
+    }
+
     private function initializeIndexes(): void
     {
         try {
@@ -73,6 +111,12 @@ class MongoDBDatabaseManager implements DatabaseManager
 
     public function loadPlayers(): array
     {
+        $cached = $this->getCache('players');
+        if ($cached !== null) {
+            $this->nextPlayerId = $cached['nextPlayerId'];
+            return $cached['players'];
+        }
+
         $players = [];
         $maxId = 0;
 
@@ -97,6 +141,7 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
 
         $this->nextPlayerId = max($maxId + 1, 1);
+        $this->setCache('players', ['players' => $players, 'nextPlayerId' => $this->nextPlayerId], 600); // 10 mins cache
         return $players;
     }
 
@@ -145,10 +190,17 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
 
         $this->nextPlayerId = max($maxId + 1, 1);
+        $this->clearCache('players');
     }
 
     public function loadMatches(): array
     {
+        $cached = $this->getCache('matches');
+        if ($cached !== null) {
+            $this->nextMatchId = $cached['nextMatchId'];
+            return $cached['matches'];
+        }
+
         $matches = [];
         $maxId = 0;
 
@@ -179,6 +231,7 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
 
         $this->nextMatchId = max($maxId + 1, 1);
+        $this->setCache('matches', ['matches' => $matches, 'nextMatchId' => $this->nextMatchId], 600);
         return $matches;
     }
 
@@ -218,6 +271,7 @@ class MongoDBDatabaseManager implements DatabaseManager
             ['$set' => $doc],
             ['upsert' => true]
         );
+        $this->clearCache('matches');
     }
 
     public function saveMatches(array $matches): void
@@ -278,6 +332,7 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
 
         $this->nextMatchId = max($maxId + 1, 1);
+        $this->clearCache('matches');
     }
 
     public function getNextPlayerId(): int
@@ -494,19 +549,32 @@ class MongoDBDatabaseManager implements DatabaseManager
             return false;
         }
 
+        $cacheKey = 'token_' . md5($token);
+        $cached = $this->getCache($cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
+
         $doc = $this->tokensCollection->findOne([
             'token' => trim($token),
             'is_active' => true
         ]);
 
         if ($doc) {
-            $this->tokensCollection->updateOne(
-                ['_id' => $doc['_id']],
-                ['$set' => ['last_used' => date('Y-m-d H:i:s')]]
-            );
+            $lastUsedStr = $doc['last_used'] ?? null;
+            $now = date('Y-m-d H:i:s');
+            // Only update last_used if older than 5 minutes to avoid DB writes overload
+            if (!$lastUsedStr || strtotime($lastUsedStr) < strtotime('-5 minutes')) {
+                $this->tokensCollection->updateOne(
+                    ['_id' => $doc['_id']],
+                    ['$set' => ['last_used' => $now]]
+                );
+            }
+            $this->setCache($cacheKey, true, 300); // 5 mins cache
             return true;
         }
 
+        $this->setCache($cacheKey, false, 30); // 30s negative cache
         return false;
     }
 

@@ -6,3 +6,4 @@ composer.phar
 
 /data/*csv
 /data/*sql
+/node_modules

@@ -12,7 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 use VRchessIndo\Logic\Stockfish;
-use VRchessIndo\Connection\MongoDBDatabaseManager;
 
 /**
  * Send a JSON response to the client.
@@ -66,24 +65,6 @@ function sanitizeFen(string $fen): string
     if (preg_match('/[\r\n\x00]/', $fen)) throw new \Exception("Invalid characters in FEN.");
     if (!preg_match('/^[prnbqkPRNBQK1-8\/wb\-\sKQkqa-h0-9]+$/', $fen)) throw new \Exception("Invalid FEN.");
     return $fen;
-}
-
-/**
- * Get the provided API token from the request.
- * 
- * This function retrieves the API token from the request headers or query parameters.
- * 
- * @return string The API token.
- */
-function getProvidedApiToken(): string
-{
-    $token = $_SERVER['HTTP_X_API_TOKEN'] ?? $_REQUEST['token'] ?? $_REQUEST['api_token'] ?? '';
-    if (empty($token) && !empty($_SERVER['HTTP_AUTHORIZATION'])) {
-        if (preg_match('/Bearer\s+(\S+)/i', $_SERVER['HTTP_AUTHORIZATION'], $matches)) {
-            $token = $matches[1];
-        }
-    }
-    return trim((string) $token);
 }
 
 /**
@@ -181,12 +162,6 @@ function analyzeFens(array $fens, int $depth): array
 }
 
 try {
-    $db = new MongoDBDatabaseManager();
-    $token = getProvidedApiToken();
-    if (empty($token) || !$db->validateToken($token)) {
-        jsonResponse(['success' => false, 'error' => 'Akses API ditolak: Diperlukan API Token yang valid.'], 401);
-    }
-
     $request = getRequest();
 
     // ── Endpoint: Batch FEN analysis (for full PGN game) ───────────────
