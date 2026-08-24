@@ -61,10 +61,10 @@ function getProvidedApiToken(): string
     return trim((string) $token);
 }
 /**
- * Check if the current user is an admin.
+ * Checks if the current user has an active admin session.
  * 
  * @param MongoDBDatabaseManager $db The database manager instance.
- * @return bool True if the user is an admin, false otherwise.
+ * @return bool True if admin, false otherwise.
  */
 function isAdmin(MongoDBDatabaseManager $db): bool
 {
@@ -82,7 +82,7 @@ function isAdmin(MongoDBDatabaseManager $db): bool
     return false;
 }
 /**
- * Require admin authentication.
+ * Requires an active admin session, terminating execution with a 401 if not found.
  * 
  * @param MongoDBDatabaseManager $db The database manager instance.
  */
@@ -96,7 +96,7 @@ function requireAdmin(MongoDBDatabaseManager $db): void
     }
 }
 /**
- * Require API access.
+ * Requires a valid API token or admin session, terminating execution with a 401 if neither is provided.
  * 
  * @param MongoDBDatabaseManager $db The database manager instance.
  */

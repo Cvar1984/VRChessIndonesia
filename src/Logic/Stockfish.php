@@ -1,11 +1,24 @@
 <?php
 
 namespace VRchessIndo\Logic;
+/**
+ * Class Stockfish
+ * Wraps the Stockfish chess engine binary to evaluate positions and find best moves.
+ */
 class Stockfish
 {
     private $process;
     private $pipes;
 
+    /**
+     * Stockfish constructor. Starts the background process.
+     * 
+     * @param string $binary Path to the Stockfish binary.
+     * @param int $threads Number of threads to use.
+     * @param int $hash Hash size in MB.
+     * @param int $multipv Number of principal variations.
+     * @throws \Exception if the process cannot be started.
+     */
     public function __construct(
         string $binary = "/usr/bin/stockfish",
         int $threads = 4,
@@ -39,11 +52,21 @@ class Stockfish
         $this->waitFor("readyok");
     }
 
+    /**
+     * Sends a command to the Stockfish process.
+     * 
+     * @param string $cmd The command string.
+     */
     private function command(string $cmd): void
     {
         fwrite($this->pipes[0], $cmd . PHP_EOL);
     }
 
+    /**
+     * Waits for a specific string in the Stockfish output.
+     * 
+     * @param string $needle The string to look for.
+     */
     private function waitFor(string $needle): void
     {
         while (($line = fgets($this->pipes[1])) !== false) {
@@ -53,11 +76,25 @@ class Stockfish
         }
     }
 
+    /**
+     * Converts a centipawn score to a win probability percentage (0.0 to 100.0).
+     * 
+     * @param float $cp The centipawn score.
+     * @return float The win probability.
+     */
     public static function evalBar(float $cp): float
     {
         return 100.0 / (1.0 + exp(-$cp / 120.0));
     }
 
+    /**
+     * Analyzes a position given a FEN string.
+     * 
+     * @param string $fen The FEN string to analyze.
+     * @param int|null $depth The depth to analyze to.
+     * @param int|null $movetime The time to spend analyzing in milliseconds.
+     * @return array The analysis results including bestmove, score, and principal variation.
+     */
     public function analyze(string $fen, ?int $depth = 15, ?int $movetime = null): array
     {
         $this->command("ucinewgame");
@@ -138,6 +175,9 @@ class Stockfish
         return $result;
     }
 
+    /**
+     * Stockfish destructor. Gracefully quits the process.
+     */
     public function __destruct()
     {
         if (is_resource($this->process)) {

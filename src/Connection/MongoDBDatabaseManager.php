@@ -51,6 +51,9 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
     }
 
+    /**
+     * Destructor - Closes MongoDB connection.
+     */
     public function __destruct()
     {
         $this->client = null;
@@ -94,6 +97,9 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
     }
 
+    /**
+     * Initializes required indexes on MongoDB collections.
+     */
     private function initializeIndexes(): void
     {
         try {
@@ -109,6 +115,11 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
     }
 
+    /**
+     * Loads all players from the database.
+     * 
+     * @return array Array of player records.
+     */
     public function loadPlayers(): array
     {
         $cached = $this->getCache('players');
@@ -145,6 +156,11 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $players;
     }
 
+    /**
+     * Saves an array of players to the database, replacing existing ones.
+     * 
+     * @param array $players The array of players to save.
+     */
     public function savePlayers(array $players): void
     {
         $usernames = [];
@@ -193,6 +209,11 @@ class MongoDBDatabaseManager implements DatabaseManager
         $this->clearCache('players');
     }
 
+    /**
+     * Loads all matches from the database.
+     * 
+     * @return array Array of match records indexed by match ID.
+     */
     public function loadMatches(): array
     {
         $cached = $this->getCache('matches');
@@ -235,6 +256,11 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $matches;
     }
 
+    /**
+     * Saves or updates a single match record.
+     * 
+     * @param array $match The match data to save.
+     */
     public function saveMatch(array $match): void
     {
         $id = (int) ($match['id'] ?? 0);
@@ -274,6 +300,11 @@ class MongoDBDatabaseManager implements DatabaseManager
         $this->clearCache('matches');
     }
 
+    /**
+     * Saves an array of matches to the database, replacing existing ones.
+     * 
+     * @param array $matches The array of matches to save.
+     */
     public function saveMatches(array $matches): void
     {
         $ids = [];
@@ -335,22 +366,44 @@ class MongoDBDatabaseManager implements DatabaseManager
         $this->clearCache('matches');
     }
 
+    /**
+     * Gets the next available player ID.
+     * 
+     * @return int The next player ID.
+     */
     public function getNextPlayerId(): int
     {
         return $this->nextPlayerId;
     }
 
+    /**
+     * Gets the next available match ID.
+     * 
+     * @return int The next match ID.
+     */
     public function getNextMatchId(): int
     {
         return $this->nextMatchId;
     }
 
+    /**
+     * Checks if a player exists by username.
+     * 
+     * @param string $username The username to check.
+     * @return bool True if the player exists, false otherwise.
+     */
     public function playerExists(string $username): bool
     {
         $count = $this->playersCollection->countDocuments(['username' => trim($username)]);
         return $count > 0;
     }
 
+    /**
+     * Retrieves a player by their username.
+     * 
+     * @param string $username The username to search for.
+     * @return array|null The player data, or null if not found.
+     */
     public function getPlayerByUsername(string $username): ?array
     {
         $doc = $this->playersCollection->findOne(['username' => trim($username)]);
@@ -369,6 +422,12 @@ class MongoDBDatabaseManager implements DatabaseManager
         ];
     }
 
+    /**
+     * Retrieves a player by their unique ID.
+     * 
+     * @param int $id The player ID.
+     * @return array|null The player data, or null if not found.
+     */
     public function getPlayerById(int $id): ?array
     {
         $doc = $this->playersCollection->findOne(['id' => (int) $id]);
@@ -388,12 +447,25 @@ class MongoDBDatabaseManager implements DatabaseManager
     }
 
     // ── Settings Management ──
+    /**
+     * Gets a setting value by key.
+     * 
+     * @param string $key The setting key.
+     * @param string|null $default The default value if the setting is not found.
+     * @return string|null The setting value.
+     */
     public function getSetting(string $key, ?string $default = null): ?string
     {
         $doc = $this->settingsCollection->findOne(['key' => $key]);
         return $doc ? (string) $doc['value'] : $default;
     }
 
+    /**
+     * Sets or updates a setting value.
+     * 
+     * @param string $key The setting key.
+     * @param string $value The setting value.
+     */
     public function setSetting(string $key, string $value): void
     {
         $this->settingsCollection->updateOne(
@@ -404,6 +476,11 @@ class MongoDBDatabaseManager implements DatabaseManager
     }
 
     // ── Admins & Password Management ──
+    /**
+     * Retrieves all admin accounts.
+     * 
+     * @return array List of admin accounts.
+     */
     public function getAdmins(): array
     {
         $admins = [];
@@ -417,6 +494,13 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $admins;
     }
 
+    /**
+     * Creates a new admin account.
+     * 
+     * @param string $username The admin username.
+     * @param string $password The raw password (will be hashed).
+     * @return bool True on success, false if username already exists.
+     */
     public function createAdmin(string $username, string $password): bool
     {
         $username = trim($username);
@@ -435,6 +519,13 @@ class MongoDBDatabaseManager implements DatabaseManager
         return true;
     }
 
+    /**
+     * Updates an admin's password.
+     * 
+     * @param string $username The admin username.
+     * @param string $newPassword The new raw password.
+     * @return bool True on success, false if not found.
+     */
     public function updateAdmin(string $username, string $newPassword): bool
     {
         $username = trim($username);
@@ -448,6 +539,12 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $res->getMatchedCount() > 0;
     }
 
+    /**
+     * Deletes an admin account.
+     * 
+     * @param string $username The admin username.
+     * @return bool True on success, false if not found.
+     */
     public function deleteAdmin(string $username): bool
     {
         if ($this->adminsCollection->countDocuments() <= 1) {
@@ -458,6 +555,13 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $res->getDeletedCount() > 0;
     }
 
+    /**
+     * Verifies an admin login attempt.
+     * 
+     * @param string $username The admin username.
+     * @param string $password The raw password.
+     * @return bool True if credentials are valid, false otherwise.
+     */
     public function verifyAdminLogin(string $username, string $password): bool
     {
         // Legacy fallback support: if we have 0 admins, create 'admin' using env or legacy setting
@@ -489,6 +593,11 @@ class MongoDBDatabaseManager implements DatabaseManager
     }
 
     // ── API Token Management ──
+    /**
+     * Retrieves all API tokens.
+     * 
+     * @return array List of API tokens.
+     */
     public function getTokens(): array
     {
         $tokens = [];
@@ -506,6 +615,12 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $tokens;
     }
 
+    /**
+     * Creates a new API token.
+     * 
+     * @param string $name Name or description of the token.
+     * @return array The created token document.
+     */
     public function createToken(string $name = 'API Token'): array
     {
         $rawToken = 'vrchess_pat_' . bin2hex(random_bytes(16));
@@ -523,6 +638,14 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $tokenDoc;
     }
 
+    /**
+     * Updates an API token's details.
+     * 
+     * @param string $tokenId The token ID.
+     * @param string $newName The new name.
+     * @param bool $isActive Whether the token is active.
+     * @return bool True on success.
+     */
     public function updateToken(string $tokenId, string $newName, bool $isActive = true): bool
     {
         $res = $this->tokensCollection->updateOne(
@@ -532,6 +655,12 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $res->getMatchedCount() > 0;
     }
 
+    /**
+     * Revokes or deletes an API token.
+     * 
+     * @param string $tokenIdOrToken The token ID or the token string itself.
+     * @return bool True on success.
+     */
     public function revokeToken(string $tokenIdOrToken): bool
     {
         $result = $this->tokensCollection->deleteOne([
@@ -543,6 +672,12 @@ class MongoDBDatabaseManager implements DatabaseManager
         return $result->getDeletedCount() > 0;
     }
 
+    /**
+     * Validates if a given token string is active and updates its last_used timestamp.
+     * 
+     * @param string $token The token string.
+     * @return bool True if valid, false otherwise.
+     */
     public function validateToken(string $token): bool
     {
         if (empty($token)) {
@@ -578,6 +713,11 @@ class MongoDBDatabaseManager implements DatabaseManager
         return false;
     }
 
+    /**
+     * Ensures a default token exists, creating it if necessary.
+     * 
+     * @return string The default token string.
+     */
     public function ensureDefaultToken(): string
     {
         $existing = $this->tokensCollection->findOne(['name' => 'Default Web App Token']);

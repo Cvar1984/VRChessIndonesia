@@ -5,6 +5,10 @@ namespace VRchessIndo\Logic;
 use VRchessIndo\Connection\Interface\DatabaseManager;
 use VRchessIndo\Logic\Rating;
 
+/**
+ * Class MatchManager
+ * Handles all logic for players, matches, and ratings calculation.
+ */
 class MatchManager
 {
     public const string WHITE_WIN = '1-0';
@@ -16,6 +20,11 @@ class MatchManager
     private array $players = [];
     private array $matches = [];
 
+    /**
+     * MatchManager constructor.
+     * 
+     * @param DatabaseManager $db The database manager instance.
+     */
     public function __construct(DatabaseManager $db)
     {
         $this->db = $db;
@@ -23,6 +32,11 @@ class MatchManager
         $this->matches = $this->db->loadMatches();
     }
 
+    /**
+     * Retrieves all players sorted by rating (descending).
+     * 
+     * @return array List of players.
+     */
     public function getPlayers(): array
     {
         $players = array_values($this->players);
@@ -34,6 +48,13 @@ class MatchManager
         return $players;
     }
 
+    /**
+     * Gets a player's username by their ID.
+     * 
+     * @param int $id The player ID.
+     * @return string The username.
+     * @throws \Exception if the player is not found.
+     */
     private function getUsernameById(int $id): string
     {
         foreach ($this->players as $username => $data) {
@@ -44,6 +65,12 @@ class MatchManager
         throw new \Exception("Player ID $id not found");
     }
 
+    /**
+     * Retrieves a player's record by ID. If deleted, returns a placeholder.
+     * 
+     * @param int $playerId The player ID.
+     * @return array The player record.
+     */
     private function getPlayerRecordById(int $playerId): array
     {
         foreach ($this->players as $player) {
@@ -65,11 +92,22 @@ class MatchManager
         ];
     }
 
+    /**
+     * Retrieves all matches.
+     * 
+     * @return array List of all matches.
+     */
     public function getMatches(): array
     {
         return array_values($this->matches);
     }
 
+    /**
+     * Gets a specific match by ID.
+     * 
+     * @param int $matchId The match ID.
+     * @return array|null The match data, or null if not found.
+     */
     public function getMatch(int $matchId): ?array
     {
         foreach ($this->matches as $match) {
@@ -80,6 +118,11 @@ class MatchManager
         return null;
     }
 
+    /**
+     * Retrieves all valid matches.
+     * 
+     * @return array List of valid matches.
+     */
     public function getValidMatches(): array
     {
         return array_values(array_filter($this->matches, function ($match) {
@@ -87,6 +130,11 @@ class MatchManager
         }));
     }
 
+    /**
+     * Retrieves all invalidated matches.
+     * 
+     * @return array List of invalid matches.
+     */
     public function getInvalidMatches(): array
     {
         return array_values(array_filter($this->matches, function ($match) {
@@ -94,6 +142,12 @@ class MatchManager
         }));
     }
 
+    /**
+     * Retrieves an existing player or creates a new one if they don't exist.
+     * 
+     * @param string $username The username.
+     * @return array The player record.
+     */
     public function getOrCreatePlayer(string $username): array
     {
         $username = trim($username);
@@ -123,6 +177,16 @@ class MatchManager
         return $newPlayer;
     }
 
+    /**
+     * Submits a new match, updates ratings, and saves to database.
+     * 
+     * @param string $whiteUsername White player's username.
+     * @param string $blackUsername Black player's username.
+     * @param string $result Match result (WHITE_WIN, BLACK_WIN, DRAW).
+     * @param string $analysisUrl URL to the game/analysis.
+     * @return array The match result details and updated ratings.
+     * @throws \Exception if invalid inputs are provided.
+     */
     public function play(string $whiteUsername, string $blackUsername, string $result, string $analysisUrl): array
     {
         $whiteUsername = trim($whiteUsername);
@@ -223,6 +287,9 @@ class MatchManager
         ];
     }
 
+    /**
+     * Recalculates all player ratings from scratch based on chronological valid matches.
+     */
     private function recalculateRatings(): void
     {
         // 1. Reset all players to initial state
@@ -314,6 +381,13 @@ class MatchManager
         $this->players = $this->db->loadPlayers();
     }
 
+    /**
+     * Invalidates a match and recalculates all ratings.
+     * 
+     * @param int $matchId The match ID to invalidate.
+     * @return array Invalidation result and updated ratings.
+     * @throws \Exception if match not found or already invalid.
+     */
     public function invalidateMatch(int $matchId): array
     {
         // Find the match
@@ -406,6 +480,13 @@ class MatchManager
         ];
     }
 
+    /**
+     * Revalidates a previously invalidated match and recalculates all ratings.
+     * 
+     * @param int $matchId The match ID to revalidate.
+     * @return array Revalidation result and updated ratings.
+     * @throws \Exception if match not found or not marked invalid.
+     */
     public function revalidateMatch(int $matchId): array
     {
         // Find the match
@@ -500,6 +581,12 @@ class MatchManager
         ];
     }
 
+    /**
+     * Removes a player from the database.
+     * 
+     * @param string $username The username to remove.
+     * @return bool True if removed successfully, false if not found.
+     */
     public function removePlayer(string $username): bool
     {
         $username = trim($username);
@@ -515,6 +602,12 @@ class MatchManager
         return true;
     }
 
+    /**
+     * Removes a match permanently and recalculates all ratings.
+     * 
+     * @param int $matchId The match ID to remove.
+     * @return bool True if removed successfully, false if not found.
+     */
     public function removeMatch(int $matchId): bool
     {
         $matchIndex = null;
@@ -540,6 +633,13 @@ class MatchManager
         return true;
     }
 
+    /**
+     * Edits a player's profile data.
+     * 
+     * @param string $username The username to edit.
+     * @param array $newData Key-value pairs of data to update.
+     * @return bool True on success, false if player not found.
+     */
     public function editPlayer(string $username, array $newData): bool
     {
         $username = trim($username);
@@ -560,6 +660,13 @@ class MatchManager
         return true;
     }
 
+    /**
+     * Edits a match's data and recalculates ratings.
+     * 
+     * @param int $matchId The match ID.
+     * @param array $newData Key-value pairs of data to update.
+     * @return bool True on success, false if match not found.
+     */
     public function editMatch(int $matchId, array $newData): bool
     {
         $matchIndex = null;
@@ -590,16 +697,33 @@ class MatchManager
         return true;
     }
 
+    /**
+     * Gets the total number of players.
+     * 
+     * @return int The player count.
+     */
     public function getPlayerCount(): int
     {
         return count($this->players);
     }
 
+    /**
+     * Gets the total number of matches.
+     * 
+     * @return int The match count.
+     */
     public function getMatchCount(): int
     {
         return count($this->matches);
     }
 
+    /**
+     * Generates comprehensive statistics for a specific player.
+     * 
+     * @param string $username The player's username.
+     * @return array The player's statistics.
+     * @throws \Exception if the player is not found.
+     */
     public function getPlayerStats(string $username): array
     {
         $username = trim($username);

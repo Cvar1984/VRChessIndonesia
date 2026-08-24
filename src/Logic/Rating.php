@@ -2,6 +2,11 @@
 
 namespace VRchessIndo\Logic;
 
+/**
+ * Class Rating
+ * 
+ * Handles chess rating calculations and expected scores.
+ */
 class Rating
 {
     public const int WIN = 1;
@@ -9,10 +14,11 @@ class Rating
     public const int LOSS = 0;
 
     /**
-     * Expected score (0.0 - 1.0)
-     * @param mixed $rating
-     * @param mixed $opponentRating
-     * @return float|int
+     * Calculates the expected score for a player against an opponent.
+     * 
+     * @param float|int $rating The player's current rating.
+     * @param float|int $opponentRating The opponent's current rating.
+     * @return float The expected score (between 0.0 and 1.0).
      */
     public static function expectedScore($rating, $opponentRating)
     {
@@ -20,11 +26,12 @@ class Rating
     }
 
     /**
-     * Summary of calculate
-     * @param mixed $rating
-     * @param mixed $opponentRating
-     * @param mixed $result
-     * @return array{change: int, expected: float, new_rating: int, old_rating: mixed}
+     * Calculates the new rating and rating change after a match.
+     * 
+     * @param float|int $rating The player's current rating.
+     * @param float|int $opponentRating The opponent's current rating.
+     * @param float|int $result The match result (Rating::WIN, Rating::DRAW, Rating::LOSS).
+     * @return array{change: int, expected: float, new_rating: int, old_rating: int|float}
      */
     public static function calculate($rating, $opponentRating, $result)
     {
