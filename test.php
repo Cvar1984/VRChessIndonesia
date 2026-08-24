@@ -912,7 +912,171 @@ class RatingSystemTest
 }
 
 // ============================================================
+// API TEST SUITE
+// ============================================================
+class APITestSuite
+{
+    private $baseUrl = 'http://localhost:8000';
+    private $token;
+    private $db;
+    private $createdMatchIds = [];
+    private $testPlayers = ['ApiTestWhite', 'ApiTestBlack'];
+    private $passed = 0;
+    private $failed = 0;
+
+    public function __construct()
+    {
+        $this->db = new MongoDBDatabaseManager();
+        $this->token = $this->db->ensureDefaultToken();
+    }
+
+    private function request($method, $path, $data = null)
+    {
+        $url = $this->baseUrl . $path;
+        $options = [
+            'http' => [
+                'method' => $method,
+                'header' => "Content-Type: application/json\r\n" .
+                            "X-API-Token: " . $this->token . "\r\n",
+                'ignore_errors' => true,
+                'timeout' => 5
+            ]
+        ];
+        
+        if ($data !== null) {
+            $options['http']['content'] = json_encode($data);
+        }
+        
+        $context = stream_context_create($options);
+        $result = @file_get_contents($url, false, $context);
+        
+        if ($result === false) {
+            return ['success' => false, 'error' => 'Connection failed'];
+        }
+        
+        return json_decode($result, true) ?? $result;
+    }
+
+    private function assert($condition, $message)
+    {
+        if ($condition) {
+            $this->passed++;
+            echo "  ✅ PASS: $message\n";
+        } else {
+            $this->failed++;
+            echo "  ❌ FAIL: $message\n";
+        }
+    }
+
+    public function run()
+    {
+        echo "\n🌐 API TEST SUITE (http://localhost:8000/)\n";
+        echo str_repeat('=', 70) . "\n";
+
+        // Check if server is running
+        $res = $this->request('GET', '/index.php?players=1');
+        if (isset($res['error']) && $res['error'] === 'Connection failed') {
+            echo "  ⚠️ API Server is not running at {$this->baseUrl}. Skipping API tests.\n";
+            return;
+        }
+
+        $this->testReadEndpoints();
+        $this->testMutationEndpoints();
+        $this->testStockfishEndpoints();
+
+        echo "\n🧹 CLEANING UP API TEST DATA...\n";
+        $this->cleanup();
+        echo "  ✅ Cleanup complete.\n";
+
+        echo "\n📊 API TEST SUMMARY\n";
+        echo str_repeat('=', 70) . "\n";
+        echo "✅ Passed: " . $this->passed . "\n";
+        echo "❌ Failed: " . $this->failed . "\n";
+        echo str_repeat('=', 70) . "\n";
+    }
+
+    private function testReadEndpoints()
+    {
+        echo "\n📋 Testing Read Endpoints...\n";
+        
+        $res = $this->request('GET', '/index.php?players=1');
+        $this->assert(isset($res['success']) && $res['success'] === true, 'GET /players returns success');
+        
+        $res = $this->request('GET', '/index.php?matches=1');
+        $this->assert(isset($res['success']) && $res['success'] === true, 'GET /matches returns success');
+    }
+
+    private function testMutationEndpoints()
+    {
+        echo "\n📋 Testing Mutation Endpoints...\n";
+        
+        // 1. Play match
+        $res = $this->request('POST', '/index.php?play=1', [
+            'white' => $this->testPlayers[0],
+            'black' => $this->testPlayers[1],
+            'result' => '1'
+        ]);
+        
+        $matchId = $res['match']['id'] ?? $res['match']['match_id'] ?? $res['match']['_id'] ?? null;
+        $this->assert($matchId !== null, 'POST /play creates a match');
+        
+        if ($matchId) {
+            $this->createdMatchIds[] = $matchId;
+            
+            // 2. Invalidate match
+            $res = $this->request('PUT', "/index.php?match={$matchId}&invalidate=1");
+            $this->assert(isset($res['success']) && $res['success'] === true, 'PUT /match?invalidate invalidates match');
+            
+            // 3. Revalidate match
+            $res = $this->request('PUT', "/index.php?match={$matchId}&revalidate=1");
+            $this->assert(isset($res['success']) && $res['success'] === true, 'PUT /match?revalidate revalidates match');
+            
+            // 4. Edit match
+            $res = $this->request('PATCH', "/index.php?match={$matchId}", ['result' => '0']);
+            $this->assert(isset($res['success']) && $res['success'] === true, 'PATCH /match edits match');
+            
+            // 5. Edit player
+            $res = $this->request('PATCH', "/index.php?player={$this->testPlayers[0]}", ['rating' => 1500]);
+            $this->assert(isset($res['success']) && $res['success'] === true, 'PATCH /player edits player');
+            
+            // 6. Delete match
+            $res = $this->request('DELETE', "/index.php?match={$matchId}");
+            $this->assert(isset($res['success']) && $res['success'] === true, 'DELETE /match deletes match');
+            // Remove from array since we just deleted it
+            $this->createdMatchIds = array_diff($this->createdMatchIds, [$matchId]);
+        }
+    }
+
+    private function testStockfishEndpoints()
+    {
+        echo "\n📋 Testing Stockfish API...\n";
+        
+        $res = $this->request('POST', '/stockfish.php', [
+            'fen' => 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+            'depth' => 5
+        ]);
+        
+        $this->assert(isset($res['bestmove']), 'POST /stockfish.php returns bestmove');
+    }
+
+    private function cleanup()
+    {
+        // Use direct DB access to clean up to avoid failing HTTP requests blocking cleanup
+        $manager = new MatchManager($this->db);
+        foreach ($this->createdMatchIds as $id) {
+            try { $manager->removeMatch($id); } catch (\Exception $e) {}
+        }
+        foreach ($this->testPlayers as $player) {
+            try { $manager->removePlayer($player); } catch (\Exception $e) {}
+        }
+    }
+}
+
+// ============================================================
 // RUN TESTS
 // ============================================================
 $test = new RatingSystemTest();
 $test->run();
+
+$apiTest = new APITestSuite();
+$apiTest->run();

@@ -127,8 +127,7 @@ try {
         jsonResponse([
             'success' => true,
             'authenticated' => isAdmin($db),
-            'username' => $_SESSION['admin_username'] ?? null,
-            'default_token' => $defaultWebToken
+            'username' => $_SESSION['admin_username'] ?? null
         ]);
     }
 
@@ -280,9 +279,8 @@ try {
         }
     }
 
-    // ── Public / API Token Protected Endpoints ──
+    // ── Public Endpoints ──
     if (isset($_GET['players'])) {
-        requireApiAccess($db);
         jsonResponse([
             'success' => true,
             'count' => $manager->getPlayerCount(),
@@ -291,7 +289,6 @@ try {
     }
 
     if (isset($_GET['matches'])) {
-        requireApiAccess($db);
         jsonResponse([
             'success' => true,
             'count' => $manager->getMatchCount(),
@@ -300,7 +297,6 @@ try {
     }
 
     if (isset($_GET['valid-matches'])) {
-        requireApiAccess($db);
         jsonResponse([
             'success' => true,
             'count' => count($manager->getValidMatches()),
@@ -309,7 +305,6 @@ try {
     }
 
     if (isset($_GET['invalid-matches'])) {
-        requireApiAccess($db);
         jsonResponse([
             'success' => true,
             'count' => count($manager->getInvalidMatches()),
@@ -318,7 +313,6 @@ try {
     }
 
     if (isset($_GET['player-stats']) && isset($_GET['username'])) {
-        requireApiAccess($db);
         try {
             $stats = $manager->getPlayerStats($_GET['username']);
             jsonResponse([
@@ -334,16 +328,15 @@ try {
     }
 
     if (isset($_GET['rankings'])) {
-        requireApiAccess($db);
         jsonResponse([
             'success' => true,
             'rankings' => $manager->getPlayers()
         ]);
     }
 
-    // ── Admin Protected Mutation Endpoints ──
+    // ── API Token Protected Mutation Endpoints (CRUD) ──
     if (isset($_GET['play'])) {
-        requireAdmin($db);
+        requireApiAccess($db);
 
         $white = trim($_GET['white'] ?? '');
         $black = trim($_GET['black'] ?? '');
@@ -395,7 +388,7 @@ try {
     }
 
     if (($_SERVER['REQUEST_METHOD'] === 'PUT' || isset($_GET['invalidate'])) && isset($_GET['match']) && isset($_GET['invalidate'])) {
-        requireAdmin($db);
+        requireApiAccess($db);
         $matchId = (int) $_GET['match'];
 
         try {
@@ -414,7 +407,7 @@ try {
     }
 
     if (($_SERVER['REQUEST_METHOD'] === 'PUT' || isset($_GET['revalidate'])) && isset($_GET['match']) && isset($_GET['revalidate'])) {
-        requireAdmin($db);
+        requireApiAccess($db);
         $matchId = (int) $_GET['match'];
 
         try {
@@ -433,7 +426,7 @@ try {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'DELETE' && isset($_GET['match'])) {
-        requireAdmin($db);
+        requireApiAccess($db);
         $matchId = (int) $_GET['match'];
         $deleted = $manager->removeMatch($matchId);
 
@@ -444,7 +437,7 @@ try {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'DELETE' && isset($_GET['player'])) {
-        requireAdmin($db);
+        requireApiAccess($db);
         $username = trim($_GET['player']);
         $deleted = $manager->removePlayer($username);
 
@@ -455,7 +448,7 @@ try {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'PATCH' && isset($_GET['match'])) {
-        requireAdmin($db);
+        requireApiAccess($db);
         $matchId = (int) $_GET['match'];
         $newData = [];
 
@@ -481,7 +474,7 @@ try {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'PATCH' && isset($_GET['player'])) {
-        requireAdmin($db);
+        requireApiAccess($db);
         $username = trim($_GET['player']);
         $newData = [];
 
