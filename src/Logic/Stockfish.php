@@ -139,25 +139,45 @@ class Stockfish
                     $result["seldepth"] = (int) $m[1];
 
                 preg_match('/time\s+(\d+)/', $line, $m);
-                if (isset($m[1]))
-                    $result["time"] = (int) $m[1];
+                if (isset($m[1])) $result["time"] = (int) $m[1];
 
                 preg_match('/nodes\s+(\d+)/', $line, $m);
-                if (isset($m[1]))
-                    $result["nodes"] = (int) $m[1];
+                if (isset($m[1])) $result["nodes"] = (int) $m[1];
 
                 preg_match('/nps\s+(\d+)/', $line, $m);
-                if (isset($m[1]))
-                    $result["nps"] = (int) $m[1];
+                if (isset($m[1])) $result["nps"] = (int) $m[1];
+
+                $mpvIndex = 1;
+                if (preg_match('/multipv\s+(\d+)/', $line, $m)) {
+                    $mpvIndex = (int)$m[1];
+                }
+
+                if (!isset($result["multipv"])) $result["multipv"] = [];
+                if (!isset($result["multipv"][$mpvIndex])) {
+                    $result["multipv"][$mpvIndex] = ["score" => null, "score_type" => null, "eval" => null, "pv" => []];
+                }
 
                 if (preg_match('/score\s+(cp|mate)\s+(-?\d+)/', $line, $m)) {
-                    $result["score_type"] = $m[1];
-                    $result["score"] = (int) $m[2];
-                    $result["eval"] = Stockfish::evalBar($result["score"]);
+                    $scoreType = $m[1];
+                    $scoreVal = (int) $m[2];
+                    $result["multipv"][$mpvIndex]["score_type"] = $scoreType;
+                    $result["multipv"][$mpvIndex]["score"] = $scoreVal;
+                    $result["multipv"][$mpvIndex]["eval"] = Stockfish::evalBar($scoreVal);
+                    
+                    if ($mpvIndex === 1) {
+                        $result["score_type"] = $scoreType;
+                        $result["score"] = $scoreVal;
+                        $result["eval"] = Stockfish::evalBar($scoreVal);
+                    }
                 }
 
                 if (preg_match('/ pv (.+)$/', $line, $m)) {
-                    $result["pv"] = explode(' ', trim($m[1]));
+                    $pvArr = explode(' ', trim($m[1]));
+                    $result["multipv"][$mpvIndex]["pv"] = $pvArr;
+                    
+                    if ($mpvIndex === 1) {
+                        $result["pv"] = $pvArr;
+                    }
                 }
             }
 

@@ -441,6 +441,12 @@
                             <input type="number" class="form-input" id="analysisDepth2" value="12" min="1" max="20"
                                 style="width:70px;">
                         </div>
+                        <div class="form-group" style="margin:0; display:flex; align-items:center; gap:8px;">
+                            <label class="form-label" style="margin:0; white-space:nowrap;"
+                                for="analysisMultiPv">Lines</label>
+                            <input type="number" class="form-input" id="analysisMultiPv" value="2" min="1" max="5"
+                                style="width:60px;">
+                        </div>
                         <button class="btn btn--primary" id="btnStartPgnAnalysis" type="button">⚡ Mulai Analisis
                             PGN</button>
                         <button class="btn btn--secondary" id="btnStartFreeAnalysis" type="button">Mulai Kosong (Free
@@ -1974,6 +1980,7 @@
                         liveAnalysisAbort = new AbortController();
 
                         const depth = parseInt($('#analysisDepth2').value) || 15;
+                        const multipv = parseInt($('#analysisMultiPv').value) || 2;
                         $('#posEvalBest').textContent = "Menghitung...";
                         $('#posEvalPv').textContent = "—";
                         clearArrows();
@@ -1982,7 +1989,7 @@
                             const res = await fetch('/stockfish.php', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ fen: fen, depth: depth }),
+                                body: JSON.stringify({ fen: fen, depth: depth, multipv: multipv }),
                                 signal: liveAnalysisAbort.signal
                             });
                             const data = await res.json();
@@ -2008,6 +2015,7 @@
                                 analysisPositions[idx].score_type = data.score_type;
                                 analysisPositions[idx].bestmove = data.bestmove;
                                 analysisPositions[idx].pv = data.pv || [];
+                                analysisPositions[idx].multipv = data.multipv || [];
 
                                 if (currentMoveIdx === idx) {
                                     gotoMove(idx); // Update UI
@@ -2030,22 +2038,50 @@
                         clearArrows();
                         if (analysisPositions.length === 0 || !analysisBoard) return;
                         const pos = analysisPositions[currentMoveIdx];
-                        if (!pos || !pos.bestmove || pos.bestmove.length < 4 || pos.bestmove.includes('(none)')) return;
+                        if (!pos) return;
 
-                        const orig = pos.bestmove.substring(0, 2);
-                        const dest = pos.bestmove.substring(2, 4);
+                        let shapes = [];
 
-                        analysisBoard.set({
-                            drawable: {
-                                shapes: [{ orig: orig, dest: dest, brush: 'paleBlue' }]
+                        // Try engine bestmove first
+                        let bm = pos.bestmove;
+                        if (!bm || bm.length < 4 || bm.includes('(none)')) {
+                            // Fallback to PV if bestmove is missing
+                            if (pos.pv && pos.pv.length > 0 && pos.pv[0].length >= 4 && !pos.pv[0].includes('(none)')) {
+                                bm = pos.pv[0];
                             }
-                        });
+                        }
+
+                        if (bm && bm.length >= 4 && !bm.includes('(none)')) {
+                            shapes.push({ orig: bm.substring(0, 2), dest: bm.substring(2, 4), brush: 'green' });
+                        }
+
+                        // Add alternative lines (multipv >= 2)
+                        if (pos.multipv) {
+                            // Support up to 5 lines as configured in the frontend
+                            for (let i = 2; i <= 5; i++) {
+                                if (pos.multipv[i] && pos.multipv[i].pv && pos.multipv[i].pv.length > 0) {
+                                    let altMove = pos.multipv[i].pv[0];
+                                    if (altMove && altMove.length >= 4 && altMove !== bm) {
+                                        shapes.push({ orig: altMove.substring(0, 2), dest: altMove.substring(2, 4), brush: 'blue' });
+                                    }
+                                }
+                            }
+                        }
+
+                        if (shapes.length > 0) {
+                            analysisBoard.set({
+                                drawable: {
+                                    shapes: shapes
+                                }
+                            });
+                        }
                     }
 
                     async function startPgnAnalysis() {
                         const pgn = $('#pgnInput').value.trim();
                         if (!pgn) { toast('Masukkan PGN terlebih dahulu.', 'error'); return; }
                         const depth = parseInt($('#analysisDepth2').value) || 12;
+                        const multipv = parseInt($('#analysisMultiPv').value) || 2;
 
                         // Parse PGN client-side to get FENs using chess.js
                         let chess;
@@ -2076,10 +2112,6 @@
                         }
 
                         const total = fenList.length;
-                        if (total > 121) {
-                            toast('Permainan terlalu panjang (max 120 langkah).', 'error');
-                            return;
-                        }
 
                         // Show progress
                         $('#analysisProgress').style.display = 'block';
@@ -2097,7 +2129,7 @@
                                 const res = await fetch('/stockfish.php', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ fens: chunk, depth })
+                                    body: JSON.stringify({ fens: chunk, depth: depth, multipv: multipv })
                                 });
                                 const data = await res.json();
                                 if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
@@ -2112,6 +2144,7 @@
                                         score_type: pos.score_type,
                                         bestmove: pos.bestmove,
                                         pv: pos.pv || [],
+                                        multipv: pos.multipv || [],
                                     });
                                 }
                                 mainPositions = [...analysisPositions];

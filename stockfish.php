@@ -119,9 +119,9 @@ function parsePgn(string $pgn): array
  * @param int $depth Search depth for Stockfish.
  * @return array Array of analysis results, each containing FEN, bestmove, score, etc.
  */
-function analyzeFens(array $fens, int $depth): array
+function analyzeFens(array $fens, int $depth, int $multipv): array
 {
-    $sf = new Stockfish('/usr/bin/stockfish', 4, 16);
+    $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv);
     $results = [];
 
     foreach ($fens as $i => $fen) {
@@ -155,6 +155,7 @@ function analyzeFens(array $fens, int $depth): array
             'bestmove'   => $res['bestmove'],
             'pv'         => array_slice($res['pv'] ?? [], 0, 6),
             'depth'      => $res['depth'],
+            'multipv'    => $res['multipv'] ?? [],
         ];
     }
 
@@ -168,8 +169,8 @@ try {
     // POST { fens: [...], depth: 12 }
     if (!empty($request['fens'])) {
         $fens = $request['fens'];
-        if (!is_array($fens) || count($fens) > 120) {
-            jsonResponse(['error' => 'fens must be an array with max 120 positions.'], 400);
+        if (!is_array($fens)) {
+            jsonResponse(['error' => 'fens must be an array.'], 400);
         }
 
         $depth = isset($request['depth']) && is_numeric($request['depth'])
@@ -182,8 +183,11 @@ try {
             $cleanFens[] = sanitizeFen((string) $f);
         }
 
+        $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 2;
+        $multipv = max(1, min(5, $multipv));
+
         set_time_limit(0); // Batch analysis can take time
-        $positions = analyzeFens($cleanFens, $depth);
+        $positions = analyzeFens($cleanFens, $depth, $multipv);
 
         jsonResponse([
             'success'   => true,
@@ -210,8 +214,10 @@ try {
 
     if ($depth === null && $movetime === null) $depth = 15;
     if ($movetime !== null) $depth = null;
+    $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 2;
+    $multipv = max(1, min(5, $multipv));
 
-    $sf = new Stockfish('/usr/bin/stockfish', 4, 16);
+    $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv);
     $result = $sf->analyze($fen, $depth, $movetime);
     jsonResponse($result);
 
