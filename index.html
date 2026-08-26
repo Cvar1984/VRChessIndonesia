@@ -1817,6 +1817,11 @@
 
                             if (tab === 'analysis') {
                                 document.body.classList.add('analysis-tab-active');
+                                setTimeout(() => {
+                                    if (typeof analysisBoard !== 'undefined' && analysisBoard && $('#analysisMainLayout').style.display === 'block') {
+                                        analysisBoard.redrawAll();
+                                    }
+                                }, 50);
                             } else {
                                 document.body.classList.remove('analysis-tab-active');
                                 clearArrows();
@@ -1883,8 +1888,9 @@
                         // Init board with Chessground
                         analysisBoard = window.Chessground(document.getElementById('analysisBoard'), {
                             fen: 'start',
+                            turnColor: 'white',
                             movable: {
-                                color: 'white',
+                                color: 'both',
                                 free: false,
                                 dests: getLegalMoves(),
                                 events: {
@@ -1916,6 +1922,10 @@
 
                             $('#analysisPgnImportCard').style.display = 'none';
                             $('#analysisMainLayout').style.display = 'block';
+
+                            setTimeout(() => {
+                                if (analysisBoard) analysisBoard.redrawAll();
+                            }, 50);
 
                             $('#infoWhite').textContent = 'Pemain Bebas';
                             $('#infoBlack').textContent = 'Pemain Bebas';
@@ -2124,9 +2134,9 @@
                         $('#analysisMainLayout').style.display = 'block';
 
                         // Force resize if needed
-                        // chessground adapts to CSS, but we can call a redraw just in case if we want
-                        // analysisBoard.redrawAll() is available, but usually not needed when container is displayed
-
+                        setTimeout(() => {
+                            if (analysisBoard) analysisBoard.redrawAll();
+                        }, 50);
 
                         // Populate game info
                         $('#infoWhite').textContent = analysisHeaders.White || '?';
@@ -2151,8 +2161,10 @@
 
                         analysisBoard.set({
                             fen: pos.fen,
+                            turnColor: toColor(analysisChess),
                             movable: {
-                                color: toColor(analysisChess),
+                                color: 'both',
+                                free: false,
                                 dests: getLegalMoves(),
                                 events: {
                                     after: handleAnalysisMove
