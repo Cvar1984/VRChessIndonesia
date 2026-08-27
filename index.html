@@ -256,6 +256,14 @@
                     </div>
 
                     <!-- Match Filters -->
+                    <datalist id="playerNamesList"></datalist>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <div class="search-wrapper" style="flex: 1; min-width: 140px; margin-bottom: 0;">
+                            <span class="search-wrapper__icon" style="font-size: 0.9rem;">🔍</span>
+                            <input type="text" class="search-input" id="matchSearch" placeholder="Cari (nama, w:nama, b:nama, y:2026, m:8, d:15)..." list="playerNamesList" autocomplete="off" title="Filter: w:nama (putih), b:nama (hitam), y:YYYY (tahun), m:MM (bulan), d:DD (hari)">
+                        </div>
+                        <button class="btn btn--secondary" id="btnResetMatchFilters" style="padding: 0 16px;">Reset</button>
+                    </div>
                     <div class="filter-bar">
                         <button class="filter-btn active" data-filter="all" id="filterAllMatches">Semua
                             Pertandingan</button>
@@ -1033,6 +1041,16 @@
                     playersCache.forEach(p => {
                         playerIdMap[p.id] = p.username;
                     });
+
+                    const datalist = $('#playerNamesList');
+                    if (datalist) {
+                        datalist.innerHTML = '';
+                        playersCache.forEach(p => {
+                            const option = document.createElement('option');
+                            option.value = p.username;
+                            datalist.appendChild(option);
+                        });
+                    }
                 }
 
                 // ── Fetch Models ──
@@ -1265,6 +1283,8 @@
                 }
 
                 function renderMatches() {
+                    const rawQuery = $('#matchSearch') ? $('#matchSearch').value.toLowerCase().trim() : '';
+
                     const container = $('#matchesContainer');
                     let matches = [...matchesCache];
 
@@ -1273,6 +1293,37 @@
                     } else if (currentMatchFilter === 'invalid') {
                         matches = matches.filter(m => 'is_valid' in m && m.is_valid === false);
                     }
+
+                    if (rawQuery) {
+                        const tokens = rawQuery.split(/\s+/);
+                        
+                        tokens.forEach(token => {
+                            if (token.startsWith('white:') || token.startsWith('w:')) {
+                                const val = token.replace(/^(white|w):/, '');
+                                matches = matches.filter(m => (playerIdMap[m.white_id] || '').toLowerCase().includes(val));
+                            } else if (token.startsWith('black:') || token.startsWith('b:')) {
+                                const val = token.replace(/^(black|b):/, '');
+                                matches = matches.filter(m => (playerIdMap[m.black_id] || '').toLowerCase().includes(val));
+                            } else if (token.startsWith('y:')) {
+                                const val = parseInt(token.replace(/^y:/, ''));
+                                matches = matches.filter(m => m.date && parseInt(m.date.substring(0, 4)) === val);
+                            } else if (token.startsWith('m:')) {
+                                const val = parseInt(token.replace(/^m:/, ''));
+                                matches = matches.filter(m => m.date && parseInt(m.date.substring(5, 7)) === val);
+                            } else if (token.startsWith('d:')) {
+                                const val = parseInt(token.replace(/^d:/, ''));
+                                matches = matches.filter(m => m.date && parseInt(m.date.substring(8, 10)) === val);
+                            } else {
+                                matches = matches.filter(m => {
+                                    const wName = (playerIdMap[m.white_id] || '').toLowerCase();
+                                    const bName = (playerIdMap[m.black_id] || '').toLowerCase();
+                                    return wName.includes(token) || bName.includes(token);
+                                });
+                            }
+                        });
+                    }
+
+
 
                     if (matches.length === 0) {
                         container.innerHTML = `
@@ -1799,6 +1850,14 @@
 
                     // Search & Filters
                     $('#playerSearch').addEventListener('input', (e) => renderLeaderboard(e.target.value));
+                    
+                    if ($('#matchSearch')) {
+                        $('#matchSearch').addEventListener('input', () => renderMatches());
+                        $('#btnResetMatchFilters').addEventListener('click', () => {
+                            $('#matchSearch').value = '';
+                            renderMatches();
+                        });
+                    }
 
                     $('#filterAllMatches').addEventListener('click', () => {
                         currentMatchFilter = 'all';
