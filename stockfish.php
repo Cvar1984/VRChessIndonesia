@@ -139,11 +139,13 @@ function analyzeFens(array $fens, int $depth, int $multipv): array
             $scoreDisplay = round($cp / 100, 2);
         } elseif ($res['score_type'] === 'mate') {
             $cp = (int) $res['score'];
+            $scoreCp = $cp > 0 ? 9999 : -9999;
             $parts = explode(' ', $fen);
             $turn = $parts[1] ?? 'w';
-            if ($turn === 'b') $cp = -$cp;
-            $scoreCp = $cp > 0 ? 9999 : -9999;
-            $scoreDisplay = "M{$cp}";
+            if ($turn === 'b') {
+                $scoreCp = -$scoreCp;
+            }
+            $scoreDisplay = "M" . abs($cp);
         }
 
         $results[] = [

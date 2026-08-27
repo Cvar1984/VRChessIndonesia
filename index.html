@@ -519,13 +519,18 @@
 
                             <!-- Player Top (Black) -->
                             <div
-                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd;">
+                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-bottom: 4px;">
                                 <div style="display:flex; gap:10px; align-items:center;">
                                     <div
                                         style="width:28px; height:28px; background:#222; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #444; font-size:0.8rem;">
                                         ⬛</div>
                                     <span id="infoBlack">Black</span>
+                                    <span id="accBlack"
+                                        style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
+                                        title="Lichess Accuracy Metric">-</span>
                                 </div>
+                                <div id="statsBlack"
+                                    style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
                             </div>
 
                             <!-- Eval Bar + Board -->
@@ -550,13 +555,18 @@
 
                             <!-- Player Bottom (White) -->
                             <div
-                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd;">
+                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-top: 4px;">
                                 <div style="display:flex; gap:10px; align-items:center;">
                                     <div
                                         style="width:28px; height:28px; background:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #ddd; font-size:0.8rem; color:#000;">
                                         ⬜</div>
                                     <span id="infoWhite">White</span>
+                                    <span id="accWhite"
+                                        style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
+                                        title="Lichess Accuracy Metric">-</span>
                                 </div>
+                                <div id="statsWhite"
+                                    style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
                             </div>
 
                             <!-- Board Controls -->
@@ -871,15 +881,15 @@
                     <div class="form-group">
                         <label class="form-label" for="editMatchResult">Hasil Pertandingan</label>
                         <select class="form-select" id="editMatchResult" required>
-                            <option value="1-0">1 - 0 (White Menang)</option>
-                            <option value="1/2-1/2">½ - ½ (Draw)</option>
-                            <option value="0-1">0 - 1 (Black Menang)</option>
+                            <option value="1-0">1 - 0 (Putih Menang)</option>
+                            <option value="1/2-1/2">½ - ½ (Remis)</option>
+                            <option value="0-1">0 - 1 (Hitam Menang)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="editMatchUrl">URL Analisis</label>
                         <input type="url" class="form-input" id="editMatchUrl"
-                            placeholder="https://www.chessigma.com/...">
+                            placeholder="https://lichess.org/analysis...">
                     </div>
                     <div style="display:flex; gap:10px; justify-content:flex-end;">
                         <button type="button" class="btn btn--secondary" id="btnCancelEditMatch">Batal</button>
@@ -2077,6 +2087,221 @@
                         }
                     }
 
+                    function getMaterial(fen, turn) {
+                        const pieces = fen.split(' ')[0];
+                        const values = { 'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9 };
+                        let total = 0;
+                        for (let i = 0; i < pieces.length; i++) {
+                            const char = pieces[i];
+                            if (turn === 'w' && char >= 'A' && char <= 'Z') {
+                                total += values[char.toLowerCase()] || 0;
+                            } else if (turn === 'b' && char >= 'a' && char <= 'z') {
+                                total += values[char] || 0;
+                            }
+                        }
+                        return total;
+                    }
+
+                    function getWinPct(cp) {
+                        if (cp === 9999) return 100;
+                        if (cp === -9999) return 0;
+                        return 100 / (1 + Math.exp(-0.00368208 * cp));
+                    }
+
+                    function playerWinPct(cp, turn) {
+                        let wPct = getWinPct(cp);
+                        return turn === 'w' ? wPct : (100 - wPct);
+                    }
+
+                    function getMoveAccuracy(prevPct, nextPct) {
+                        if (nextPct >= prevPct) return 100;
+                        const winDiff = prevPct - nextPct;
+                        const raw = 103.1668100711649 * Math.exp(-0.04354415386753951 * winDiff) - 3.166924740191411;
+                        return Math.max(0, Math.min(100, raw + 1));
+                    }
+
+                    //https://lichess.org/page/accuracy
+                    function computeGameAccuracy(color) {
+                        if (!analysisPositions || analysisPositions.length <= 1) return '-';
+                        const cps = [0]; // Initial state eval is ~0
+                        for (let i = 1; i < analysisPositions.length; i++) {
+                            cps.push(analysisPositions[i].score_cp || 0);
+                        }
+
+                        const allWinPercents = cps.map(cp => getWinPct(cp));
+                        const n = cps.length;
+                        let windowSize = Math.floor(n / 10);
+                        windowSize = Math.max(2, Math.min(8, windowSize));
+
+                        const windows = [];
+                        const firstWindow = allWinPercents.slice(0, windowSize);
+                        const copiesCount = Math.max(0, Math.min(windowSize, allWinPercents.length) - 2);
+
+                        for (let i = 0; i < copiesCount; i++) windows.push(firstWindow);
+                        for (let i = 0; i <= allWinPercents.length - windowSize; i++) {
+                            windows.push(allWinPercents.slice(i, i + windowSize));
+                        }
+
+                        const stdDev = (arr) => {
+                            if (!arr || arr.length === 0) return 0;
+                            const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+                            const variance = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
+                            return Math.sqrt(variance);
+                        };
+
+                        const weights = windows.map(w => Math.max(0.5, Math.min(12, stdDev(w) || 0)));
+                        const weightedAccuracies = [];
+
+                        for (let i = 0; i < allWinPercents.length - 1; i++) {
+                            const isWhite = (i % 2 === 0);
+                            const prev = allWinPercents[i];
+                            const next = allWinPercents[i + 1];
+                            const weight = weights[i] || 0.5;
+
+                            let prevP = isWhite ? prev : (100 - prev);
+                            let nextP = isWhite ? next : (100 - next);
+                            const acc = getMoveAccuracy(prevP, nextP);
+
+                            if ((isWhite && color === 'w') || (!isWhite && color === 'b')) {
+                                weightedAccuracies.push({ acc, weight });
+                            }
+                        }
+
+                        if (weightedAccuracies.length === 0) return '-';
+
+                        let sumWeight = 0;
+                        let sumWeightedAcc = 0;
+                        let sumHarmonic = 0;
+
+                        for (let { acc, weight } of weightedAccuracies) {
+                            sumWeightedAcc += acc * weight;
+                            sumWeight += weight;
+                            sumHarmonic += 1 / Math.max(1, acc);
+                        }
+
+                        const weightedMean = sumWeight > 0 ? (sumWeightedAcc / sumWeight) : 0;
+                        const harmonicMean = weightedAccuracies.length / sumHarmonic;
+
+                        return ((weightedMean + harmonicMean) / 2).toFixed(1);
+                    }
+
+                    function getMoveAnnotationIcon(prevCp, currCp, turn, moveNum, prevPos, currPos) {
+                        if (prevCp === null || prevCp === undefined || currCp === null || currCp === undefined) return null;
+
+                        let prevPct = playerWinPct(prevCp, turn);
+                        let currPct = playerWinPct(currCp, turn);
+                        let loss = prevPct - currPct; // How much win% was lost
+
+                        // Book move: theoretical move (first 5 moves, near equal eval)
+                        if (moveNum <= 5 && currPct > 40 && currPct < 60 && loss < 5) {
+                            return { src: './assets/images/theoritical_move.png', title: 'Book: A known opening move' };
+                        }
+
+                        // Brilliant move: A sound sacrifice (loss < 2, win% >= 45, material drops by >= 2 after PV response)
+                        if (loss < 2 && currPct >= 45 && currPos.pv && currPos.pv.length > 0) {
+                            try {
+                                const tempChess = new window.Chess(currPos.fen);
+                                const pvMove = currPos.pv[0];
+                                if (pvMove && pvMove.length >= 4 && pvMove !== '(none)') {
+                                    tempChess.move({ from: pvMove.substring(0, 2), to: pvMove.substring(2, 4), promotion: pvMove[4] });
+                                    const matBefore = getMaterial(prevPos.fen, turn);
+                                    const matAfter = getMaterial(tempChess.fen(), turn);
+                                    if (matAfter <= matBefore - 2) {
+                                        return { src: './assets/images/brilliant.png', title: "Brilliant: A sound sacrifice" };
+                                    }
+                                }
+                            } catch (e) { }
+                        }
+
+                        // Great move: The only move that holds. (Beats second best by >= 18 win%)
+                        if (loss < 2 && prevPos && prevPos.multipv && Object.keys(prevPos.multipv).length >= 2) {
+                            const pv1 = prevPos.multipv["1"] || prevPos.multipv[1];
+                            const pv2 = prevPos.multipv["2"] || prevPos.multipv[2];
+                            if (pv1 && pv2) {
+                                let s1 = pv1.score_type === 'mate' ? (pv1.score > 0 ? 9999 : -9999) : pv1.score;
+                                let s2 = pv2.score_type === 'mate' ? (pv2.score > 0 ? 9999 : -9999) : pv2.score;
+                                let pct1 = playerWinPct(s1, turn);
+                                let pct2 = playerWinPct(s2, turn);
+                                if (pct1 - pct2 >= 18) {
+                                    return { src: './assets/images/the_only_move.png', title: "Great: The only good choice" };
+                                }
+                            }
+                        }
+
+                        // Blunder: Lost at least 20 win%
+                        if (loss >= 20) {
+                            return { src: './assets/images/blunder.png', title: "Blunder: Extremely costly mistake" };
+                        }
+
+                        // Mistake: Lost at least 10 win%
+                        if (loss >= 10) {
+                            return { src: './assets/images/missed_tactic.png', title: "Mistake: Meaningful chunk of game lost" };
+                        }
+
+                        // Inaccuracy: Lost at least 5 win%
+                        if (loss >= 5) {
+                            return { src: './assets/images/strange_move.png', title: "Inaccuracy: Slightly worsens position" };
+                        }
+
+                        // Good Move: Lost less than 5 win%
+                        if (loss >= 1) {
+                            return { src: './assets/images/good_move.png', title: "Good: A solid, sensible move" };
+                        }
+
+                        // Best Move: Gives up almost nothing (under 1 win%)
+                        return { src: './assets/images/best_move.png', title: "Best: The engine's top choice" };
+                    }
+
+                    function drawMoveAnnotationOnBoard() {
+                        let overlay = $('#boardAnnOverlay');
+                        if (overlay) overlay.remove();
+
+                        if (currentMoveIdx === 0 || analysisPositions.length <= 1) return;
+                        const currPos = analysisPositions[currentMoveIdx];
+                        const prevPos = analysisPositions[currentMoveIdx - 1];
+                        if (!currPos || !prevPos) return;
+
+                        const turn = currentMoveIdx % 2 === 1 ? 'w' : 'b';
+                        const moveNum = Math.ceil(currentMoveIdx / 2);
+                        const annIcon = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos);
+                        if (!annIcon) return;
+
+                        let toSquare = null;
+                        if (currPos.move_san) {
+                            try {
+                                const tempChess = new window.Chess(prevPos.fen);
+                                const m = tempChess.move(currPos.move_san);
+                                if (m) toSquare = m.to;
+                            } catch (e) { }
+                        }
+
+                        if (!toSquare) return;
+
+                        const boardEl = $('#analysisBoard');
+                        if (!boardEl) return;
+                        boardEl.style.position = 'relative';
+
+                        const orientation = (analysisBoard && analysisBoard.state && analysisBoard.state.orientation) || 'white';
+                        const fileIdx = toSquare.charCodeAt(0) - 97; // a=0..h=7
+                        const rankIdx = parseInt(toSquare[1]) - 1;   // 1=0..8=7
+
+                        let xPct, yPct;
+                        if (orientation === 'white') {
+                            xPct = (fileIdx / 8) * 100;
+                            yPct = ((7 - rankIdx) / 8) * 100;
+                        } else {
+                            xPct = ((7 - fileIdx) / 8) * 100;
+                            yPct = (rankIdx / 8) * 100;
+                        }
+
+                        overlay = document.createElement('div');
+                        overlay.id = 'boardAnnOverlay';
+                        overlay.style.cssText = `position: absolute; left: ${xPct}%; top: ${yPct}%; width: 12.5%; height: 12.5%; pointer-events: none; z-index: 15; display: flex; align-items: flex-start; justify-content: flex-end;`;
+
+                        overlay.innerHTML = `<img src="${annIcon.src}" title="${annIcon.title}" style="width: 22px; height: 22px; pointer-events: auto; transform: translate(30%, -30%); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));" />`;
+                        boardEl.appendChild(overlay);
+                    }
+
                     async function startPgnAnalysis() {
                         const pgn = $('#pgnInput').value.trim();
                         if (!pgn) { toast('Masukkan PGN terlebih dahulu.', 'error'); return; }
@@ -2232,6 +2457,63 @@
                         renderMoveList();
                         renderEvalChart();
                         drawBestMoveArrow();
+                        drawMoveAnnotationOnBoard();
+                        renderGameStats();
+                    }
+
+                    function renderGameStats() {
+                        const statsW = {};
+                        const statsB = {};
+
+                        for (let i = 1; i < analysisPositions.length; i++) {
+                            const turn = i % 2 === 1 ? 'w' : 'b';
+                            const moveNum = Math.ceil(i / 2);
+                            const currPos = analysisPositions[i];
+                            const prevPos = analysisPositions[i - 1];
+
+                            const ann = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos);
+                            if (ann) {
+                                const target = turn === 'w' ? statsW : statsB;
+                                if (!target[ann.src]) {
+                                    target[ann.src] = { count: 0, title: ann.title };
+                                }
+                                target[ann.src].count++;
+                            }
+                        }
+
+                        const order = [
+                            './assets/images/brilliant.png',
+                            './assets/images/the_only_move.png',
+                            './assets/images/best_move.png',
+                            './assets/images/good_move.png',
+                            './assets/images/theoritical_move.png',
+                            './assets/images/strange_move.png',
+                            './assets/images/missed_tactic.png',
+                            './assets/images/blunder.png'
+                        ];
+
+                        function buildHtml(stats) {
+                            let html = '';
+                            for (const src of order) {
+                                if (stats[src] && stats[src].count > 0) {
+                                    html += `<div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.4); padding:2px 5px; border-radius:4px;" title="${stats[src].title}">
+                                                <img src="${src}" style="width:14px; height:14px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));" />
+                                                <span style="color:#eee; font-size:0.75rem; font-weight:600;">${stats[src].count}</span>
+                                             </div>`;
+                                }
+                            }
+                            return html;
+                        }
+
+                        const sw = $('#statsWhite');
+                        const sb = $('#statsBlack');
+                        if (sw) sw.innerHTML = buildHtml(statsW);
+                        if (sb) sb.innerHTML = buildHtml(statsB);
+
+                        const accW = $('#accWhite');
+                        const accB = $('#accBlack');
+                        if (accW) accW.innerText = computeGameAccuracy('w') + '%';
+                        if (accB) accB.innerText = computeGameAccuracy('b') + '%';
                     }
 
                     function updateEvalBar(scoreCp) {
@@ -2374,7 +2656,17 @@
                             s.id = 'analysisMoveStyle';
                             s.textContent = `.analysis-move-btn:hover{background:#363430 !important;}
                                 .analysis-move-btn.active{background:#45433d !important;color:white!important; border-bottom: 2px solid #7fa650 !important;}
-                                .analysis-move-btn.variant-move.active{background:#45433d !important;color:white!important; border-bottom: 2px solid #ff9e00 !important;}`;
+                                .analysis-move-btn.variant-move.active{background:#45433d !important;color:white!important; border-bottom: 2px solid #ff9e00 !important;}
+                                .ann-badge { font-size: 0.6rem; padding: 2px 4px; border-radius: 4px; margin-left: 6px; font-weight: 800; text-transform: uppercase; display: inline-block; vertical-align: middle; }
+                                .ann-sigma { background: #06b6d4; color: #fff; }
+                                .ann-awesome { background: #22c55e; color: #fff; }
+                                .ann-best { background: #3b82f6; color: #fff; }
+                                .ann-nice { background: #10b981; color: #fff; }
+                                .ann-ok { background: #eab308; color: #000; }
+                                .ann-theoretical { background: #a855f7; color: #fff; }
+                                .ann-strange { background: #f97316; color: #fff; }
+                                .ann-bad { background: #ef4444; color: #fff; }
+                                .ann-clown { background: #991b1b; color: #fff; }`;
                             document.head.appendChild(s);
                         }
 
