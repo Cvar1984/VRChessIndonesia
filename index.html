@@ -260,9 +260,13 @@
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
                         <div class="search-wrapper" style="flex: 1; min-width: 140px; margin-bottom: 0;">
                             <span class="search-wrapper__icon" style="font-size: 0.9rem;">🔍</span>
-                            <input type="text" class="search-input" id="matchSearch" placeholder="Cari (nama, w:nama, b:nama, y:2026, m:8, d:15)..." list="playerNamesList" autocomplete="off" title="Filter: w:nama (putih), b:nama (hitam), y:YYYY (tahun), m:MM (bulan), d:DD (hari)">
+                            <input type="text" class="search-input" id="matchSearch"
+                                placeholder="Cari (nama, w:nama, b:nama, y:2026, m:8, d:15)..." list="playerNamesList"
+                                autocomplete="off"
+                                title="Filter: w:nama (putih), b:nama (hitam), y:YYYY (tahun), m:MM (bulan), d:DD (hari)">
                         </div>
-                        <button class="btn btn--secondary" id="btnResetMatchFilters" style="padding: 0 16px;">Reset</button>
+                        <button class="btn btn--secondary" id="btnResetMatchFilters"
+                            style="padding: 0 16px;">Reset</button>
                     </div>
                     <div class="filter-bar">
                         <button class="filter-btn active" data-filter="all" id="filterAllMatches">Semua
@@ -294,12 +298,12 @@
                     <form id="playMatchForm">
                         <div class="form-row">
                             <div class="form-group autocomplete-wrapper">
-                                <label class="form-label" for="playWhite">⬜ Pemain Putih (White)</label>
+                                <label class="form-label" for="playWhite">Pemain Putih (White)</label>
                                 <input type="text" class="form-input" id="playWhite" placeholder="Ketik nama pemain..."
                                     required autocomplete="off">
                             </div>
                             <div class="form-group autocomplete-wrapper">
-                                <label class="form-label" for="playBlack">⬛ Pemain Hitam (Black)</label>
+                                <label class="form-label" for="playBlack">Pemain Hitam (Black)</label>
                                 <input type="text" class="form-input" id="playBlack" placeholder="Ketik nama pemain..."
                                     required autocomplete="off">
                             </div>
@@ -443,18 +447,6 @@
                         <label class="btn btn--secondary btn--sm" style="cursor:pointer;" for="pgnFileInput">📂 Buka
                             File PGN</label>
                         <input type="file" id="pgnFileInput" accept=".pgn" style="display:none;">
-                        <div class="form-group" style="margin:0; display:flex; align-items:center; gap:8px;">
-                            <label class="form-label" style="margin:0; white-space:nowrap;"
-                                for="analysisDepth2">Depth</label>
-                            <input type="number" class="form-input" id="analysisDepth2" value="12" min="1" max="20"
-                                style="width:70px;">
-                        </div>
-                        <div class="form-group" style="margin:0; display:flex; align-items:center; gap:8px;">
-                            <label class="form-label" style="margin:0; white-space:nowrap;"
-                                for="analysisMultiPv">Lines</label>
-                            <input type="number" class="form-input" id="analysisMultiPv" value="2" min="1" max="5"
-                                style="width:60px;">
-                        </div>
                         <button class="btn btn--primary" id="btnStartPgnAnalysis" type="button">⚡ Mulai Analisis
                             PGN</button>
                         <button class="btn btn--secondary" id="btnStartFreeAnalysis" type="button">Mulai Kosong (Free
@@ -531,7 +523,7 @@
                                 <div style="display:flex; gap:10px; align-items:center;">
                                     <div
                                         style="width:28px; height:28px; background:#222; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #444; font-size:0.8rem;">
-                                        ⬛</div>
+                                    </div>
                                     <span id="infoBlack">Black</span>
                                     <span id="accBlack"
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
@@ -567,7 +559,7 @@
                                 <div style="display:flex; gap:10px; align-items:center;">
                                     <div
                                         style="width:28px; height:28px; background:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #ddd; font-size:0.8rem; color:#000;">
-                                        ⬜</div>
+                                    </div>
                                     <span id="infoWhite">White</span>
                                     <span id="accWhite"
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
@@ -616,12 +608,46 @@
 
                                 <!-- Evaluation & Engine Lines -->
                                 <div style="padding:16px 20px; display:flex; flex-direction:column; gap:10px;">
-                                    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                                    <!-- Live Engine Settings Toolbar -->
+                                    <div
+                                        style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#1a1917; padding:6px 12px; border-radius:6px; border:1px solid #33312e; font-size:0.78rem;">
+                                        <div style="display:flex; align-items:center; gap:12px;">
+                                            <div style="display:flex; align-items:center; gap:6px;">
+                                                <label for="liveDepthSelect"
+                                                    style="color:#aaa; font-weight:600; font-size:0.75rem;">Depth:</label>
+                                                <input type="number" id="liveDepthSelect" value="18" min="1" max="99"
+                                                    style="width:55px; padding:2px 6px; font-size:0.75rem; height:26px; background:#262421; border:1px solid #444; color:#fff; border-radius:4px; font-family:var(--font-mono); font-weight:700;">
+                                            </div>
+                                            <div style="display:flex; align-items:center; gap:6px;">
+                                                <label for="liveMultiPvSelect"
+                                                    style="color:#aaa; font-weight:600; font-size:0.75rem;">Lines:</label>
+                                                <select id="liveMultiPvSelect"
+                                                    style="padding:2px 6px; font-size:0.75rem; height:26px; background:#262421; border:1px solid #444; color:#fff; border-radius:4px; font-family:var(--font-mono); font-weight:700; cursor:pointer;">
+                                                    <option value="1" selected>1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="3">3</option>
+                                                    <option value="4">4</option>
+                                                    <option value="5">5</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <button id="btnToggleLiveEngine" class="btn btn--secondary btn--xs"
+                                            style="background:#33312e; color:#7fa650; border:1px solid rgba(127,166,80,0.5); font-weight:700; padding:3px 8px;"
+                                            type="button" title="Toggle Live Engine">
+                                            ⚡ Live Engine: ON
+                                        </button>
+                                    </div>
+
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
                                         <div style="display:flex; align-items:baseline; gap:12px;">
                                             <span id="posEvalScore"
                                                 style="font-size:2rem; font-weight:800; font-family:var(--font-mono); color:#fff; line-height:1;">+0.00</span>
                                             <span style="font-size:0.8rem; color:#7fa650; font-weight:700;"><span
-                                                    class="depth-val">15</span> Depth</span>
+                                                    class="depth-val" id="posEvalDepth">18</span> Depth</span>
+                                        </div>
+                                        <div id="engineStreamBadge" class="engine-stream-badge">
+                                            <span class="pulse-dot"></span>
+                                            <span id="engineStreamText">Stockfish computing...</span>
                                         </div>
                                     </div>
                                     <div
@@ -1296,7 +1322,7 @@
 
                     if (rawQuery) {
                         const tokens = rawQuery.split(/\s+/);
-                        
+
                         tokens.forEach(token => {
                             if (token.startsWith('white:') || token.startsWith('w:')) {
                                 const val = token.replace(/^(white|w):/, '');
@@ -1850,7 +1876,7 @@
 
                     // Search & Filters
                     $('#playerSearch').addEventListener('input', (e) => renderLeaderboard(e.target.value));
-                    
+
                     if ($('#matchSearch')) {
                         $('#matchSearch').addEventListener('input', () => renderMatches());
                         $('#btnResetMatchFilters').addEventListener('click', () => {
@@ -1919,6 +1945,7 @@
                     let currentMoveIdx = 0;       // 0 = starting position
                     let evalChartInstance = null;
                     let liveAnalysisAbort = null;
+                    let isLiveEngineEnabled = true;
 
                     function getLegalMoves() {
                         const dests = new Map();
@@ -2033,6 +2060,42 @@
                             clearArrows();
                         });
 
+                        // Live controls
+                        const liveDepth = $('#liveDepthSelect');
+                        const liveMultiPv = $('#liveMultiPvSelect');
+                        const btnToggleEngine = $('#btnToggleLiveEngine');
+
+                        const triggerReanalysis = () => {
+                            if (isLiveEngineEnabled && analysisPositions[currentMoveIdx]) {
+                                analyzeLivePosition(currentMoveIdx, analysisPositions[currentMoveIdx].fen);
+                            }
+                        };
+
+                        if (liveDepth) {
+                            liveDepth.addEventListener('change', triggerReanalysis);
+                            liveDepth.addEventListener('input', triggerReanalysis);
+                        }
+                        if (liveMultiPv) {
+                            liveMultiPv.addEventListener('change', triggerReanalysis);
+                        }
+                        if (btnToggleEngine) {
+                            btnToggleEngine.addEventListener('click', () => {
+                                isLiveEngineEnabled = !isLiveEngineEnabled;
+                                if (isLiveEngineEnabled) {
+                                    btnToggleEngine.style.color = '#7fa650';
+                                    btnToggleEngine.style.borderColor = 'rgba(127,166,80,0.5)';
+                                    btnToggleEngine.innerHTML = '⚡ Live Engine: ON';
+                                    triggerReanalysis();
+                                } else {
+                                    btnToggleEngine.style.color = '#aaa';
+                                    btnToggleEngine.style.borderColor = '#444';
+                                    btnToggleEngine.innerHTML = '⏸ Live Engine: OFF';
+                                    if (liveAnalysisAbort) liveAnalysisAbort.abort();
+                                    updateEngineStreamBadge(false);
+                                }
+                            });
+                        }
+
                         // Keyboard navigation
                         document.addEventListener('keydown', (e) => {
                             if ($('#tab-analysis').classList.contains('active') && analysisPositions.length > 0) {
@@ -2044,58 +2107,143 @@
                         });
                     }
 
+                    function updateEngineStreamBadge(isComputing, depth = 0, targetDepth = 18, nps = 0) {
+                        const badge = $('#engineStreamBadge');
+                        const textEl = $('#engineStreamText');
+                        if (!badge || !textEl) return;
+
+                        if (!isComputing) {
+                            badge.style.display = 'none';
+                            return;
+                        }
+
+                        badge.style.display = 'inline-flex';
+                        let npsStr = nps > 0 ? ` · ${(nps / 1000000).toFixed(1)}M nps` : '';
+                        textEl.textContent = `Depth ${depth}/${targetDepth}${npsStr}`;
+                    }
+
                     async function analyzeLivePosition(idx, fen) {
+                        if (!isLiveEngineEnabled) return;
                         if (liveAnalysisAbort) liveAnalysisAbort.abort();
                         liveAnalysisAbort = new AbortController();
 
-                        const depth = parseInt($('#analysisDepth2').value) || 15;
-                        const multipv = parseInt($('#analysisMultiPv').value) || 2;
-                        $('#posEvalBest').textContent = "Menghitung...";
-                        $('#posEvalPv').textContent = "—";
-                        clearArrows();
+                        const depth = parseInt($('#liveDepthSelect')?.value) || 18;
+                        const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
+
+                        if (currentMoveIdx === idx && (!analysisPositions[idx] || analysisPositions[idx].score === null)) {
+                            $('#posEvalBest').textContent = "Menghitung...";
+                            $('#posEvalPv').textContent = "—";
+                            clearArrows();
+                        }
+
+                        updateEngineStreamBadge(true, 1, depth, 0);
 
                         try {
-                            const res = await fetch('/stockfish.php', {
+                            const res = await fetch('/stockfish.php?stream=1', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ fen: fen, depth: depth, multipv: multipv }),
+                                body: JSON.stringify({ fen: fen, depth: depth, multipv: multipv, stream: true }),
                                 signal: liveAnalysisAbort.signal
                             });
-                            const data = await res.json();
-                            if (!res.ok) throw new Error(data.error);
 
-                            if (analysisPositions[idx]) {
-                                let scoreDisplay = null;
-                                let scoreCp = null;
-                                if (data.score_type === 'cp') {
-                                    scoreCp = data.score;
-                                    const turn = fen.split(' ')[1] || 'w';
-                                    if (turn === 'b') scoreCp = -scoreCp;
-                                    scoreDisplay = scoreCp / 100;
-                                } else if (data.score_type === 'mate') {
-                                    scoreCp = data.score > 0 ? 9999 : -9999;
-                                    const turn = fen.split(' ')[1] || 'w';
-                                    if (turn === 'b') scoreCp = -scoreCp;
-                                    scoreDisplay = "M" + Math.abs(data.score);
+                            if (!res.ok) {
+                                const data = await res.json().catch(() => ({}));
+                                throw new Error(data.error || 'Server error');
+                            }
+
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = '';
+                            let lastRenderTime = 0;
+
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+
+                                buffer += decoder.decode(value, { stream: true });
+                                const lines = buffer.split('\n');
+                                buffer = lines.pop(); // keep last partial line in buffer
+
+                                for (const line of lines) {
+                                    const trimmed = line.trim();
+                                    if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+                                    const jsonStr = trimmed.substring(6);
+                                    let data;
+                                    try {
+                                        data = JSON.parse(jsonStr);
+                                    } catch (e) {
+                                        continue;
+                                    }
+
+                                    if (!analysisPositions[idx]) continue;
+
+                                    let scoreDisplay = null;
+                                    let scoreCp = null;
+                                    if (data.score_type === 'cp') {
+                                        scoreCp = data.score;
+                                        const turn = fen.split(' ')[1] || 'w';
+                                        if (turn === 'b') scoreCp = -scoreCp;
+                                        scoreDisplay = scoreCp / 100;
+                                    } else if (data.score_type === 'mate') {
+                                        scoreCp = data.score > 0 ? 9999 : -9999;
+                                        const turn = fen.split(' ')[1] || 'w';
+                                        if (turn === 'b') scoreCp = -scoreCp;
+                                        scoreDisplay = "M" + Math.abs(data.score);
+                                    }
+
+                                    analysisPositions[idx].score = scoreDisplay;
+                                    analysisPositions[idx].score_cp = scoreCp;
+                                    analysisPositions[idx].score_type = data.score_type;
+                                    analysisPositions[idx].bestmove = data.bestmove;
+                                    analysisPositions[idx].pv = data.pv || [];
+                                    analysisPositions[idx].multipv = data.multipv || [];
+                                    analysisPositions[idx].depth = data.depth;
+                                    analysisPositions[idx].nps = data.nps;
+
+                                    updateEngineStreamBadge(true, data.depth || 0, depth, data.nps || 0);
+
+                                    if (currentMoveIdx === idx) {
+                                        if (scoreDisplay !== null && scoreDisplay !== undefined) {
+                                            const isNum = typeof scoreDisplay === 'number';
+                                            let display = isNum ? (scoreDisplay >= 0 ? `+${scoreDisplay.toFixed(2)}` : scoreDisplay.toFixed(2)) : String(scoreDisplay);
+                                            $('#posEvalScore').textContent = display;
+                                            $('#posEvalScore').style.color = isNum
+                                                ? (scoreDisplay > 0.2 ? '#fff' : scoreDisplay < -0.2 ? 'var(--accent-red)' : '#fff')
+                                                : '#fff';
+                                            updateEvalBar(scoreCp);
+                                            $('#evalBarLabel').textContent = display;
+                                        }
+
+                                        if ($('#posEvalDepth')) $('#posEvalDepth').textContent = data.depth || depth;
+                                        $('#posEvalBest').textContent = data.bestmove || '—';
+                                        $('#posEvalPv').textContent = data.pv && data.pv.length ? data.pv.join(' ') : '—';
+
+                                        // Update arrow on board live as engine calculates!
+                                        drawBestMoveArrow();
+                                        drawMoveAnnotationOnBoard();
+                                    }
+
+                                    const now = Date.now();
+                                    if (now - lastRenderTime > 150) {
+                                        lastRenderTime = now;
+                                        renderMoveList(true);  // live patch only
+                                        renderEvalChart();
+                                    }
                                 }
+                            }
 
-                                analysisPositions[idx].score = scoreDisplay;
-                                analysisPositions[idx].score_cp = scoreCp;
-                                analysisPositions[idx].score_type = data.score_type;
-                                analysisPositions[idx].bestmove = data.bestmove;
-                                analysisPositions[idx].pv = data.pv || [];
-                                analysisPositions[idx].multipv = data.multipv || [];
-
-                                if (currentMoveIdx === idx) {
-                                    gotoMove(idx); // Update UI
-                                }
+                            updateEngineStreamBadge(false);
+                            if (currentMoveIdx === idx) {
                                 renderMoveList();
                                 renderEvalChart();
                             }
+
                         } catch (e) {
                             if (e.name !== 'AbortError') {
                                 console.error('Live analysis error:', e);
                             }
+                            updateEngineStreamBadge(false);
                         }
                     }
 
@@ -2364,8 +2512,8 @@
                     async function startPgnAnalysis() {
                         const pgn = $('#pgnInput').value.trim();
                         if (!pgn) { toast('Masukkan PGN terlebih dahulu.', 'error'); return; }
-                        const depth = parseInt($('#analysisDepth2').value) || 12;
-                        const multipv = parseInt($('#analysisMultiPv').value) || 2;
+                        const depth = parseInt($('#liveDepthSelect')?.value) || 18;
+                        const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
 
                         // Parse PGN client-side to get FENs using chess.js
                         let chess;
@@ -2518,6 +2666,13 @@
                         drawBestMoveArrow();
                         drawMoveAnnotationOnBoard();
                         renderGameStats();
+
+                        if (isLiveEngineEnabled && analysisPositions[idx]) {
+                            analyzeLivePosition(idx, pos.fen);
+                        } else {
+                            if (liveAnalysisAbort) liveAnalysisAbort.abort();
+                            updateEngineStreamBadge(false);
+                        }
                     }
 
                     function renderGameStats() {
@@ -2588,8 +2743,59 @@
                         bar.style.height = whitePct + '%';
                     }
 
-                    function renderMoveList() {
+                    function renderMoveList(liveUpdate = false) {
                         const container = $('#moveListContainer');
+
+                        // ── LIVE PATCH: avoid full innerHTML rebuild during streaming ──
+                        if (liveUpdate && container.querySelector('table')) {
+                            // 1. Update active class on move buttons
+                            container.querySelectorAll('.analysis-move-btn').forEach(btn => {
+                                const mainIdx = btn.dataset.mainIdx !== undefined
+                                    ? parseInt(btn.dataset.mainIdx, 10) : null;
+                                const varIdx  = btn.dataset.varIdx  !== undefined
+                                    ? parseInt(btn.dataset.varIdx,  10) : null;
+                                const idx = mainIdx !== null ? mainIdx : varIdx;
+                                if (idx === null) return;
+
+                                const isActive = (idx === currentMoveIdx);
+                                btn.classList.toggle('active', isActive);
+                            });
+
+                            // 2. Patch eval cells in-place (every td after a move button)
+                            container.querySelectorAll('tr').forEach(row => {
+                                const cells = row.querySelectorAll('td');
+                                // Row layout: [#] [move-btn] [eval] [move-btn] [eval]
+                                // or variant: [#] [move-btn] [eval] [move-btn] [eval]
+                                [[1, 2], [3, 4]].forEach(([btnCol, evalCol]) => {
+                                    const btnCell = cells[btnCol];
+                                    const evalCell = cells[evalCol];
+                                    if (!btnCell || !evalCell) return;
+                                    const btn = btnCell.querySelector('.analysis-move-btn');
+                                    if (!btn) return;
+                                    const mainIdx = btn.dataset.mainIdx !== undefined
+                                        ? parseInt(btn.dataset.mainIdx, 10) : null;
+                                    const varIdx  = btn.dataset.varIdx  !== undefined
+                                        ? parseInt(btn.dataset.varIdx,  10) : null;
+                                    const idx = mainIdx !== null ? mainIdx : varIdx;
+                                    if (idx === null) return;
+                                    const srcArr = mainIdx !== null ? mainPositions : analysisPositions;
+                                    const pos = srcArr[idx];
+                                    if (!pos) return;
+                                    const { text, color } = formatEvalCell(pos);
+                                    if (evalCell.textContent !== text) evalCell.textContent = text;
+                                    if (evalCell.style.color !== color) evalCell.style.color = color;
+                                });
+                            });
+
+                            // 3. Scroll active into view without smooth animation (prevents jitter)
+                            const activeBtn = container.querySelector('.analysis-move-btn.active');
+                            if (activeBtn) {
+                                activeBtn.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+                            }
+                            return;  // skip full rebuild
+                        }
+
+                        // ── FULL REBUILD (navigation, initial render, stream end) ──
                         let html = `<table>`;
                         html += `<tr><th style="padding:8px; text-align:left; color:#888; font-weight:600; width:10%;">#</th>
                                      <th style="padding:8px; text-align:left; color:#ccc;">White</th>
@@ -2729,7 +2935,7 @@
                             document.head.appendChild(s);
                         }
 
-                        // Scroll active into view
+                        // Scroll active into view (smooth only on full rebuild / navigation)
                         const activeBtn = container.querySelector('.analysis-move-btn.active');
                         if (activeBtn) {
                             activeBtn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });

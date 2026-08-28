@@ -1322,6 +1322,47 @@ body::before {
         flex-wrap: wrap;
         font-size: 0.72rem;
     }
+
+    /* ── Analysis tab mobile fixes ── */
+    /* Stack board + right panel vertically */
+    .chesscom-layout {
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+
+    /* Board area: full width, no sticky */
+    .chesscom-layout > div:first-child {
+        flex: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        position: static !important;
+    }
+
+    /* Right panel: full width, no fixed height, no sticky */
+    .chesscom-layout > div:last-child {
+        flex: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        position: static !important;
+        /* panel sub-items stack normally */
+    }
+
+    /* Move list: fixed scrollable height instead of flex-grow */
+    #moveListContainer {
+        max-height: 280px !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        /* Prevent repaint jitter during live updates */
+        contain: layout style;
+        will-change: scroll-position;
+    }
+
+    /* Eval chart shrink a bit */
+    #evalChart {
+        height: 50px !important;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1337,3 +1378,35 @@ body::before {
         display: none;
     }
 }
+
+/* ── Real-Time Engine Stream Badge ── */
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #7fa650;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 8px #7fa650;
+    animation: pulse-stream 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes pulse-stream {
+    from { opacity: 0.3; transform: scale(0.75); }
+    to   { opacity: 1; transform: scale(1.25); }
+}
+
+.engine-stream-badge {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    background: rgba(127, 166, 80, 0.15);
+    border: 1px solid rgba(127, 166, 80, 0.4);
+    color: #a3d959;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    transition: all var(--transition-fast);
+}
+

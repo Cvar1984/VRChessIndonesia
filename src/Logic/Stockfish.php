@@ -93,9 +93,10 @@ class Stockfish
      * @param string $fen The FEN string to analyze.
      * @param int|null $depth The depth to analyze to.
      * @param int|null $movetime The time to spend analyzing in milliseconds.
+     * @param callable|null $onInfoCallback Optional callback invoked when Stockfish outputs info lines during computation.
      * @return array The analysis results including bestmove, score, and principal variation.
      */
-    public function analyze(string $fen, ?int $depth = 15, ?int $movetime = null): array
+    public function analyze(string $fen, ?int $depth = 15, ?int $movetime = null, ?callable $onInfoCallback = null): array
     {
         $this->command("ucinewgame");
         $this->command("isready");
@@ -119,7 +120,10 @@ class Stockfish
             "score" => null,
             "score_type" => null,
             "eval" => null,
-            "pv" => []
+            "pv" => [],
+            "bestmove" => null,
+            "ponder" => null,
+            "multipv" => []
         ];
 
         while (($line = fgets($this->pipes[1])) !== false) {
@@ -157,6 +161,8 @@ class Stockfish
                     $result["multipv"][$mpvIndex] = ["score" => null, "score_type" => null, "eval" => null, "pv" => []];
                 }
 
+                $hasInfoData = false;
+
                 if (preg_match('/score\s+(cp|mate)\s+(-?\d+)/', $line, $m)) {
                     $scoreType = $m[1];
                     $scoreVal = (int) $m[2];
@@ -169,6 +175,7 @@ class Stockfish
                         $result["score"] = $scoreVal;
                         $result["eval"] = Stockfish::evalBar($scoreVal);
                     }
+                    $hasInfoData = true;
                 }
 
                 if (preg_match('/ pv (.+)$/', $line, $m)) {
@@ -177,7 +184,15 @@ class Stockfish
                     
                     if ($mpvIndex === 1) {
                         $result["pv"] = $pvArr;
+                        if (!empty($pvArr[0])) {
+                            $result["bestmove"] = $pvArr[0];
+                        }
                     }
+                    $hasInfoData = true;
+                }
+
+                if ($onInfoCallback && $hasInfoData) {
+                    $onInfoCallback($result, $line);
                 }
             }
 
@@ -185,7 +200,7 @@ class Stockfish
 
                 $parts = preg_split('/\s+/', $line);
 
-                $result["bestmove"] = $parts[1] ?? null;
+                $result["bestmove"] = $parts[1] ?? ($result["pv"][0] ?? null);
                 $result["ponder"] = $parts[3] ?? null;
 
                 break;

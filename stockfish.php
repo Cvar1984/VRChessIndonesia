@@ -176,8 +176,8 @@ try {
         }
 
         $depth = isset($request['depth']) && is_numeric($request['depth'])
-            && $request['depth'] >= 1 && $request['depth'] <= 20
-            ? (int) $request['depth'] : 12;
+            && $request['depth'] >= 1 && $request['depth'] <= 99
+            ? (int) $request['depth'] : 22; //18 fast, 22 standard, 24 deep, 26 max
 
         // Validate all FENs
         $cleanFens = [];
@@ -185,7 +185,7 @@ try {
             $cleanFens[] = sanitizeFen((string) $f);
         }
 
-        $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 2;
+        $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 1;
         $multipv = max(1, min(5, $multipv));
 
         set_time_limit(0); // Batch analysis can take time
@@ -207,19 +207,81 @@ try {
     $fen = sanitizeFen($request['fen']);
 
     $depth = isset($request['depth']) && is_numeric($request['depth'])
-        && $request['depth'] >= 1 && $request['depth'] <= 30
+        && $request['depth'] >= 1 && $request['depth'] <= 99
         ? (int) $request['depth'] : null;
 
     $movetime = isset($request['movetime']) && is_numeric($request['movetime'])
         && $request['movetime'] >= 100 && $request['movetime'] <= 10000
         ? (int) $request['movetime'] : null;
 
-    if ($depth === null && $movetime === null) $depth = 15;
+    if ($depth === null && $movetime === null) $depth = 18;
     if ($movetime !== null) $depth = null;
-    $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 2;
+    $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 1;
     $multipv = max(1, min(5, $multipv));
 
+    set_time_limit(0);
+    $stream = (isset($request['stream']) && ($request['stream'] === true || $request['stream'] === '1' || $request['stream'] === 1)) || (isset($_GET['stream']) && $_GET['stream'] == '1');
+
     $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv);
+
+    if ($stream) {
+        header("Access-Control-Allow-Origin: *");
+        header("Content-Type: text/event-stream");
+        header("Cache-Control: no-cache");
+        header("Connection: keep-alive");
+        header("X-Accel-Buffering: no");
+
+        while (ob_get_level()) {
+            ob_end_flush();
+        }
+
+        $lastStreamTime = 0;
+        $result = $sf->analyze($fen, $depth, $movetime, function ($res) use (&$lastStreamTime) {
+            $now = microtime(true);
+            if ($now - $lastStreamTime < 0.03) {
+                return;
+            }
+            $lastStreamTime = $now;
+
+            $payload = [
+                'type'       => 'info',
+                'depth'      => $res['depth'],
+                'seldepth'   => $res['seldepth'],
+                'time'       => $res['time'],
+                'nodes'      => $res['nodes'],
+                'nps'        => $res['nps'],
+                'score'      => $res['score'],
+                'score_type' => $res['score_type'],
+                'eval'       => $res['eval'],
+                'bestmove'   => $res['bestmove'] ?? ($res['pv'][0] ?? null),
+                'pv'         => $res['pv'] ?? [],
+                'multipv'    => $res['multipv'] ?? [],
+            ];
+
+            echo "data: " . json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n\n";
+            flush();
+        });
+
+        $finalPayload = [
+            'type'       => 'done',
+            'depth'      => $result['depth'],
+            'seldepth'   => $result['seldepth'],
+            'time'       => $result['time'],
+            'nodes'      => $result['nodes'],
+            'nps'        => $result['nps'],
+            'score'      => $result['score'],
+            'score_type' => $result['score_type'],
+            'eval'       => $result['eval'],
+            'bestmove'   => $result['bestmove'] ?? ($result['pv'][0] ?? null),
+            'pv'         => $result['pv'] ?? [],
+            'multipv'    => $result['multipv'] ?? [],
+        ];
+
+        echo "data: " . json_encode($finalPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n\n";
+        flush();
+        exit;
+    }
+
     $result = $sf->analyze($fen, $depth, $movetime);
     jsonResponse($result);
 
