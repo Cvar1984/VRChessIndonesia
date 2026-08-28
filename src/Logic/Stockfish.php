@@ -24,6 +24,7 @@ class Stockfish
         int $threads = 4,
         int $hash = 512,
         int $multipv = 1,
+        bool $chess960 = false,
     ) {
         $this->process = proc_open(
             $binary,
@@ -47,6 +48,10 @@ class Stockfish
         $this->command("setoption name Threads value " . max(1, (int) $threads));
         $this->command("setoption name Hash value " . max(1, (int) $hash));
         $this->command("setoption name MultiPV value " . max(0, (int) $multipv));
+
+        if ($chess960) {
+            $this->command("setoption name UCI_Chess960 value true");
+        }
 
         $this->command("isready");
         $this->waitFor("readyok");

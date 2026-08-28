@@ -119,9 +119,9 @@ function parsePgn(string $pgn): array
  * @param int $depth Search depth for Stockfish.
  * @return array Array of analysis results, each containing FEN, bestmove, score, etc.
  */
-function analyzeFens(array $fens, int $depth, int $multipv): array
+function analyzeFens(array $fens, int $depth, int $multipv, bool $chess960 = false): array
 {
-    $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv);
+    $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv, $chess960);
     $results = [];
 
     foreach ($fens as $i => $fen) {
@@ -187,9 +187,10 @@ try {
 
         $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 1;
         $multipv = max(1, min(5, $multipv));
+        $chess960 = isset($request['chess960']) && (bool)$request['chess960'];
 
         set_time_limit(0); // Batch analysis can take time
-        $positions = analyzeFens($cleanFens, $depth, $multipv);
+        $positions = analyzeFens($cleanFens, $depth, $multipv, $chess960);
 
         jsonResponse([
             'success'   => true,
@@ -218,11 +219,12 @@ try {
     if ($movetime !== null) $depth = null;
     $multipv = isset($request['multipv']) ? (int) $request['multipv'] : 1;
     $multipv = max(1, min(5, $multipv));
+    $chess960 = isset($request['chess960']) && (bool)$request['chess960'];
 
     set_time_limit(0);
     $stream = (isset($request['stream']) && ($request['stream'] === true || $request['stream'] === '1' || $request['stream'] === 1)) || (isset($_GET['stream']) && $_GET['stream'] == '1');
 
-    $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv);
+    $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv, $chess960);
 
     if ($stream) {
         header("Access-Control-Allow-Origin: *");

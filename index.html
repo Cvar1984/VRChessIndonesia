@@ -529,8 +529,10 @@
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
                                         title="Lichess Accuracy Metric">-</span>
                                 </div>
-                                <div id="statsBlack"
-                                    style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span id="clockBlack" style="background:#222; border:1px solid #444; padding:2px 8px; border-radius:4px; font-family:var(--font-mono); font-size:1.1rem; display:none;"></span>
+                                    <div id="statsBlack" style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
+                                </div>
                             </div>
 
                             <!-- Eval Bar + Board -->
@@ -563,8 +565,10 @@
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
                                         title="Lichess Accuracy Metric">-</span>
                                 </div>
-                                <div id="statsWhite"
-                                    style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span id="clockWhite" style="background:#222; border:1px solid #444; padding:2px 8px; border-radius:4px; font-family:var(--font-mono); font-size:1.1rem; display:none;"></span>
+                                    <div id="statsWhite" style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
+                                </div>
                             </div>
 
                             <!-- Board Controls -->
@@ -1942,6 +1946,8 @@
                     let analysisBoard = null;
                     let analysisChess = null;
                     let mainPositions = [];       // Backup of the main PGN line
+                    let isCurrentGame960 = false; // Flag for 960 mode
+                    let initialClock = null;      // Extracted from TimeControl
                     let variantPositions = null;  // Backup of the active variant line
                     let analysisPositions = [];   // Currently active line [{fen, move_san, score, score_cp, bestmove, pv}]
                     let analysisHeaders = {};
@@ -2146,7 +2152,7 @@
                             const res = await fetch('/stockfish.php?stream=1', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ fen: fen, depth: depth, multipv: multipv, stream: true }),
+                                body: JSON.stringify({ fen: fen, depth: depth, multipv: multipv, stream: true, chess960: isCurrentGame960 }),
                                 signal: liveAnalysisAbort.signal
                             });
 
@@ -2521,32 +2527,132 @@
                         const depth = parseInt($('#liveDepthSelect')?.value) || 18;
                         const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
 
-                        // Parse PGN client-side to get FENs using chess.js
-                        let chess;
-                        try {
-                            chess = new window.Chess();
-                            // chess.js load_pgn
-                            if (!chess.load_pgn(pgn, { sloppy: true })) {
-                                toast('Format PGN tidak valid.', 'error');
-                                return;
+                        // Parse PGN client-side
+                        function parsePGNToMoves(pgnText) {
+                            const lines = pgnText.split('\n');
+                            let headers = {};
+                            let moveText = '';
+                            let inMoves = false;
+                            for (let line of lines) {
+                                line = line.trim();
+                                if (line.startsWith('[')) {
+                                    if (inMoves) break; // Break on second game
+                                    const match = line.match(/\[(\w+)\s+"([^"]*)"\]/);
+                                    if (match) headers[match[1]] = match[2];
+                                } else if (line !== '') {
+                                    inMoves = true;
+                                    moveText += line + ' ';
+                                }
                             }
-                        } catch (err) {
-                            toast('Gagal parse PGN: ' + err.message, 'error');
+                            moveText = moveText.replace(/\d+\.{1,3}/g, ' ');
+                            moveText = moveText.replace(/1-0|0-1|1\/2-1\/2|\*/g, ' ');
+                            
+                            const regex = /(\{[^}]*\})|([a-zA-Z0-9\-+=#]+)/g;
+                            let match;
+                            let tokens = [];
+                            while ((match = regex.exec(moveText)) !== null) {
+                                tokens.push(match[0]);
+                            }
+                            
+                            let moves = [];
+                            let currentMove = null;
+                            for (let t of tokens) {
+                                if (t.startsWith('{')) {
+                                    if (currentMove) {
+                                        const clkMatch = t.match(/\[%clk\s+([\d:]+)\]/);
+                                        if (clkMatch) currentMove.clock = clkMatch[1];
+                                    }
+                                } else {
+                                    currentMove = { san: t, clock: null };
+                                    moves.push(currentMove);
+                                }
+                            }
+                            return { headers, moves };
+                        }
+
+                        const parsed = parsePGNToMoves(pgn);
+                        analysisHeaders = parsed.headers;
+                        const movesParsed = parsed.moves;
+                        isCurrentGame960 = analysisHeaders.Variant && (analysisHeaders.Variant.toLowerCase() === 'fischerandom' || analysisHeaders.Variant.toLowerCase() === 'chess960');
+                        
+                        function getInitialClock(tc) {
+                            if (!tc || tc === '?' || tc === '-') return null;
+                            let base = parseInt(tc.split('+')[0]);
+                            if (isNaN(base)) return null;
+                            let isMinutes = base <= 99; 
+                            let totalSeconds = isMinutes ? base * 60 : base;
+                            let h = Math.floor(totalSeconds / 3600);
+                            let m = Math.floor((totalSeconds % 3600) / 60);
+                            let s = totalSeconds % 60;
+                            if (h > 0) return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                            return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                        }
+                        initialClock = getInitialClock(analysisHeaders.TimeControl);
+                        
+                        let chess = new window.Chess();
+                        let startFen = analysisHeaders.FEN || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+                        
+                        if (isCurrentGame960) {
+                            // Replace X-FEN castling rights with pseudo-FEN KQkq so chess.js can load it
+                            const parts = startFen.split(' ');
+                            if (parts.length >= 3 && !parts[2].match(/^[KkQq-]+$/)) {
+                                parts[2] = 'KQkq';
+                                startFen = parts.join(' ');
+                            }
+                        }
+                        
+                        if (!chess.load(startFen)) {
+                            toast('Format FEN tidak valid.', 'error');
                             return;
                         }
 
-                        // Extract headers
-                        analysisHeaders = chess.header() || {};
-                        const moves = chess.history({ verbose: true });
-                        analysisMovesSan = chess.history();
+                        const fenList = [chess.fen()];
+                        analysisMovesSan = [];
 
-                        // Build FEN list: start + after each move
-                        const fenList = [];
-                        const tempChess = new window.Chess();
-                        fenList.push(tempChess.fen());
-                        for (const move of moves) {
-                            tempChess.move(move);
-                            fenList.push(tempChess.fen());
+                        for (let i = 0; i < movesParsed.length; i++) {
+                            const move = movesParsed[i];
+                            let san = move.san;
+                            if (isCurrentGame960 && (san === 'O-O' || san === 'O-O-O')) {
+                                // Manual 960 castling workaround
+                                const fen = chess.fen();
+                                const parts = fen.split(' ');
+                                let board = parts[0], turn = parts[1], castling = parts[2];
+                                const ep = '-'; let halfmove = 0; let fullmove = parseInt(parts[5], 10);
+                                const isWhite = turn === 'w';
+                                const rankIdx = isWhite ? 7 : 0;
+                                let rows = board.split('/');
+                                let rankStr = rows[rankIdx];
+                                let expanded = '';
+                                for(let j=0; j<rankStr.length; j++) {
+                                    if(/[1-8]/.test(rankStr[j])) expanded += ' '.repeat(parseInt(rankStr[j]));
+                                    else expanded += rankStr[j];
+                                }
+                                const kingChar = isWhite ? 'K' : 'k';
+                                const rookChar = isWhite ? 'R' : 'r';
+                                const kIndex = expanded.indexOf(kingChar);
+                                let rIndex = san === 'O-O' ? expanded.indexOf(rookChar, kIndex + 1) : expanded.lastIndexOf(rookChar, kIndex - 1);
+                                let arr = expanded.split('');
+                                arr[kIndex] = ' '; arr[rIndex] = ' ';
+                                if (san === 'O-O') { arr[6] = kingChar; arr[5] = rookChar; }
+                                else { arr[2] = kingChar; arr[3] = rookChar; }
+                                expanded = arr.join('');
+                                let compressed = '', spaces = 0;
+                                for(let j=0; j<8; j++) {
+                                    if (expanded[j] === ' ') spaces++;
+                                    else { if (spaces > 0) compressed += spaces; spaces = 0; compressed += expanded[j]; }
+                                }
+                                if (spaces > 0) compressed += spaces;
+                                rows[rankIdx] = compressed;
+                                board = rows.join('/');
+                                if (isWhite) castling = castling.replace('K', '').replace('Q', '');
+                                else { castling = castling.replace('k', '').replace('q', ''); fullmove++; }
+                                if (castling === '') castling = '-';
+                                chess.load(`${board} ${turn === 'w' ? 'b' : 'w'} ${castling} ${ep} ${halfmove} ${fullmove}`);
+                            } else {
+                                chess.move(san, { sloppy: true });
+                            }
+                            fenList.push(chess.fen());
+                            analysisMovesSan.push(san);
                         }
 
                         const total = fenList.length;
@@ -2556,7 +2662,6 @@
                         $('#analysisCurrent').textContent = '0';
                         $('#analysisTotal').textContent = total;
                         $('#analysisProgressBar').style.width = '0%';
-                        $('#btnStartPgnAnalysis').disabled = true;
 
                         // Send batch to server (analyse in chunks of 20 to show progress)
                         analysisPositions = [];
@@ -2567,7 +2672,7 @@
                                 const res = await fetch('/stockfish.php', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ fens: chunk, depth: depth, multipv: multipv })
+                                    body: JSON.stringify({ fens: chunk, depth: depth, multipv: multipv, chess960: isCurrentGame960 })
                                 });
                                 const data = await res.json();
                                 if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
@@ -2577,6 +2682,7 @@
                                     analysisPositions.push({
                                         fen: pos.fen,
                                         move_san: globalIdx === 0 ? null : analysisMovesSan[globalIdx - 1],
+                                        clock: globalIdx === 0 ? null : (movesParsed[globalIdx - 1] ? movesParsed[globalIdx - 1].clock : null),
                                         score: pos.score,
                                         score_cp: pos.score_cp,
                                         score_type: pos.score_type,
@@ -2629,6 +2735,38 @@
                         const pos = analysisPositions[idx];
 
                         analysisChess.load(pos.fen);
+
+                        // Update player clocks
+                        let wClock = null, bClock = null;
+                        for (let i = idx; i >= 1; i--) {
+                            if (!wClock && i % 2 === 1 && analysisPositions[i].clock) wClock = analysisPositions[i].clock;
+                            if (!bClock && i % 2 === 0 && analysisPositions[i].clock) bClock = analysisPositions[i].clock;
+                            if (wClock && bClock) break;
+                        }
+                        if (!wClock) wClock = initialClock;
+                        if (!bClock) bClock = initialClock;
+                        
+                        if (!wClock) {
+                            for(let i=1; i<analysisPositions.length; i+=2) {
+                                if (analysisPositions[i].clock) { wClock = analysisPositions[i].clock; break; }
+                            }
+                        }
+                        if (!bClock) {
+                            for(let i=2; i<analysisPositions.length; i+=2) {
+                                if (analysisPositions[i].clock) { bClock = analysisPositions[i].clock; break; }
+                            }
+                        }
+                        const cw = $('#clockWhite');
+                        const cb = $('#clockBlack');
+                        if (cw && cb) {
+                            if (wClock) { cw.textContent = wClock; cw.style.display = 'inline-block'; } else cw.style.display = 'none';
+                            if (bClock) { cb.textContent = bClock; cb.style.display = 'inline-block'; } else cb.style.display = 'none';
+                            const turn = idx % 2 === 0 ? 'w' : 'b';
+                            cw.style.borderColor = turn === 'w' ? '#aaa' : '#444';
+                            cw.style.color = turn === 'w' ? '#fff' : '#888';
+                            cb.style.borderColor = turn === 'b' ? '#aaa' : '#444';
+                            cb.style.color = turn === 'b' ? '#fff' : '#888';
+                        }
 
                         analysisBoard.set({
                             fen: pos.fen,
@@ -2849,9 +2987,11 @@
                             const { text, color } = formatEvalCell(pos);
                             const evalHtml = `<span class="eval-score" style="font-size:0.65rem; margin-left:6px; color:${color}; font-family:var(--font-mono);">${text}</span>`;
                             
+                            const clockHtml = pos.clock ? `<span class="move-clock" style="font-size:0.6rem; color:#aaa; margin-left:4px; font-weight:normal; font-family:var(--font-mono);">(${pos.clock})</span>` : '';
+                            
                             return `<button class="analysis-move-btn ${varClass} ${isActive}" ${dataAttr} 
                                 style="background:none; border:none; color:#ddd; cursor:pointer; padding:4px 6px; border-radius:3px; display:inline-flex; align-items:center;"
-                                onclick="${onClick}">${pos.move_san || ''}${evalHtml}</button>`;
+                                onclick="${onClick}">${pos.move_san || ''}${clockHtml}${evalHtml}</button>`;
                         };
 
                         // 1. Render Main Line
