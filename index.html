@@ -538,14 +538,12 @@
                                 style="display:flex; gap:0; align-items:stretch; border-radius:6px; overflow:hidden; box-shadow:var(--shadow-lg); background: #2f2e2c;">
                                 <!-- Eval Bar (vertical) -->
                                 <div id="evalBarOuter"
-                                    style="width:24px; background:#302e2c; position:relative; display:flex; flex-direction:column; align-items:center;">
+                                    style="width:15px; background:#302e2c; position:relative; display:flex; flex-direction:column; align-items:center;">
                                     <div id="evalBarBlack" style="background:#302e2c; width:100%; flex:1;"
                                         title="Black advantage"></div>
                                     <div id="evalBarWhite"
                                         style="background:#fff; width:100%; transition: height 0.5s ease;"
                                         title="White advantage"></div>
-                                    <span id="evalBarLabel"
-                                        style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:0.6rem; color:#888; font-weight:800; white-space:nowrap; background:rgba(0,0,0,0.65); padding:2px 4px; border-radius:3px; pointer-events:none;">0.00</span>
                                 </div>
                                 <!-- Board -->
                                 <div style="flex:1; position:relative; line-height: 0; aspect-ratio: 1 / 1;">
@@ -606,6 +604,12 @@
                                     </div>
                                 </div>
 
+                                <!-- Prominent Opening Display -->
+                                <div id="openingInfo" style="display:flex; align-items:center; gap:12px; background:linear-gradient(90deg, #242b1f, #1e231b); padding:12px 20px; border-bottom: 2px solid #334024; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 10;">
+                                    <span style="font-size:0.9rem; font-weight:800; background:#7fa650; color:#fff; padding:4px 10px; border-radius:4px; font-family:var(--font-mono); box-shadow: 0 2px 4px rgba(0,0,0,0.2);" id="openingEco">A00</span>
+                                    <span style="font-size:1.0rem; color:#a5d6a7; font-weight:700; letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(0,0,0,0.5);" id="openingName">Starting Position</span>
+                                </div>
+
                                 <!-- Evaluation & Engine Lines -->
                                 <div style="padding:16px 20px; display:flex; flex-direction:column; gap:10px;">
                                     <!-- Live Engine Settings Toolbar -->
@@ -637,7 +641,6 @@
                                             ⚡ Live Engine: ON
                                         </button>
                                     </div>
-
                                     <div style="display:flex; justify-content:space-between; align-items:center;">
                                         <div style="display:flex; align-items:baseline; gap:12px;">
                                             <span id="posEvalScore"
@@ -651,11 +654,11 @@
                                         </div>
                                     </div>
                                     <div
-                                        style="display:flex; gap:10px; align-items:center; background:#1f1e1b; padding:8px 12px; border-radius:4px; border: 1px solid #33312e;">
+                                        style="display:flex; gap:10px; align-items:flex-start; padding-top:4px;">
                                         <span id="posEvalBest"
-                                            style="font-family:var(--font-mono); font-weight:800; font-size:0.9rem; color:#fff; min-width:45px;">—</span>
+                                            style="font-family:var(--font-mono); font-weight:800; font-size:0.85rem; color:#fff; min-width:45px;">—</span>
                                         <div id="posEvalPv"
-                                            style="font-size:0.8rem; color:#888; font-family:var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            style="font-size:0.8rem; color:#888; font-family:var(--font-sans); line-height:1.4;">
                                             —</div>
                                     </div>
                                 </div>
@@ -947,6 +950,7 @@
                 let activeApiToken = '';
                 let currentAdminName = '';
                 let playersCache = [];
+                let openingsDatabase = {};
                 let matchesCache = [];
                 let tokensCache = [];
                 let adminsCache = [];
@@ -2212,12 +2216,14 @@
                                                 ? (scoreDisplay > 0.2 ? '#fff' : scoreDisplay < -0.2 ? 'var(--accent-red)' : '#fff')
                                                 : '#fff';
                                             updateEvalBar(scoreCp);
-                                            $('#evalBarLabel').textContent = display;
                                         }
 
                                         if ($('#posEvalDepth')) $('#posEvalDepth').textContent = data.depth || depth;
                                         $('#posEvalBest').textContent = data.bestmove || '—';
-                                        $('#posEvalPv').textContent = data.pv && data.pv.length ? data.pv.join(' ') : '—';
+                                        
+                                        // Limit PV display to avoid it taking up too much vertical space
+                                        const pvText = data.pv && data.pv.length ? data.pv.join(' ') : '—';
+                                        $('#posEvalPv').textContent = pvText;
 
                                         // Update arrow on board live as engine calculates!
                                         drawBestMoveArrow();
@@ -2656,22 +2662,53 @@
                                 ? (sc > 0.2 ? '#fff' : sc < -0.2 ? 'var(--accent-red)' : '#fff')
                                 : '#fff';
                             updateEvalBar(pos.score_cp);
-                            $('#evalBarLabel').textContent = display;
                         }
                         $('#posEvalBest').textContent = pos.bestmove || '—';
-                        $('#posEvalPv').textContent = pos.pv && pos.pv.length ? pos.pv.join(' ') : '—';
+                        const pvText = pos.pv && pos.pv.length ? pos.pv.join(' ') : '—';
+                        $('#posEvalPv').textContent = pvText;
 
                         renderMoveList();
                         renderEvalChart();
                         drawBestMoveArrow();
                         drawMoveAnnotationOnBoard();
                         renderGameStats();
+                        updateOpeningUI(idx);
 
                         if (isLiveEngineEnabled && analysisPositions[idx]) {
                             analyzeLivePosition(idx, pos.fen);
                         } else {
                             if (liveAnalysisAbort) liveAnalysisAbort.abort();
                             updateEngineStreamBadge(false);
+                        }
+                    }
+
+                    function updateOpeningUI(idx) {
+                        if (idx === 0) {
+                            $('#openingInfo').style.display = 'flex';
+                            $('#openingEco').textContent = 'Starting';
+                            $('#openingName').textContent = 'Initial Position';
+                            return;
+                        }
+
+                        let longestMatch = null;
+                        for (let i = 1; i <= idx; i++) {
+                            if (analysisPositions[i] && analysisPositions[i].fen) {
+                                const parts = analysisPositions[i].fen.split(' ');
+                                if (parts.length >= 4) {
+                                    const fenStripped = parts.slice(0, 4).join(' ');
+                                    if (openingsDatabase[fenStripped]) {
+                                        longestMatch = openingsDatabase[fenStripped];
+                                    }
+                                }
+                            }
+                        }
+
+                        if (longestMatch) {
+                            $('#openingInfo').style.display = 'flex';
+                            $('#openingEco').textContent = longestMatch.eco;
+                            $('#openingName').textContent = longestMatch.name;
+                        } else {
+                            $('#openingInfo').style.display = 'none';
                         }
                     }
 
@@ -2745,9 +2782,10 @@
 
                     function renderMoveList(liveUpdate = false) {
                         const container = $('#moveListContainer');
+                        const savedScrollTop = container.scrollTop;
 
-                        // ── LIVE PATCH: avoid full innerHTML rebuild during streaming ──
-                        if (liveUpdate && container.querySelector('table')) {
+                        // ── LIVE PATCH: avoid full rebuild during streaming ──
+                        if (liveUpdate && container.querySelector('.lichess-move-list')) {
                             // 1. Update active class on move buttons
                             container.querySelectorAll('.analysis-move-btn').forEach(btn => {
                                 const mainIdx = btn.dataset.mainIdx !== undefined
@@ -2761,47 +2799,35 @@
                                 btn.classList.toggle('active', isActive);
                             });
 
-                            // 2. Patch eval cells in-place (every td after a move button)
-                            container.querySelectorAll('tr').forEach(row => {
-                                const cells = row.querySelectorAll('td');
-                                // Row layout: [#] [move-btn] [eval] [move-btn] [eval]
-                                // or variant: [#] [move-btn] [eval] [move-btn] [eval]
-                                [[1, 2], [3, 4]].forEach(([btnCol, evalCol]) => {
-                                    const btnCell = cells[btnCol];
-                                    const evalCell = cells[evalCol];
-                                    if (!btnCell || !evalCell) return;
-                                    const btn = btnCell.querySelector('.analysis-move-btn');
-                                    if (!btn) return;
-                                    const mainIdx = btn.dataset.mainIdx !== undefined
-                                        ? parseInt(btn.dataset.mainIdx, 10) : null;
-                                    const varIdx  = btn.dataset.varIdx  !== undefined
-                                        ? parseInt(btn.dataset.varIdx,  10) : null;
-                                    const idx = mainIdx !== null ? mainIdx : varIdx;
-                                    if (idx === null) return;
-                                    const srcArr = mainIdx !== null ? mainPositions : analysisPositions;
-                                    const pos = srcArr[idx];
-                                    if (!pos) return;
-                                    const { text, color } = formatEvalCell(pos);
-                                    if (evalCell.textContent !== text) evalCell.textContent = text;
-                                    if (evalCell.style.color !== color) evalCell.style.color = color;
-                                });
+                            // 2. Patch eval cells in-place
+                            container.querySelectorAll('.analysis-move-btn').forEach(btn => {
+                                const mainIdx = btn.dataset.mainIdx !== undefined
+                                    ? parseInt(btn.dataset.mainIdx, 10) : null;
+                                const varIdx  = btn.dataset.varIdx  !== undefined
+                                    ? parseInt(btn.dataset.varIdx,  10) : null;
+                                const idx = mainIdx !== null ? mainIdx : varIdx;
+                                if (idx === null) return;
+                                
+                                const srcArr = mainIdx !== null ? mainPositions : analysisPositions;
+                                const pos = srcArr[idx];
+                                if (!pos) return;
+                                
+                                const { text, color } = formatEvalCell(pos);
+                                let evalSpan = btn.querySelector('.eval-score');
+                                if (!evalSpan) {
+                                    evalSpan = document.createElement('span');
+                                    evalSpan.className = 'eval-score';
+                                    btn.appendChild(evalSpan);
+                                }
+                                if (evalSpan.textContent !== text) evalSpan.textContent = text;
+                                if (evalSpan.style.color !== color) evalSpan.style.color = color;
                             });
 
-                            // 3. Scroll active into view without smooth animation (prevents jitter)
-                            const activeBtn = container.querySelector('.analysis-move-btn.active');
-                            if (activeBtn) {
-                                activeBtn.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-                            }
                             return;  // skip full rebuild
                         }
 
-                        // ── FULL REBUILD (navigation, initial render, stream end) ──
-                        let html = `<table>`;
-                        html += `<tr><th style="padding:8px; text-align:left; color:#888; font-weight:600; width:10%;">#</th>
-                                     <th style="padding:8px; text-align:left; color:#ccc;">White</th>
-                                     <th style="padding:8px; text-align:left; color:#888;">Eval</th>
-                                     <th style="padding:8px; text-align:left; color:#ccc;">Black</th>
-                                     <th style="padding:8px; text-align:left; color:#888;">Eval</th></tr>`;
+                        // ── FULL REBUILD ──
+                        let html = `<div class="lichess-move-list" style="display:flex; flex-wrap:wrap; align-content:flex-start; padding:8px; font-size:0.9rem; color:#b3b3b2;">`;
 
                         // Find divergence point
                         let splitIdx = mainPositions.length;
@@ -2811,8 +2837,22 @@
                                 break;
                             }
                         }
-                        // If no divergence but analysisPositions is shorter, it hasn't technically diverged, 
-                        // but we are just walking back on the main line. splitIdx will be analysisPositions.length
+
+                        // Helper to render a single move button
+                        const renderMoveBtn = (idx, pos, isMain) => {
+                            if (!pos) return '';
+                            const isActive = (currentMoveIdx === idx && analysisPositions[idx] && analysisPositions[idx].fen === pos.fen) ? 'active' : '';
+                            const varClass = isMain ? '' : 'variant-move';
+                            const dataAttr = isMain ? `data-main-idx="${idx}"` : `data-var-idx="${idx}"`;
+                            const onClick = isMain ? `window.gotoMainMove(${idx})` : `window.gotoVariantMove(${idx})`;
+                            
+                            const { text, color } = formatEvalCell(pos);
+                            const evalHtml = `<span class="eval-score" style="font-size:0.65rem; margin-left:6px; color:${color}; font-family:var(--font-mono);">${text}</span>`;
+                            
+                            return `<button class="analysis-move-btn ${varClass} ${isActive}" ${dataAttr} 
+                                style="background:none; border:none; color:#ddd; cursor:pointer; padding:4px 6px; border-radius:3px; display:inline-flex; align-items:center;"
+                                onclick="${onClick}">${pos.move_san || ''}${evalHtml}</button>`;
+                        };
 
                         // 1. Render Main Line
                         for (let i = 1; i < mainPositions.length; i += 2) {
@@ -2820,43 +2860,23 @@
                             const white = mainPositions[i];
                             const black = mainPositions[i + 1];
 
-                            const wEval = formatEvalCell(white);
-                            const bEval = black ? formatEvalCell(black) : { text: '', color: '' };
-
-                            let wClass = (currentMoveIdx === i && analysisPositions[i] && analysisPositions[i].fen === mainPositions[i].fen) ? 'active' : '';
-                            let bClass = (currentMoveIdx === i + 1 && analysisPositions[i + 1] && analysisPositions[i + 1].fen === mainPositions[i + 1].fen) ? 'active' : '';
-
-                            html += `<tr>
-                                <td style="padding:8px; color:#666; font-weight:600;">${moveNum}.</td>
-                                <td>
-                                    <button class="analysis-move-btn ${wClass}" data-main-idx="${i}" 
-                                        style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
-                                        onclick="window.gotoMainMove(${i})">${white.move_san || ''}</button>
-                                </td>
-                                <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
-
+                            html += `<div style="width:100%; display:flex; align-items:center; margin-bottom:2px;">`;
+                            html += `<div style="width:35px; color:#666; text-align:right; margin-right:8px; font-size:0.85rem;">${moveNum}.</div>`;
+                            html += `<div style="flex:1; display:flex;">`;
+                            html += renderMoveBtn(i, white, true);
                             if (black) {
-                                html += `<td>
-                                    <button class="analysis-move-btn ${bClass}" data-main-idx="${i + 1}"
-                                        style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
-                                        onclick="window.gotoMainMove(${i + 1})">${black.move_san || ''}</button>
-                                </td>
-                                <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
-                            } else {
-                                html += `<td></td><td></td>`;
+                                html += `<div style="width:12px;"></div>`; // spacer
+                                html += renderMoveBtn(i + 1, black, true);
                             }
-                            html += `</tr>`;
+                            html += `</div></div>`;
                         }
 
                         // 2. Render Variant (if deviated)
                         if (splitIdx < analysisPositions.length) {
-                            html += `<tr><td colspan="5"><div style="background:rgba(255,170,0,0.1); padding:4px 8px; margin:4px 0; border-left:3px solid orange; color:orange; font-size:0.75rem;"><strong>Variant Aktif</strong></div></td></tr>`;
+                            html += `<div style="width:100%; background:rgba(255,170,0,0.1); padding:4px 8px; margin:8px 0; border-left:3px solid orange; color:orange; font-size:0.75rem;"><strong>Variant Aktif</strong></div>`;
+                            html += `<div style="width:100%; display:flex; flex-wrap:wrap; gap:4px; padding-left:8px;">`;
 
-                            // Variant moves (we list them sequentially, adapting move numbers)
-                            let currentTurn = splitIdx % 2 !== 0 ? 'w' : 'b'; // splitIdx is the index in analysisPositions
-                            let moveNum = Math.ceil(splitIdx / 2);
-
-                            // To make rendering easy, we step through the variant indices
+                            // Variant moves inline
                             for (let i = splitIdx; i < analysisPositions.length;) {
                                 let moveNumStr = Math.ceil(i / 2) + '.';
                                 let white = null, black = null;
@@ -2871,57 +2891,39 @@
                                         bIdx = i;
                                         i++;
                                     }
-                                } else { // Black move (variant started on black's turn)
+                                } else { // Black move
                                     moveNumStr += '..';
                                     black = analysisPositions[i];
                                     bIdx = i;
                                     i++;
                                 }
 
-                                const wEval = white ? formatEvalCell(white) : { text: '', color: '' };
-                                const bEval = black ? formatEvalCell(black) : { text: '', color: '' };
-
-                                let wClass = (wIdx !== null && currentMoveIdx === wIdx) ? 'active' : '';
-                                let bClass = (bIdx !== null && currentMoveIdx === bIdx) ? 'active' : '';
-
-                                html += `<tr>
-                                    <td style="padding:8px; color:#ff9e00; font-weight:600;">${moveNumStr}</td>`;
-
+                                if (white || moveNumStr.includes('..')) {
+                                    html += `<span style="color:#ff9e00; margin-right:4px; display:inline-flex; align-items:center; font-size:0.85rem;">${moveNumStr}</span>`;
+                                }
+                                
                                 if (white) {
-                                    html += `<td>
-                                        <button class="analysis-move-btn variant-move ${wClass}" data-var-idx="${wIdx}" 
-                                            style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
-                                            onclick="window.gotoVariantMove(${wIdx})">${white.move_san || ''}</button>
-                                    </td>
-                                    <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${wEval.color};">${wEval.text}</td>`;
-                                } else {
-                                    html += `<td></td><td></td>`;
+                                    html += renderMoveBtn(wIdx, white, false);
                                 }
-
                                 if (black) {
-                                    html += `<td>
-                                        <button class="analysis-move-btn variant-move ${bClass}" data-var-idx="${bIdx}" 
-                                            style="background:none;border:none;color:#ddd;cursor:pointer;width:100%;text-align:left;"
-                                            onclick="window.gotoVariantMove(${bIdx})">${black.move_san || ''}</button>
-                                    </td>
-                                    <td style="padding:8px; font-family:var(--font-mono); font-size:0.75rem; color:${bEval.color};">${bEval.text}</td>`;
-                                } else {
-                                    html += `<td></td><td></td>`;
+                                    if (white) html += `<span style="width:4px;"></span>`;
+                                    html += renderMoveBtn(bIdx, black, false);
                                 }
-                                html += `</tr>`;
                             }
+                            html += `</div>`;
                         }
 
-                        html += `</table>`;
+                        html += `</div>`;
                         container.innerHTML = html;
+                        container.scrollTop = savedScrollTop;
 
                         // CSS for active move highlight
                         if (!document.getElementById('analysisMoveStyle')) {
                             const s = document.createElement('style');
                             s.id = 'analysisMoveStyle';
                             s.textContent = `.analysis-move-btn:hover{background:#363430 !important;}
-                                .analysis-move-btn.active{background:#45433d !important;color:white!important; border-bottom: 2px solid #7fa650 !important;}
-                                .analysis-move-btn.variant-move.active{background:#45433d !important;color:white!important; border-bottom: 2px solid #ff9e00 !important;}
+                                .analysis-move-btn.active{background:#363430 !important; color:white!important; font-weight:700;}
+                                .analysis-move-btn.variant-move.active{background:#45433d !important; color:white!important; border-bottom: 2px solid #ff9e00 !important;}
                                 .ann-badge { font-size: 0.6rem; padding: 2px 4px; border-radius: 4px; margin-left: 6px; font-weight: 800; text-transform: uppercase; display: inline-block; vertical-align: middle; }
                                 .ann-sigma { background: #06b6d4; color: #fff; }
                                 .ann-awesome { background: #22c55e; color: #fff; }
@@ -2933,12 +2935,6 @@
                                 .ann-bad { background: #ef4444; color: #fff; }
                                 .ann-clown { background: #991b1b; color: #fff; }`;
                             document.head.appendChild(s);
-                        }
-
-                        // Scroll active into view (smooth only on full rebuild / navigation)
-                        const activeBtn = container.querySelector('.analysis-move-btn.active');
-                        if (activeBtn) {
-                            activeBtn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                         }
                     }
 
@@ -3044,10 +3040,18 @@
                 }
 
                 // ── Initialize App ──
-                function init() {
+                async function init() {
                     setupEvents();
                     checkConnection();
+                    try {
+                        const res = await fetch('./data/openings_fen.json');
+                        openingsDatabase = await res.json();
+                    } catch (e) {
+                        console.error('Failed to load openings database:', e);
+                    }
                 }
+
+
 
                 if (document.readyState === 'loading') {
                     document.addEventListener('DOMContentLoaded', init);

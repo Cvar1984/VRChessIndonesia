@@ -1365,6 +1365,38 @@ body::before {
     }
 }
 
+/* Wide foldables have enough room for a compact board and analysis sidebar.
+   Keep the move history beside the board instead of stacking it underneath. */
+@media (min-width: 600px) and (max-width: 768px) {
+    .chesscom-layout {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 16px !important;
+    }
+
+    .chesscom-layout > div:first-child {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        position: sticky !important;
+        top: 20px !important;
+    }
+
+    .chesscom-layout > div:last-child {
+        flex: 0 0 280px !important;
+        width: 280px !important;
+        max-width: 280px !important;
+        height: calc(100vh - 40px) !important;
+        position: sticky !important;
+        top: 20px !important;
+    }
+
+    #moveListContainer {
+        max-height: none !important;
+    }
+}
+
 @media (max-width: 480px) {
     .app-wrapper {
         padding: 0 12px;
@@ -1409,4 +1441,3 @@ body::before {
     border-radius: 12px;
     transition: all var(--transition-fast);
 }
-
