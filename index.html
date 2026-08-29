@@ -2157,10 +2157,8 @@
                             clearArrows();
                         });
 
-                        // Export PGN
-                        $('#btnExportPgn').addEventListener('click', () => {
+                        function getCurrentPgnText() {
                             let pgnText = $('#pgnInput').value.trim();
-
                             // If empty (e.g., from Free Play), attempt to generate from moves
                             if (!pgnText && analysisPositions.length > 1) {
                                 try {
@@ -2176,6 +2174,12 @@
                                     console.error('Failed to generate PGN', e);
                                 }
                             }
+                            return pgnText;
+                        }
+
+                        // Export PGN
+                        $('#btnExportPgn').addEventListener('click', () => {
+                            let pgnText = getCurrentPgnText();
 
                             if (!pgnText) {
                                 toast('No PGN available to export.', 'error');
@@ -2230,7 +2234,13 @@
                                 btn.innerHTML = '⏳ Saving...';
                                 btn.disabled = true;
 
-                                const pgn = $('#pgnInput').value.trim();
+                                const pgn = getCurrentPgnText();
+                                if (!pgn) {
+                                    toast('No moves to save.', 'error');
+                                    btn.innerHTML = origText;
+                                    btn.disabled = false;
+                                    return;
+                                }
 
                                 const res = await fetch('/index.php?action=save-analysis', {
                                     method: 'POST',
@@ -2913,6 +2923,17 @@
                         renderMoveList();
                         renderEvalChart();
                         gotoMove(0);
+
+                        // Auto-save back to DB if this was a shared link that needed re-analysis
+                        if (currentAnalysisId && mainPositions.length > 1) {
+                            try {
+                                fetch('/index.php?action=update-analysis&id=' + encodeURIComponent(currentAnalysisId), {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ analysis: mainPositions })
+                                });
+                            } catch (e) { console.error('Auto-save failed:', e); }
+                        }
                     }
 
                     function gotoMove(idx) {
@@ -3422,6 +3443,7 @@
                                     toast('Analysis loaded!', 'success');
                                 } else if (data.success && data.data && data.data.pgn) {
                                     // Fallback: analysis not saved, just populate PGN and re-run
+                                    currentAnalysisId = analysisId;
                                     $('#pgnInput').value = data.data.pgn;
                                     toast('Re-analyzing (no cached data)…', 'info');
                                     setTimeout(() => { $('#btnStartPgnAnalysis').click(); }, 100);
