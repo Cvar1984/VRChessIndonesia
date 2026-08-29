@@ -212,6 +212,11 @@
                     <span class="tab-btn__icon">🧠</span>
                     <span class="tab-btn__label">Analisis (Stockfish)</span>
                 </button>
+                <button class="tab-btn" data-tab="analyses-history" id="tabBtnAnalysesHistory">
+                    <span class="tab-btn__icon">📚</span>
+                    <span class="tab-btn__label">Daftar Analisis</span>
+                    <span class="tab-btn__count" id="analysisCount">0</span>
+                </button>
             </nav>
 
             <!-- ═══════════════════════════════════════════════════════ -->
@@ -722,6 +727,39 @@
 
             </section>
 
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- TAB 6: Daftar Analisis                                  -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <section class="tab-content" id="tab-analyses-history">
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">📚 Riwayat Analisis PGN</div>
+                        <button class="btn btn--secondary btn--sm" id="btnRefreshAnalyses" title="Refresh riwayat"
+                            type="button">↻ Refresh</button>
+                    </div>
+
+                    <!-- Search Filter for Analyses -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; padding: 0 16px; flex-wrap: wrap;">
+                        <div class="search-wrapper" style="flex: 1; min-width: 140px; margin-bottom: 0;">
+                            <span class="search-wrapper__icon" style="font-size: 0.9rem;">🔍</span>
+                            <input type="text" class="search-input" id="analysisSearch"
+                                placeholder="Cari analisis (nama, event, opening, elo, title, w:nama)..."
+                                autocomplete="off"
+                                title="Filter: w:nama (putih), b:nama (hitam), elo:2600 (rating), title:GM (gelar)">
+                        </div>
+                        <button class="btn btn--secondary" id="btnResetAnalysisFilters"
+                            style="padding: 0 16px;">Reset</button>
+                    </div>
+
+                    <div id="analysesContainer">
+                        <div class="empty-state">
+                            <div class="empty-state__icon">📚</div>
+                            <div class="empty-state__text">Belum ada analisis tersimpan</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- ── Footer ── -->
             <footer class="app-footer">
                 VRChess Indonesia &copy; 2026 — Built with ♥ for the Indonesian Chess Community
@@ -1068,6 +1106,9 @@
                         $('#authBadge').className = 'auth-badge admin-only';
                         $('#authBadge').textContent = '';
                     }
+                    // Re-render lists so admin-only buttons (delete) appear/disappear immediately
+                    renderMatches();
+                    renderAnalyses();
                 }
 
                 // ── Server Connection Health Check ──
@@ -1087,6 +1128,9 @@
                             $('#adminStatPlayers').textContent = playersCache.length;
                             renderLeaderboard();
                             await fetchMatches(true);
+                            if (typeof fetchAnalyses === 'function') {
+                                await fetchAnalyses(true);
+                            }
                         } else {
                             setOffline();
                         }
@@ -1469,6 +1513,280 @@
 
                     container.innerHTML = html;
                 }
+
+                // ==========================================
+                // ANALYSES HISTORY LIST
+                // ==========================================
+
+                let allAnalyses = [];
+
+                async function fetchAnalyses(silent = false) {
+                    try {
+                        const res = await apiCall('/index.php?action=get-analyses');
+                        if (res.success) {
+                            allAnalyses = res.analyses || [];
+                            if ($('#analysisCount')) {
+                                $('#analysisCount').textContent = allAnalyses.length;
+                            }
+                            renderAnalyses();
+                        }
+                    } catch (err) {
+                        console.error('Gagal memuat analisis', err);
+                    }
+                }
+
+                function renderAnalyses() {
+                    const container = $('#analysesContainer');
+                    if (!container) return;
+
+                    const rawQuery = $('#analysisSearch') ? $('#analysisSearch').value.toLowerCase().trim() : '';
+                    let analyses = [...allAnalyses];
+
+                    if (rawQuery) {
+                        const tokens = rawQuery.split(/\s+/);
+                        tokens.forEach(token => {
+                            if (token.startsWith('white:') || token.startsWith('w:')) {
+                                const val = token.replace(/^(white|w):/, '');
+                                analyses = analyses.filter(an => {
+                                    if (!an.headers) return false;
+                                    const wKey = Object.keys(an.headers).find(k => k.toLowerCase() === 'white');
+                                    const white = wKey ? an.headers[wKey] : '';
+                                    return white.toLowerCase().includes(val);
+                                });
+                            } else if (token.startsWith('black:') || token.startsWith('b:')) {
+                                const val = token.replace(/^(black|b):/, '');
+                                analyses = analyses.filter(an => {
+                                    if (!an.headers) return false;
+                                    const bKey = Object.keys(an.headers).find(k => k.toLowerCase() === 'black');
+                                    const black = bKey ? an.headers[bKey] : '';
+                                    return black.toLowerCase().includes(val);
+                                });
+                            } else if (token.startsWith('elo:') || token.startsWith('rating:')) {
+                                const val = token.replace(/^(elo|rating):/, '');
+                                analyses = analyses.filter(an => {
+                                    if (!an.headers) return false;
+                                    const wEloKey = Object.keys(an.headers).find(k => k.toLowerCase() === 'whiteelo');
+                                    const bEloKey = Object.keys(an.headers).find(k => k.toLowerCase() === 'blackelo');
+                                    const wElo = wEloKey ? an.headers[wEloKey] : '';
+                                    const bElo = bEloKey ? an.headers[bEloKey] : '';
+                                    return wElo.toLowerCase().includes(val) || bElo.toLowerCase().includes(val);
+                                });
+                            } else if (token.startsWith('title:')) {
+                                const val = token.replace(/^title:/, '');
+                                analyses = analyses.filter(an => {
+                                    if (!an.headers) return false;
+                                    const wTitleKey = Object.keys(an.headers).find(k => k.toLowerCase() === 'whitetitle');
+                                    const bTitleKey = Object.keys(an.headers).find(k => k.toLowerCase() === 'blacktitle');
+                                    const wTitle = wTitleKey ? an.headers[wTitleKey] : '';
+                                    const bTitle = bTitleKey ? an.headers[bTitleKey] : '';
+                                    return wTitle.toLowerCase().includes(val) || bTitle.toLowerCase().includes(val);
+                                });
+                            } else {
+                                analyses = analyses.filter(an => {
+                                    if (!an.headers) return false;
+                                    return Object.entries(an.headers).some(([k, v]) =>
+                                        k.toLowerCase().includes(token) || String(v).toLowerCase().includes(token)
+                                    );
+                                });
+                            }
+                        });
+                    }
+
+                    if (analyses.length === 0) {
+                        if (allAnalyses.length === 0) {
+                            container.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-state__icon">📚</div>
+                                <div class="empty-state__text">Belum ada analisis tersimpan</div>
+                            </div>`;
+                        } else {
+                            container.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-state__icon">🔍</div>
+                                <div class="empty-state__text">Tidak ada analisis yang cocok dengan pencarian</div>
+                            </div>`;
+                        }
+                        return;
+                    }
+
+                    // ── TimeControl formatter ─────────────────────────────────────────
+                    // PGN standard: values in seconds (e.g. 900+10 = 15 min + 10s).
+                    // DGT/tournament style: base < 60 treated as minutes (e.g. 15+5 = 15 min + 5s).
+                    // Handles: "3600" → "60 min", "900+10" → "15 min + 10s", "15+5" → "15 min + 5s"
+                    function formatTimeControl(tc) {
+                        if (!tc || tc === '-' || tc === '?') return null;
+                        tc = tc.trim();
+
+                        // Pure number — always seconds per PGN standard
+                        if (/^\d+$/.test(tc)) {
+                            const secs = parseInt(tc, 10);
+                            if (secs === 0) return null;
+                            if (secs < 60) return `${secs}s`;
+                            const mins = secs / 60;
+                            return Number.isInteger(mins) ? `${mins} min` : `${(secs / 60).toFixed(1)} min`;
+                        }
+
+                        // base+increment: "900+10", "15+5", "15 + 5"
+                        const m = tc.match(/^(\d+)\s*\+\s*(\d+)$/);
+                        if (m) {
+                            const base = parseInt(m[1], 10);
+                            const inc = parseInt(m[2], 10);
+                            // If base < 60: DGT/tournament format — treat as minutes directly
+                            // If base >= 60: PGN seconds format — convert to minutes
+                            let baseFmt;
+                            if (base < 60) {
+                                baseFmt = `${base} min`;
+                            } else {
+                                const mins = base / 60;
+                                baseFmt = Number.isInteger(mins) ? `${mins} min` : `${(base / 60).toFixed(1)} min`;
+                            }
+                            return inc > 0 ? `${baseFmt} + ${inc}s` : baseFmt;
+                        }
+
+                        return tc; // unknown format — return as-is
+                    }
+
+                    // ── Result helpers ──────────────────────────────────────────────
+                    function resultLabel(r) {
+                        if (r === '1-0') return { text: 'White wins', color: 'rgba(220,220,220,0.18)', border: 'rgba(220,220,220,0.35)' };
+                        if (r === '0-1') return { text: 'Black wins', color: 'rgba(40,40,60,0.5)', border: 'rgba(120,120,180,0.3)' };
+                        if (r === '1/2-1/2') return { text: 'Draw', color: 'rgba(210,175,50,0.15)', border: 'rgba(210,175,50,0.35)' };
+                        return { text: r || '?', color: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.15)' };
+                    }
+
+                    // ── Card builder ────────────────────────────────────────────────
+                    let html = '';
+                    analyses.forEach(an => {
+                        const shareUrl = window.location.origin + window.location.pathname + '?analysis=' + an.id;
+
+                        // Admin delete button — always re-evaluated so it tracks login/logout instantly
+                        const adminBtn = isAdminState
+                            ? `<button class="btn btn--danger btn--xs" onclick="window.appDeleteAnalysis('${an.id}')" title="Hapus Analisis">🗑 Hapus</button>`
+                            : '';
+
+                        // ── Parse PGN headers ──
+                        let cardBody = '';
+                        if (an.headers && Object.keys(an.headers).length > 0) {
+                            const h = an.headers;
+
+                            // Case-insensitive, strips '-' and '?' placeholders
+                            const getTag = (key) => {
+                                const k = Object.keys(h).find(x => x.toLowerCase() === key.toLowerCase());
+                                const v = k ? h[k] : null;
+                                return (v && v !== '-' && v !== '?') ? v : null;
+                            };
+
+                            // Players
+                            const whiteName = getTag('White') || '?';
+                            const wTitle = getTag('WhiteTitle');
+                            const wElo = getTag('WhiteElo') || getTag('WhiteRating');
+
+                            const blackName = getTag('Black') || '?';
+                            const bTitle = getTag('BlackTitle');
+                            const bElo = getTag('BlackElo') || getTag('BlackRating');
+
+                            // Build player HTML: [TITLE] Name [Elo]
+                            const playerHtml = (name, title, elo) => {
+                                let s = '';
+                                if (title) s += `<span style="color:#d4af37;font-weight:900;font-size:0.75rem;letter-spacing:.5px;margin-right:4px;vertical-align:middle;">${escHtml(title)}</span>`;
+                                s += `<span style="font-weight:600;">${escHtml(name)}</span>`;
+                                if (elo) s += ` <span style="display:inline-block;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.15);padding:0 5px;border-radius:3px;font-size:0.7rem;color:#bbb;vertical-align:middle;margin-left:3px;">${escHtml(elo)}</span>`;
+                                return s;
+                            };
+
+                            const result = getTag('Result') || '?';
+                            const rl = resultLabel(result);
+
+                            // Meta fields
+                            const opening = getTag('Opening') || getTag('ECO');
+                            const eventName = getTag('Event');
+                            const site = getTag('Site');
+                            const variant = getTag('Variant');
+                            const dateStr = getTag('Date');
+                            const round = getTag('Round');
+                            const timeFmt = formatTimeControl(getTag('TimeControl'));
+
+                            // Tags that are explicitly rendered above — everything else goes to "extra"
+                            const rendered = new Set([
+                                'white', 'black', 'result', 'opening', 'eco',
+                                'whiteelo', 'blackelo', 'whiterating', 'blackrating',
+                                'whitetitle', 'blacktitle',
+                                'event', 'site', 'variant', 'timecontrol', 'date', 'round',
+                                // Always hidden
+                                'fen', 'setup', 'epgn',
+                                'whitefideid', 'blackfideid',
+                                'gameid', 'game id',
+                            ]);
+                            const extras = Object.entries(h)
+                                .filter(([k, v]) => !rendered.has(k.toLowerCase()) && v && v !== '?' && v !== '-')
+                                .map(([k, v]) => `<span><b>${escHtml(k)}:</b> ${escHtml(v)}</span>`);
+
+                            // ── Card body HTML ──
+                            cardBody = `
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+
+                                <!-- Players row -->
+                                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:0.88rem;">
+                                    <span style="opacity:.6;font-size:0.8rem;">♚</span>
+                                    ${playerHtml(whiteName, wTitle, wElo)}
+                                    <span style="color:var(--text-secondary);font-size:0.75rem;font-style:italic;margin:0 2px;">vs</span>
+                                    <span style="opacity:.6;font-size:0.8rem;">♔</span>
+                                    ${playerHtml(blackName, bTitle, bElo)}
+                                    <span style="margin-left:auto;padding:2px 9px;background:${rl.color};border:1px solid ${rl.border};border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:.5px;white-space:nowrap;">${escHtml(rl.text)}</span>
+                                </div>
+
+                                <!-- Meta chips row -->
+                                <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.74rem;color:var(--text-secondary);">
+                                    ${eventName ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">🏆 ${escHtml(eventName)}</span>` : ''}
+                                    ${variant ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">♟ ${escHtml(variant)}</span>` : ''}
+                                    ${timeFmt ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">⏱ ${escHtml(timeFmt)}</span>` : ''}
+                                    ${dateStr ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">📅 ${escHtml(dateStr)}</span>` : ''}
+                                    ${round ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">R${escHtml(round)}</span>` : ''}
+                                    ${site ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">📍 ${escHtml(site)}</span>` : ''}
+                                    ${opening ? `<span style="background:rgba(80,120,255,0.08);border:1px solid rgba(80,120,255,0.2);border-radius:4px;padding:1px 7px;color:var(--accent-primary);">📖 ${escHtml(opening)}</span>` : ''}
+                                </div>
+
+                                ${extras.length > 0 ? `<div style="font-size:0.7rem;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:6px;opacity:.75;">${extras.join('')}</div>` : ''}
+                            </div>`;
+                        } else {
+                            cardBody = `<div style="font-size:0.82rem;color:var(--text-secondary);font-style:italic;padding:4px 0;">Informasi PGN tidak tersedia — Free Mode</div>`;
+                        }
+
+                        html += `
+                        <div style="display:flex;flex-direction:column;gap:0;border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.18);">
+                            <!-- Card header: date + link -->
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.75rem;color:var(--text-secondary);">
+                                <span>🕒 ${escHtml(an.created_at || '—')}</span>
+                                <a href="${escHtml(shareUrl)}" target="_blank" rel="noopener" style="color:var(--accent-primary);text-decoration:none;font-weight:600;font-size:0.75rem;">📊 Open Analysis →</a>
+                            </div>
+                            <!-- Card body: PGN info -->
+                            <div style="padding:12px 14px;">
+                                ${cardBody}
+                            </div>
+                            <!-- Card footer: actions -->
+                            <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:8px 14px;background:rgba(255,255,255,0.02);border-top:1px solid rgba(255,255,255,0.05);">
+                                <button class="btn btn--secondary btn--xs" onclick="navigator.clipboard.writeText('${escHtml(shareUrl)}').then(()=>toast('Link copied!','success'))">📋 Copy Link</button>
+                                ${adminBtn}
+                            </div>
+                        </div>`;
+                    });
+
+                    container.innerHTML = html;
+
+                }
+
+                window.appDeleteAnalysis = async (id) => {
+                    if (!confirm(`Hapus analisis ${id} secara permanen? Link yang sudah dibagikan akan mati.`)) return;
+                    try {
+                        const res = await apiCall(`/index.php?action=delete-analysis&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+                        if (res.success) {
+                            toast(res.message || 'Analisis dihapus', 'success');
+                            fetchAnalyses(true);
+                        }
+                    } catch (err) {
+                        toast(err.message || 'Gagal menghapus', 'error');
+                    }
+                };
 
                 async function openPlayerStats(username) {
                     activePlayerUsername = username;
@@ -1978,6 +2296,14 @@
                         });
                     }
 
+                    if ($('#analysisSearch')) {
+                        $('#analysisSearch').addEventListener('input', () => renderAnalyses());
+                        $('#btnResetAnalysisFilters').addEventListener('click', () => {
+                            $('#analysisSearch').value = '';
+                            renderAnalyses();
+                        });
+                    }
+
                     $('#filterAllMatches').addEventListener('click', () => {
                         currentMatchFilter = 'all';
                         $$('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -2025,6 +2351,7 @@
 
                     // Refresh buttons
                     $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
+                    $('#btnRefreshAnalyses')?.addEventListener('click', () => fetchAnalyses(false));
                     $('#btnRefreshMatches').addEventListener('click', () => fetchMatches(false));
 
                     // ── Analysis Tab Logic ──────────────────────────────────────

@@ -811,4 +811,48 @@ class MongoDBDatabaseManager implements DatabaseManager
         $result = $this->analysesCollection->deleteOne(['id' => trim($id)]);
         return $result->getDeletedCount() > 0;
     }
+
+    /**
+     * Retrieves all saved analyses, omitting the heavy analysis positions array.
+     * 
+     * @return array List of analyses.
+     */
+    public function getAllAnalyses(): array
+    {
+        // Don't fetch the 'analysis' array to save bandwidth/memory
+        $cursor = $this->analysesCollection->find([], [
+            'projection' => [
+                'id' => 1,
+                'created_at' => 1,
+                // Extract just a short snippet of the PGN to display
+                'pgn' => 1 
+            ],
+            'sort' => ['created_at' => -1]
+        ]);
+
+        $results = [];
+        foreach ($cursor as $doc) {
+            $rawPgn = trim((string) ($doc['pgn'] ?? ''));
+            
+            $headers = [];
+            if (preg_match_all('/\[([A-Za-z0-9_]+)\s+"([^"]*)"\]/', $rawPgn, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $headers[$match[1]] = $match[2];
+                }
+            }
+
+            // Remove headers for the preview
+            $pgnPreview = preg_replace('/\[.*?\]\s*/s', '', $rawPgn);
+            $pgnPreview = mb_substr(trim($pgnPreview), 0, 100) . (mb_strlen($pgnPreview) > 100 ? '...' : '');
+
+            $results[] = [
+                'id' => (string) $doc['id'],
+                'created_at' => (string) ($doc['created_at'] ?? ''),
+                'pgn_preview' => $pgnPreview,
+                'headers' => $headers
+            ];
+        }
+
+        return $results;
+    }
 }

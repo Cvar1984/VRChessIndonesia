@@ -314,6 +314,21 @@ try {
         }
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get-analyses') {
+        $analyses = $db->getAllAnalyses();
+        jsonResponse(['success' => true, 'analyses' => $analyses]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'DELETE' && isset($_GET['action']) && $_GET['action'] === 'delete-analysis' && isset($_GET['id'])) {
+        requireApiAccess($db);
+        $deleted = $db->deleteAnalysis($_GET['id']);
+        if ($deleted) {
+            jsonResponse(['success' => true, 'message' => "Analisis {$_GET['id']} telah dihapus."]);
+        } else {
+            jsonResponse(['success' => false, 'error' => 'Analysis not found'], 404);
+        }
+    }
+
     if (isset($_GET['players'])) {
         jsonResponse([
             'success' => true,
