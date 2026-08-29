@@ -324,6 +324,24 @@
                                 placeholder="https://www.chessigma.com/games/...">
                         </div>
 
+                        <div class="form-group">
+                            <label class="form-label">📄 Atau Upload PGN (Opsional)</label>
+                            <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:8px;">
+                                Jika PGN diisi, analisis akan disimpan otomatis dan link-nya akan digunakan sebagai URL
+                                analisis.
+                            </p>
+                            <textarea class="form-input" id="playPgn" rows="4"
+                                placeholder="[Event &#34;?&#34;]&#10;[White &#34;Player1&#34;]&#10;[Black &#34;Player2&#34;]&#10;&#10;1. e4 e5 ..."
+                                style="font-family: var(--font-mono); font-size: 0.78rem; resize: vertical;"></textarea>
+                            <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
+                                <label class="btn btn--secondary btn--sm" style="cursor:pointer; margin:0;"
+                                    for="playPgnFile">📂 Buka File PGN</label>
+                                <input type="file" id="playPgnFile" accept=".pgn" style="display:none;">
+                                <button type="button" class="btn btn--secondary btn--sm" id="btnClearPlayPgn">✕
+                                    Hapus</button>
+                            </div>
+                        </div>
+
                         <button type="submit" class="btn btn--primary btn--full" id="btnSubmitMatch">
                             ⚡ Catat Pertandingan &amp; Hitung Ulang Rating
                         </button>
@@ -530,8 +548,10 @@
                                         title="Lichess Accuracy Metric">-</span>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:8px;">
-                                    <span id="clockBlack" style="background:#222; border:1px solid #444; padding:2px 8px; border-radius:4px; font-family:var(--font-mono); font-size:1.1rem; display:none;"></span>
-                                    <div id="statsBlack" style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
+                                    <span id="clockBlack"
+                                        style="background:#222; border:1px solid #444; padding:2px 8px; border-radius:4px; font-family:var(--font-mono); font-size:1.1rem; display:none;"></span>
+                                    <div id="statsBlack"
+                                        style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
                                 </div>
                             </div>
 
@@ -566,8 +586,10 @@
                                         title="Lichess Accuracy Metric">-</span>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:8px;">
-                                    <span id="clockWhite" style="background:#222; border:1px solid #444; padding:2px 8px; border-radius:4px; font-family:var(--font-mono); font-size:1.1rem; display:none;"></span>
-                                    <div id="statsWhite" style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
+                                    <span id="clockWhite"
+                                        style="background:#222; border:1px solid #444; padding:2px 8px; border-radius:4px; font-family:var(--font-mono); font-size:1.1rem; display:none;"></span>
+                                    <div id="statsWhite"
+                                        style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;"></div>
                                 </div>
                             </div>
 
@@ -602,6 +624,12 @@
                                         Details</div>
                                     <div
                                         style="margin-left:auto; display:flex; align-items:center; padding-right:12px;">
+                                        <button class="btn btn--secondary btn--xs" id="btnExportPgn"
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; margin-right: 8px;">📥
+                                            Export</button>
+                                        <button class="btn btn--secondary btn--xs" id="btnSaveAnalysis"
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; margin-right: 8px;">🔗
+                                            Share Link</button>
                                         <button class="btn btn--secondary btn--xs" id="btnNewAnalysis"
                                             style="background:#33312e; border:none; color:#ddd; font-weight:600;">➕
                                             New</button>
@@ -609,9 +637,14 @@
                                 </div>
 
                                 <!-- Prominent Opening Display -->
-                                <div id="openingInfo" style="display:flex; align-items:center; gap:12px; background:linear-gradient(90deg, #242b1f, #1e231b); padding:12px 20px; border-bottom: 2px solid #334024; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 10;">
-                                    <span style="font-size:0.9rem; font-weight:800; background:#7fa650; color:#fff; padding:4px 10px; border-radius:4px; font-family:var(--font-mono); box-shadow: 0 2px 4px rgba(0,0,0,0.2);" id="openingEco">A00</span>
-                                    <span style="font-size:1.0rem; color:#a5d6a7; font-weight:700; letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(0,0,0,0.5);" id="openingName">Starting Position</span>
+                                <div id="openingInfo"
+                                    style="display:flex; align-items:center; gap:12px; background:linear-gradient(90deg, #242b1f, #1e231b); padding:12px 20px; border-bottom: 2px solid #334024; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 10;">
+                                    <span
+                                        style="font-size:0.9rem; font-weight:800; background:#7fa650; color:#fff; padding:4px 10px; border-radius:4px; font-family:var(--font-mono); box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+                                        id="openingEco">A00</span>
+                                    <span
+                                        style="font-size:1.0rem; color:#a5d6a7; font-weight:700; letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(0,0,0,0.5);"
+                                        id="openingName">Starting Position</span>
                                 </div>
 
                                 <!-- Evaluation & Engine Lines -->
@@ -657,8 +690,7 @@
                                             <span id="engineStreamText">Stockfish computing...</span>
                                         </div>
                                     </div>
-                                    <div
-                                        style="display:flex; gap:10px; align-items:flex-start; padding-top:4px;">
+                                    <div style="display:flex; gap:10px; align-items:flex-start; padding-top:4px;">
                                         <span id="posEvalBest"
                                             style="font-family:var(--font-mono); font-weight:800; font-size:0.85rem; color:#fff; min-width:45px;">—</span>
                                         <div id="posEvalPv"
@@ -1381,8 +1413,23 @@
                         if (m.result === '1-0') { resultClass = 'white'; resultLabel = '1-0'; }
                         else if (m.result === '0-1') { resultClass = 'black'; resultLabel = '0-1'; }
 
-                        const analysisLink = m.analysis_url
-                            ? `<a class="match-card__link" href="${escHtml(m.analysis_url)}" target="_blank" rel="noopener">📊 Analisis</a>`
+                        // Resolve analysis URL: build full URL from raw ID or legacy path/absolute URLs
+                        let resolvedAnalysisUrl = m.analysis_url || null;
+                        if (resolvedAnalysisUrl) {
+                            // Raw hex ID (e.g. "bfc44a8496005d38") — no slashes or query chars
+                            if (/^[a-f0-9]{8,}$/i.test(resolvedAnalysisUrl.trim())) {
+                                resolvedAnalysisUrl = window.location.origin + window.location.pathname + '?analysis=' + resolvedAnalysisUrl.trim();
+                            } else {
+                                // Legacy: absolute or relative URL containing ?analysis=<id>
+                                const analysisMatch = resolvedAnalysisUrl.match(/[?&]analysis=([a-f0-9]+)/);
+                                if (analysisMatch) {
+                                    resolvedAnalysisUrl = window.location.origin + window.location.pathname + '?analysis=' + analysisMatch[1];
+                                }
+                            }
+                        }
+
+                        const analysisLink = resolvedAnalysisUrl
+                            ? `<a class="match-card__link" href="${escHtml(resolvedAnalysisUrl)}" target="_blank" rel="noopener">📊 Analisis</a>`
                             : '';
 
                         const statusBadge = !isValid
@@ -1812,16 +1859,52 @@
                     $('#btnCancelEditMatch').addEventListener('click', () => { $('#editMatchModal').style.display = 'none'; });
 
                     // Submit Play Match Form
+                    $('#playPgnFile').addEventListener('change', (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => { $('#playPgn').value = ev.target.result; };
+                        reader.readAsText(file);
+                    });
+                    $('#btnClearPlayPgn').addEventListener('click', () => {
+                        $('#playPgn').value = '';
+                        $('#playPgnFile').value = '';
+                    });
+
                     $('#playMatchForm').addEventListener('submit', async (e) => {
                         e.preventDefault();
                         const white = $('#playWhite').value.trim();
                         const black = $('#playBlack').value.trim();
                         const result = $('#playResult').value;
-                        const url = $('#playUrl').value.trim();
+                        let url = $('#playUrl').value.trim();
+                        const pgn = $('#playPgn').value.trim();
 
                         if (white.toLowerCase() === black.toLowerCase()) {
                             toast('Pemain Putih dan Hitam harus berbeda!', 'error');
                             return;
+                        }
+
+                        // If PGN is provided but no external URL, save it as an internal analysis
+                        if (pgn && !url) {
+                            try {
+                                toast('Menyimpan analisis PGN...', 'info');
+                                const saveRes = await fetch('/index.php?action=save-analysis', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ pgn: pgn })
+                                });
+                                const saveData = await saveRes.json();
+                                if (saveData.success) {
+                                    // Store only the raw analysis ID — host-agnostic
+                                    url = saveData.id;
+                                } else {
+                                    toast('Gagal menyimpan PGN: ' + saveData.error, 'error');
+                                    return;
+                                }
+                            } catch (err) {
+                                toast('Gagal menyimpan PGN analisis.', 'error');
+                                return;
+                            }
                         }
 
                         try {
@@ -1855,6 +1938,8 @@
                                 $('#playWhite').value = '';
                                 $('#playBlack').value = '';
                                 $('#playUrl').value = '';
+                                $('#playPgn').value = '';
+                                $('#playPgnFile').value = '';
 
                                 await fetchPlayers(true);
                                 await fetchMatches(true);
@@ -1956,6 +2041,7 @@
                     let evalChartInstance = null;
                     let liveAnalysisAbort = null;
                     let isLiveEngineEnabled = true;
+                    let currentAnalysisId = null; // Tracks the ID if analysis was loaded from a saved link
 
                     function getLegalMoves() {
                         const dests = new Map();
@@ -2060,14 +2146,116 @@
                             drawBestMoveArrow();
                         });
 
-                        // New analysis
+                        // New analysis — clear saved ID
                         $('#btnNewAnalysis').addEventListener('click', () => {
+                            currentAnalysisId = null;
                             $('#analysisMainLayout').style.display = 'none';
                             $('#analysisPgnImportCard').style.display = '';
                             analysisPositions = [];
                             mainPositions = [];
                             variantPositions = null;
                             clearArrows();
+                        });
+
+                        // Export PGN
+                        $('#btnExportPgn').addEventListener('click', () => {
+                            let pgnText = $('#pgnInput').value.trim();
+
+                            // If empty (e.g., from Free Play), attempt to generate from moves
+                            if (!pgnText && analysisPositions.length > 1) {
+                                try {
+                                    let temp = new window.Chess();
+                                    if (analysisHeaders && analysisHeaders.FEN) temp.load(analysisHeaders.FEN);
+                                    for (let i = 1; i < analysisPositions.length; i++) {
+                                        if (analysisPositions[i].move_san) {
+                                            temp.move(analysisPositions[i].move_san);
+                                        }
+                                    }
+                                    pgnText = temp.pgn();
+                                } catch (e) {
+                                    console.error('Failed to generate PGN', e);
+                                }
+                            }
+
+                            if (!pgnText) {
+                                toast('No PGN available to export.', 'error');
+                                return;
+                            }
+
+                            const blob = new Blob([pgnText], { type: 'text/plain' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'vrchess_analysis.pgn';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            toast('PGN Exported!', 'success');
+                        });
+
+                        // Save / Share analysis
+                        $('#btnSaveAnalysis').addEventListener('click', async () => {
+                            const btn = $('#btnSaveAnalysis');
+                            const origText = btn.innerHTML;
+
+                            // If we have an existing ID but also have fresh analysis positions,
+                            // patch the DB entry so future visitors don't need to re-analyze
+                            if (currentAnalysisId && mainPositions.length > 1) {
+                                btn.innerHTML = '⏳ Saving...';
+                                btn.disabled = true;
+                                try {
+                                    await fetch('/index.php?action=update-analysis&id=' + encodeURIComponent(currentAnalysisId), {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ analysis: mainPositions })
+                                    });
+                                } catch (_) { /* non-fatal, still copy URL */ }
+                                btn.innerHTML = origText;
+                                btn.disabled = false;
+                            }
+
+                            // If already saved, just copy the link (with or without positions patch above)
+                            if (currentAnalysisId) {
+                                const shareUrl = window.location.origin + window.location.pathname + '?analysis=' + currentAnalysisId;
+                                navigator.clipboard.writeText(shareUrl).then(() => {
+                                    toast('Link copied to clipboard!', 'success');
+                                }).catch(() => {
+                                    toast('Share URL: ' + shareUrl, 'success');
+                                });
+                                return;
+                            }
+
+                            try {
+                                btn.innerHTML = '⏳ Saving...';
+                                btn.disabled = true;
+
+                                const pgn = $('#pgnInput').value.trim();
+
+                                const res = await fetch('/index.php?action=save-analysis', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ pgn: pgn, analysis: mainPositions })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    currentAnalysisId = data.id;
+                                    const shareUrl = window.location.origin + window.location.pathname + '?analysis=' + data.id;
+                                    navigator.clipboard.writeText(shareUrl).then(() => {
+                                        toast('Link copied to clipboard!', 'success');
+                                    }).catch(() => {
+                                        toast('Analysis saved! URL: ' + shareUrl, 'success');
+                                    });
+                                } else {
+                                    toast('Failed to save: ' + data.error, 'error');
+                                }
+                                btn.innerHTML = origText;
+                                btn.disabled = false;
+                            } catch (e) {
+                                toast('Error saving analysis', 'error');
+                                $('#btnSaveAnalysis').innerHTML = '🔗 Share Link';
+                                $('#btnSaveAnalysis').disabled = false;
+                            }
                         });
 
                         // Live controls
@@ -2226,7 +2414,7 @@
 
                                         if ($('#posEvalDepth')) $('#posEvalDepth').textContent = data.depth || depth;
                                         $('#posEvalBest').textContent = data.bestmove || '—';
-                                        
+
                                         // Limit PV display to avoid it taking up too much vertical space
                                         const pvText = data.pv && data.pv.length ? data.pv.join(' ') : '—';
                                         $('#posEvalPv').textContent = pvText;
@@ -2546,14 +2734,14 @@
                             }
                             moveText = moveText.replace(/\d+\.{1,3}/g, ' ');
                             moveText = moveText.replace(/1-0|0-1|1\/2-1\/2|\*/g, ' ');
-                            
+
                             const regex = /(\{[^}]*\})|([a-zA-Z0-9\-+=#]+)/g;
                             let match;
                             let tokens = [];
                             while ((match = regex.exec(moveText)) !== null) {
                                 tokens.push(match[0]);
                             }
-                            
+
                             let moves = [];
                             let currentMove = null;
                             for (let t of tokens) {
@@ -2574,24 +2762,24 @@
                         analysisHeaders = parsed.headers;
                         const movesParsed = parsed.moves;
                         isCurrentGame960 = analysisHeaders.Variant && (analysisHeaders.Variant.toLowerCase() === 'fischerandom' || analysisHeaders.Variant.toLowerCase() === 'chess960');
-                        
+
                         function getInitialClock(tc) {
                             if (!tc || tc === '?' || tc === '-') return null;
                             let base = parseInt(tc.split('+')[0]);
                             if (isNaN(base)) return null;
-                            let isMinutes = base <= 99; 
+                            let isMinutes = base <= 99;
                             let totalSeconds = isMinutes ? base * 60 : base;
                             let h = Math.floor(totalSeconds / 3600);
                             let m = Math.floor((totalSeconds % 3600) / 60);
                             let s = totalSeconds % 60;
-                            if (h > 0) return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-                            return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                            if (h > 0) return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                         }
                         initialClock = getInitialClock(analysisHeaders.TimeControl);
-                        
+
                         let chess = new window.Chess();
                         let startFen = analysisHeaders.FEN || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-                        
+
                         if (isCurrentGame960) {
                             // Replace X-FEN castling rights with pseudo-FEN KQkq so chess.js can load it
                             const parts = startFen.split(' ');
@@ -2600,7 +2788,7 @@
                                 startFen = parts.join(' ');
                             }
                         }
-                        
+
                         if (!chess.load(startFen)) {
                             toast('Format FEN tidak valid.', 'error');
                             return;
@@ -2623,8 +2811,8 @@
                                 let rows = board.split('/');
                                 let rankStr = rows[rankIdx];
                                 let expanded = '';
-                                for(let j=0; j<rankStr.length; j++) {
-                                    if(/[1-8]/.test(rankStr[j])) expanded += ' '.repeat(parseInt(rankStr[j]));
+                                for (let j = 0; j < rankStr.length; j++) {
+                                    if (/[1-8]/.test(rankStr[j])) expanded += ' '.repeat(parseInt(rankStr[j]));
                                     else expanded += rankStr[j];
                                 }
                                 const kingChar = isWhite ? 'K' : 'k';
@@ -2637,7 +2825,7 @@
                                 else { arr[2] = kingChar; arr[3] = rookChar; }
                                 expanded = arr.join('');
                                 let compressed = '', spaces = 0;
-                                for(let j=0; j<8; j++) {
+                                for (let j = 0; j < 8; j++) {
                                     if (expanded[j] === ' ') spaces++;
                                     else { if (spaces > 0) compressed += spaces; spaces = 0; compressed += expanded[j]; }
                                 }
@@ -2745,14 +2933,14 @@
                         }
                         if (!wClock) wClock = initialClock;
                         if (!bClock) bClock = initialClock;
-                        
+
                         if (!wClock) {
-                            for(let i=1; i<analysisPositions.length; i+=2) {
+                            for (let i = 1; i < analysisPositions.length; i += 2) {
                                 if (analysisPositions[i].clock) { wClock = analysisPositions[i].clock; break; }
                             }
                         }
                         if (!bClock) {
-                            for(let i=2; i<analysisPositions.length; i+=2) {
+                            for (let i = 2; i < analysisPositions.length; i += 2) {
                                 if (analysisPositions[i].clock) { bClock = analysisPositions[i].clock; break; }
                             }
                         }
@@ -2928,8 +3116,8 @@
                             container.querySelectorAll('.analysis-move-btn').forEach(btn => {
                                 const mainIdx = btn.dataset.mainIdx !== undefined
                                     ? parseInt(btn.dataset.mainIdx, 10) : null;
-                                const varIdx  = btn.dataset.varIdx  !== undefined
-                                    ? parseInt(btn.dataset.varIdx,  10) : null;
+                                const varIdx = btn.dataset.varIdx !== undefined
+                                    ? parseInt(btn.dataset.varIdx, 10) : null;
                                 const idx = mainIdx !== null ? mainIdx : varIdx;
                                 if (idx === null) return;
 
@@ -2941,15 +3129,15 @@
                             container.querySelectorAll('.analysis-move-btn').forEach(btn => {
                                 const mainIdx = btn.dataset.mainIdx !== undefined
                                     ? parseInt(btn.dataset.mainIdx, 10) : null;
-                                const varIdx  = btn.dataset.varIdx  !== undefined
-                                    ? parseInt(btn.dataset.varIdx,  10) : null;
+                                const varIdx = btn.dataset.varIdx !== undefined
+                                    ? parseInt(btn.dataset.varIdx, 10) : null;
                                 const idx = mainIdx !== null ? mainIdx : varIdx;
                                 if (idx === null) return;
-                                
+
                                 const srcArr = mainIdx !== null ? mainPositions : analysisPositions;
                                 const pos = srcArr[idx];
                                 if (!pos) return;
-                                
+
                                 const { text, color } = formatEvalCell(pos);
                                 let evalSpan = btn.querySelector('.eval-score');
                                 if (!evalSpan) {
@@ -2983,12 +3171,12 @@
                             const varClass = isMain ? '' : 'variant-move';
                             const dataAttr = isMain ? `data-main-idx="${idx}"` : `data-var-idx="${idx}"`;
                             const onClick = isMain ? `window.gotoMainMove(${idx})` : `window.gotoVariantMove(${idx})`;
-                            
+
                             const { text, color } = formatEvalCell(pos);
                             const evalHtml = `<span class="eval-score" style="font-size:0.65rem; margin-left:6px; color:${color}; font-family:var(--font-mono);">${text}</span>`;
-                            
+
                             const clockHtml = pos.clock ? `<span class="move-clock" style="font-size:0.6rem; color:#aaa; margin-left:4px; font-weight:normal; font-family:var(--font-mono);">(${pos.clock})</span>` : '';
-                            
+
                             return `<button class="analysis-move-btn ${varClass} ${isActive}" ${dataAttr} 
                                 style="background:none; border:none; color:#ddd; cursor:pointer; padding:4px 6px; border-radius:3px; display:inline-flex; align-items:center;"
                                 onclick="${onClick}">${pos.move_san || ''}${clockHtml}${evalHtml}</button>`;
@@ -3041,7 +3229,7 @@
                                 if (white || moveNumStr.includes('..')) {
                                     html += `<span style="color:#ff9e00; margin-right:4px; display:inline-flex; align-items:center; font-size:0.85rem;">${moveNumStr}</span>`;
                                 }
-                                
+
                                 if (white) {
                                     html += renderMoveBtn(wIdx, white, false);
                                 }
@@ -3177,6 +3365,75 @@
                     };
 
                     initAnalysisTab();
+
+                    // Handle saved analysis URL — restore directly without re-running Stockfish
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.has('analysis')) {
+                        const analysisId = urlParams.get('analysis');
+                        setTimeout(async () => {
+                            $('#tabBtnAnalysis').click();
+                            toast('Loading saved analysis…', 'info');
+                            try {
+                                const res = await fetch('/index.php?action=get-analysis&id=' + encodeURIComponent(analysisId));
+                                const data = await res.json();
+                                if (data.success && data.data && data.data.analysis && data.data.analysis.length > 0) {
+                                    const saved = data.data;
+
+                                    // Re-parse PGN headers only (cheap, no engine)
+                                    const pgnText = saved.pgn || '';
+                                    const headerRe = /\[(\w+)\s+"([^"]*)"\]/g;
+                                    let hm;
+                                    const headers = {};
+                                    while ((hm = headerRe.exec(pgnText)) !== null) headers[hm[1]] = hm[2];
+                                    analysisHeaders = headers;
+                                    isCurrentGame960 = headers.Variant &&
+                                        (headers.Variant.toLowerCase() === 'fischerandom' ||
+                                            headers.Variant.toLowerCase() === 'chess960');
+
+                                    // Restore positions directly from saved data
+                                    currentAnalysisId = analysisId;
+                                    analysisPositions = saved.analysis;
+                                    mainPositions = [...analysisPositions];
+
+                                    // Rebuild analysisMovesSan list for move list rendering
+                                    analysisMovesSan = analysisPositions.slice(1).map(p => p.move_san || '');
+
+                                    // Restore original PGN text so Export always produces the exact source PGN
+                                    $('#pgnInput').value = pgnText;
+
+                                    // Show the layout
+                                    $('#analysisPgnImportCard').style.display = 'none';
+                                    $('#analysisMainLayout').style.display = 'block';
+
+                                    // Populate player info
+                                    $('#infoWhite').textContent = headers.White || '?';
+                                    $('#infoBlack').textContent = headers.Black || '?';
+                                    if (typeof $('#infoEvent') !== 'undefined' && $('#infoEvent')) {
+                                        $('#infoEvent').textContent = headers.Event && headers.Event !== '?' ? headers.Event : '';
+                                        $('#infoDate').textContent = headers.Date || '';
+                                        $('#infoResult').textContent = headers.Result || '';
+                                    }
+
+                                    renderMoveList();
+                                    renderEvalChart();
+                                    gotoMove(0);
+
+                                    setTimeout(() => { if (analysisBoard) analysisBoard.redrawAll(); }, 50);
+                                    toast('Analysis loaded!', 'success');
+                                } else if (data.success && data.data && data.data.pgn) {
+                                    // Fallback: analysis not saved, just populate PGN and re-run
+                                    $('#pgnInput').value = data.data.pgn;
+                                    toast('Re-analyzing (no cached data)…', 'info');
+                                    setTimeout(() => { $('#btnStartPgnAnalysis').click(); }, 100);
+                                } else {
+                                    toast('Saved analysis not found.', 'error');
+                                }
+                            } catch (e) {
+                                console.error('Error loading analysis:', e);
+                                toast('Failed to load analysis.', 'error');
+                            }
+                        }, 500);
+                    }
                 }
 
                 // ── Initialize App ──

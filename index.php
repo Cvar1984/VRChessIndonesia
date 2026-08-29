@@ -280,6 +280,40 @@ try {
     }
 
     // ── Public Endpoints ──
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'save-analysis') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $pgn = $input['pgn'] ?? '';
+        $analysisData = $input['analysis'] ?? null;
+
+        if (empty($pgn)) {
+            jsonResponse(['success' => false, 'error' => 'PGN required'], 400);
+        }
+
+        $id = $db->saveAnalysis($pgn, $analysisData);
+        jsonResponse(['success' => true, 'id' => $id]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'PATCH' && isset($_GET['action']) && $_GET['action'] === 'update-analysis' && isset($_GET['id'])) {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $analysisData = $input['analysis'] ?? null;
+
+        if (empty($analysisData) || !is_array($analysisData)) {
+            jsonResponse(['success' => false, 'error' => 'analysis array required'], 400);
+        }
+
+        $updated = $db->updateAnalysis($_GET['id'], $analysisData);
+        jsonResponse(['success' => $updated]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get-analysis' && isset($_GET['id'])) {
+        $data = $db->getAnalysis($_GET['id']);
+        if ($data) {
+            jsonResponse(['success' => true, 'data' => $data]);
+        } else {
+            jsonResponse(['success' => false, 'error' => 'Analysis not found'], 404);
+        }
+    }
+
     if (isset($_GET['players'])) {
         jsonResponse([
             'success' => true,
@@ -428,7 +462,23 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'DELETE' && isset($_GET['match'])) {
         requireApiAccess($db);
         $matchId = (int) $_GET['match'];
+
+        // Fetch the match first so we can cascade-delete its analysis if it's internal
+        $matchToDelete = $manager->getMatch($matchId);
         $deleted = $manager->removeMatch($matchId);
+
+        if ($deleted && $matchToDelete) {
+            $analysisUrl = trim($matchToDelete['analysis_url'] ?? '');
+            if (!empty($analysisUrl)) {
+                // Raw hex ID (e.g. "bfc44a8496005d38") — new format
+                if (preg_match('/^[a-f0-9]{8,}$/i', $analysisUrl)) {
+                    $db->deleteAnalysis($analysisUrl);
+                // Legacy: path or full URL containing ?analysis=<id>
+                } elseif (preg_match('/[?&]analysis=([a-f0-9]+)/i', $analysisUrl, $m)) {
+                    $db->deleteAnalysis($m[1]);
+                }
+            }
+        }
 
         jsonResponse([
             'success' => $deleted,

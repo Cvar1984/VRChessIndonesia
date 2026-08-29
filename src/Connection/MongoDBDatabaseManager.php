@@ -15,6 +15,7 @@ class MongoDBDatabaseManager implements DatabaseManager
     private Collection $tokensCollection;
     private Collection $settingsCollection;
     private Collection $adminsCollection;
+    private Collection $analysesCollection;
     private int $nextPlayerId = 1;
     private int $nextMatchId = 1;
 
@@ -42,6 +43,7 @@ class MongoDBDatabaseManager implements DatabaseManager
             $this->tokensCollection = $db->selectCollection('tokens');
             $this->settingsCollection = $db->selectCollection('settings');
             $this->adminsCollection = $db->selectCollection('admins');
+            $this->analysesCollection = $db->selectCollection('analyses');
 
             $this->initializeIndexes();
             $this->loadPlayers();
@@ -110,6 +112,7 @@ class MongoDBDatabaseManager implements DatabaseManager
             $this->tokensCollection->createIndex(['token' => 1], ['unique' => true]);
             $this->settingsCollection->createIndex(['key' => 1], ['unique' => true]);
             $this->adminsCollection->createIndex(['username' => 1], ['unique' => true]);
+            $this->analysesCollection->createIndex(['id' => 1], ['unique' => true]);
         } catch (\Throwable $e) {
             // Ignore index initialization errors if non-critical
         }
@@ -726,5 +729,86 @@ class MongoDBDatabaseManager implements DatabaseManager
         }
         $tok = $this->createToken('Default Web App Token');
         return $tok['token'];
+    }
+
+    // ── Analysis Management ──
+    /**
+     * Saves a PGN analysis to the database.
+     * 
+     * @param string $pgn The PGN string.
+     * @param array|null $analysisData Optional analysis data (e.g. array of evaluated positions).
+     * @return string The unique analysis ID.
+     */
+    public function saveAnalysis(string $pgn, ?array $analysisData = null): string
+    {
+        $id = bin2hex(random_bytes(8)); // 16 char hex string
+        
+        $doc = [
+            'id' => $id,
+            'pgn' => $pgn,
+            'created_at' => date('Y-m-d H:i:s'),
+        ];
+        
+        if ($analysisData !== null) {
+            $doc['analysis'] = $analysisData;
+        }
+
+        $this->analysesCollection->insertOne($doc);
+        return $id;
+    }
+
+    /**
+     * Retrieves a saved analysis by ID.
+     * 
+     * @param string $id The analysis ID.
+     * @return array|null The analysis document, or null if not found.
+     */
+    public function getAnalysis(string $id): ?array
+    {
+        $doc = $this->analysesCollection->findOne(['id' => $id]);
+        if (!$doc) {
+            return null;
+        }
+
+        $result = [
+            'id' => (string) $doc['id'],
+            'pgn' => (string) ($doc['pgn'] ?? ''),
+            'created_at' => (string) ($doc['created_at'] ?? '')
+        ];
+        
+        if (isset($doc['analysis'])) {
+            // Need to convert BSONArray/Document to standard PHP array
+            $result['analysis'] = json_decode(json_encode($doc['analysis']), true);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Updates the analysis positions data for an existing analysis document.
+     * 
+     * @param string $id The analysis ID.
+     * @param array $analysisData The computed positions array.
+     * @return bool True if updated, false if not found.
+     */
+    public function updateAnalysis(string $id, array $analysisData): bool
+    {
+        $result = $this->analysesCollection->updateOne(
+            ['id' => trim($id)],
+            ['$set' => ['analysis' => $analysisData, 'updated_at' => date('Y-m-d H:i:s')]]
+        );
+        return $result->getMatchedCount() > 0;
+    }
+
+    /**
+     * Deletes a saved analysis by ID.
+     * 
+     * @param string $id The analysis ID.
+     * @return bool True if deleted, false if not found.
+     */
+    public function deleteAnalysis(string $id): bool
+    {
+        $result = $this->analysesCollection->deleteOne(['id' => trim($id)]);
+        return $result->getDeletedCount() > 0;
     }
 }
