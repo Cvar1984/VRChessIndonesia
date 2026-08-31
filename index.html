@@ -2827,16 +2827,19 @@
                     let isLiveEngineEnabled = true;
                     let currentAnalysisId = null; // Tracks the ID if analysis was loaded from a saved link
 
-                    // Default: browser (stockfish-web) and server (Stockfish 18) engines run
-                    // TOGETHER — whichever produces a deeper result at any moment wins the
-                    // display, and a per-position failure in one just means it contributes
-                    // nothing for that position (never a sticky "disabled" state, so there's
-                    // nothing to manually "switch back"). enginePreference lets the user pin it
-                    // to one engine only; 'both' is the default.
+                    // Default: the in-browser engine (stockfish-web) — no network round-trip, so
+                    // it's never at the mercy of the server being slow or overloaded. In "Both"
+                    // mode the browser engine leads: the UI finishes as soon as IT is done, and
+                    // the server (cloud) engine runs alongside purely as a non-blocking bonus —
+                    // if it's lagging it simply hasn't contributed yet by the time we're done,
+                    // never something we wait around for. A per-engine failure just means that
+                    // engine contributes nothing for that position; there's no sticky "disabled"
+                    // state to manually switch back from. enginePreference lets the user pin it
+                    // to one engine only; 'client' (browser) is the default.
                     let clientEngineAvailable = null;    // capability cache: null=unprobed, true/false=detected
-                    let enginePreference = localStorage.getItem('vrchess-engine-pref') || 'both'; // 'both' | 'client' | 'server'
-                    const ENGINE_MODE_CYCLE = ['both', 'client', 'server'];
-                    const ENGINE_MODE_LABEL = { both: 'Keduanya (Browser + Server)', client: 'Browser saja', server: 'Server saja' };
+                    let enginePreference = localStorage.getItem('vrchess-engine-pref') || 'client'; // 'client' | 'both' | 'server'
+                    const ENGINE_MODE_CYCLE = ['client', 'both', 'server'];
+                    const ENGINE_MODE_LABEL = { both: 'Keduanya (Browser utama + Server bonus)', client: 'Browser saja', server: 'Server saja' };
 
                     // Probes (once) whether the browser can actually run the client engine.
                     async function probeClientEngine() {
@@ -2850,6 +2853,14 @@
                                 console.info('[Engine] In-browser Stockfish (stockfish-web) is available.');
                             } else {
                                 console.info('[Engine] In-browser Stockfish unavailable — the server engine will cover it.');
+                                // enginePreference defaults to 'client' without ever going through the
+                                // toggle's own availability guard — if this browser/hosting setup
+                                // genuinely can't run it, pinning to "browser only" would silently
+                                // analyze nothing. Fall back to the server rather than go dark.
+                                if (enginePreference === 'client') {
+                                    enginePreference = 'server';
+                                    localStorage.setItem('vrchess-engine-pref', enginePreference);
+                                }
                             }
                             updateEngineSourceUI();
                         }
@@ -2867,7 +2878,7 @@
                             btn.style.borderColor = 'rgba(127,166,80,0.5)';
                             btn.title = clientEngineAvailable === false
                                 ? 'Mesin browser tidak tersedia — hanya server yang aktif. Klik untuk beralih mode.'
-                                : 'Browser + server bekerja bersama: lebih cepat & lebih akurat. Klik untuk beralih mode.';
+                                : 'Browser mesin utama (tidak pernah menunggu server); server menambah kedalaman di latar belakang tanpa memperlambat. Klik untuk beralih mode.';
                         } else if (enginePreference === 'client') {
                             btn.textContent = '🖥️ Engine: Browser Only';
                             btn.style.color = '#7fa650';
@@ -3263,8 +3274,11 @@
                             clearArrows();
                         }
 
-                        const wantServer = enginePreference !== 'client';
+                        // Order matters: probe first, since it can self-correct enginePreference
+                        // away from 'client' if this browser turns out not to support it (see
+                        // probeClientEngine) — wantServer must be computed from that corrected value.
                         const willUseClient = (enginePreference !== 'server') && await probeClientEngine();
+                        const wantServer = enginePreference !== 'client';
 
                         const attemptedSources = [];
                         if (willUseClient) attemptedSources.push('client');
@@ -3277,11 +3291,13 @@
 
                         // Shared per-update handler — fed by whichever engine(s) are running.
                         // Only lets an update win if it's at least as deep as what's already
-                        // displayed, so the two engines "race" and the more advanced one leads.
+                        // displayed. Ties go to the browser engine — it's the prioritized one, so
+                        // a same-depth server update never displaces what it already showed.
                         function applyLiveInfo(data, source) {
                             if (!analysisPositions[idx]) return;
                             const d = data.depth || 0;
                             if (d < bestDepthSeen) return;
+                            if (d === bestDepthSeen && source === 'server' && sourcesShown.has('client')) return;
                             bestDepthSeen = d;
                             sourcesShown.add(source);
 
@@ -3341,46 +3357,81 @@
                             }
                         }
 
-                        const tasks = [];
+                        // Built lazily so pure "browser only" mode can still reach for the server
+                        // as an emergency, per-position fallback if the browser engine genuinely
+                        // fails — it just never gets started proactively in that mode.
+                        function startCloudTask() {
+                            return runServerLive(fen, depth, multipv, signal, (d) => applyLiveInfo(d, 'server'))
+                                .then(() => true)
+                                .catch((e) => {
+                                    if (e.name === 'AbortError') return null;
+                                    console.error('Server engine failed for this position:', e);
+                                    return false;
+                                });
+                        }
+
+                        let localTask = null;
+                        let cloudTask = wantServer ? startCloudTask() : null;
 
                         if (willUseClient) {
-                            tasks.push(
-                                window.VRChessEngine.analyze(
-                                    fen, { depth, multipv, chess960: isCurrentGame960 },
-                                    (d) => applyLiveInfo(d, 'client'), signal
-                                )
-                                    .then((r) => { applyLiveInfo(r, 'client'); return true; })
-                                    .catch((e) => {
-                                        if (e.name === 'AbortError') return null;
-                                        console.warn('Client engine failed for this position (server will still cover it if enabled):', e);
-                                        return false;
-                                    })
-                            );
+                            localTask = window.VRChessEngine.analyze(
+                                fen, { depth, multipv, chess960: isCurrentGame960 },
+                                (d) => applyLiveInfo(d, 'client'), signal
+                            )
+                                .then((r) => { applyLiveInfo(r, 'client'); return true; })
+                                .catch((e) => {
+                                    if (e.name === 'AbortError') return null;
+                                    console.warn('Client engine failed for this position (server will still cover it if enabled):', e);
+                                    return false;
+                                });
                         }
 
-                        if (wantServer) {
-                            tasks.push(
-                                runServerLive(fen, depth, multipv, signal, (d) => applyLiveInfo(d, 'server'))
-                                    .then(() => true)
-                                    .catch((e) => {
-                                        if (e.name === 'AbortError') return null;
-                                        console.error('Server engine failed for this position:', e);
-                                        return false;
-                                    })
-                            );
+                        const finish = () => {
+                            if (currentMoveIdx === idx) {
+                                updateEngineStreamBadge(false);
+                                renderMoveList();
+                                renderEvalChart();
+                            }
+                        };
+
+                        if (localTask) {
+                            // Browser leads: the UI is done as soon as IT is, regardless of
+                            // whether the server has responded yet — a lagging cloud engine never
+                            // holds this up.
+                            const localOk = await localTask;
+
+                            if (localOk === false) {
+                                // The browser engine genuinely failed on this position — make sure
+                                // the server actually gets a shot at it, even in "browser only" mode.
+                                if (!cloudTask) cloudTask = startCloudTask();
+                                const cloudOk = await cloudTask;
+                                finish();
+                                if (cloudOk === false) toast('Analisis gagal di semua mesin yang aktif.', 'error');
+                                return;
+                            }
+
+                            finish();
+
+                            // If the server is still going, let it keep working in the background —
+                            // if it eventually lands a deeper result for a position the user is
+                            // still looking at, quietly refine the display. Never reopens the
+                            // "computing" badge for this.
+                            if (cloudTask) {
+                                cloudTask.then((ok) => {
+                                    if (ok && currentMoveIdx === idx) { renderMoveList(); renderEvalChart(); }
+                                });
+                            }
+                            return;
                         }
 
-                        const outcomes = tasks.length ? await Promise.all(tasks) : [];
-
-                        if (currentMoveIdx === idx) {
-                            updateEngineStreamBadge(false);
-                            renderMoveList();
-                            renderEvalChart();
+                        if (cloudTask) {
+                            const cloudOk = await cloudTask;
+                            finish();
+                            if (cloudOk === false) toast('Analisis gagal di mesin server.', 'error');
+                            return;
                         }
 
-                        if (tasks.length && outcomes.every((o) => o === false)) {
-                            toast('Analisis gagal di semua mesin yang aktif.', 'error');
-                        }
+                        finish();
                     }
 
                     function clearArrows() {
@@ -3824,17 +3875,28 @@
                         }
 
                         // Work-shared batch: browser and server engines both pull positions off the
-                        // same queue and analyze concurrently, instead of one engine sitting idle
-                        // while the other does all the work — a healthy pair finishes roughly twice
-                        // as fast as either alone. A position the client engine fails on is simply
-                        // handed to the server rather than disabling the client for the rest of the
-                        // batch — the very next position it claims is tried fresh.
+                        // same queue and analyze concurrently — a healthy pair finishes roughly
+                        // twice as fast as either alone. The browser is prioritized: it always
+                        // claims one position at a time (never idle waiting on a big reservation),
+                        // while the server claims positions in a chunk sized adaptively from how
+                        // its measured per-position latency compares to the browser's — a lagging
+                        // cloud automatically gets handed a smaller slice next time instead of
+                        // tying up a large batch of positions the fast local engine could otherwise
+                        // have covered. A position the client engine fails on is simply handed to
+                        // the server rather than disabling the client for the rest of the batch —
+                        // the very next position it claims is tried fresh.
                         analysisPositions = new Array(total);
-                        const chunkSize = 20;
+                        const MAX_SERVER_CHUNK = 20;
+                        const MIN_SERVER_CHUNK = 2;
+                        let serverChunkSize = 8; // starting guess; adapts after the first chunk lands
+                        let localAvgMs = null;
+                        let serverAvgMs = null;
                         let nextClaim = 0;
                         let completedCount = 0;
                         const serverBacklog = [];
                         let batchFailed = false;
+
+                        const emaUpdate = (prev, sample) => prev === null ? sample : prev * 0.7 + sample * 0.3;
 
                         function buildPosEntry(pos, globalIdx) {
                             return {
@@ -3862,9 +3924,11 @@
                             while (!batchFailed) {
                                 const i = nextClaim < total ? nextClaim++ : null;
                                 if (i === null) return;
+                                const startedAt = performance.now();
                                 try {
                                     const pos = await analyzeFenClient(fenList[i], i);
                                     analysisPositions[i] = buildPosEntry(pos, i);
+                                    localAvgMs = emaUpdate(localAvgMs, performance.now() - startedAt);
                                 } catch (err) {
                                     console.warn(`Client engine failed on position ${i}, handing it to the server:`, err);
                                     serverBacklog.push(i);
@@ -3883,14 +3947,14 @@
                                         await new Promise((r) => setTimeout(r, 60));
                                         continue;
                                     }
-                                    await runServerBatchChunk(serverBacklog.splice(0, chunkSize));
+                                    await runServerBatchChunk(serverBacklog.splice(0, MAX_SERVER_CHUNK));
                                 }
                                 return;
                             }
 
                             while (!batchFailed) {
                                 const batchIdxs = [];
-                                while (batchIdxs.length < chunkSize) {
+                                while (batchIdxs.length < serverChunkSize) {
                                     if (serverBacklog.length) { batchIdxs.push(serverBacklog.shift()); continue; }
                                     if (nextClaim < total) { batchIdxs.push(nextClaim++); continue; }
                                     break;
@@ -3905,6 +3969,7 @@
                         }
 
                         async function runServerBatchChunk(batchIdxs) {
+                            const startedAt = performance.now();
                             try {
                                 const res = await fetch('/stockfish.php', {
                                     method: 'POST',
@@ -3918,11 +3983,32 @@
                                     analysisPositions[globalIdx] = buildPosEntry(pos, globalIdx);
                                     recordProgress();
                                 }
+
+                                // Adapt: shrink the cloud's next slice when it's measurably slower per
+                                // position than the browser (lagging), grow it back when it's keeping
+                                // pace — so a lagging server never locks up a large chunk of positions
+                                // that the browser engine could otherwise have gotten to.
+                                serverAvgMs = emaUpdate(serverAvgMs, (performance.now() - startedAt) / batchIdxs.length);
+                                if (localAvgMs !== null && serverAvgMs !== null) {
+                                    if (serverAvgMs > localAvgMs * 1.5) {
+                                        serverChunkSize = Math.max(MIN_SERVER_CHUNK, serverChunkSize - 2);
+                                    } else if (serverAvgMs < localAvgMs * 1.1) {
+                                        serverChunkSize = Math.min(MAX_SERVER_CHUNK, serverChunkSize + 2);
+                                    }
+                                }
                             } catch (err) {
                                 batchFailed = true;
                                 toast('Analisis gagal: ' + err.message, 'error');
                             }
                         }
+
+                        // Resolved up front (not just inside clientBatchWorker) so both workers see
+                        // the same, already-corrected enginePreference before they start — otherwise
+                        // they could race: serverBatchWorker reading a still-stale 'client' preference
+                        // and sitting in backstop-only mode while clientBatchWorker's own probe is the
+                        // one that would have corrected it, which never arrives if the browser engine
+                        // turns out to be unavailable.
+                        await probeClientEngine();
 
                         if ($('#analysisEngineLabel')) {
                             const label = enginePreference === 'both' ? '(🖥️ Browser + ☁️ Server)'
