@@ -791,8 +791,19 @@ try {
         ]);
     }
 
-    // Serve Frontend HTML page
-    echo file_get_contents('index.html');
+    // Serve Frontend HTML page. Cache-bust the stylesheet with its own mtime so a
+    // CDN/browser holding a long-lived cached copy (style.css is served with a 7-day
+    // max-age) always picks up the current file the moment it changes on deploy,
+    // instead of requiring a manual cache purge.
+    $html = file_get_contents('index.html');
+    $cssPath = __DIR__ . '/assets/css/style.css';
+    $cssVersion = @filemtime($cssPath) ?: time();
+    $html = str_replace(
+        'href="assets/css/style.css"',
+        'href="assets/css/style.css?v=' . $cssVersion . '"',
+        $html
+    );
+    echo $html;
 } catch (\Throwable $e) {
     jsonResponse([
         'success' => false,
