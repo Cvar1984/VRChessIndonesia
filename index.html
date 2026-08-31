@@ -574,8 +574,8 @@
                             <!-- Player Top (Black by default — swaps with the bottom row when the
                                  board is flipped, see .board-column.flipped in style.css) -->
                             <div class="player-row player-row--top"
-                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-bottom: 4px;">
-                                <div style="display:flex; gap:10px; align-items:center;">
+                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-bottom: 4px; flex-wrap:wrap; row-gap:4px;">
+                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; row-gap:4px;">
                                     <div
                                         style="width:28px; height:28px; background:#222; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #444; font-size:0.8rem;">
                                     </div>
@@ -583,6 +583,8 @@
                                     <span id="accBlack"
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
                                         title="Lichess Accuracy Metric">-</span>
+                                    <span id="estRatingBlack" class="est-rating-badge"
+                                        title="Estimasi performa rating pada game ini, berdasarkan akurasi (seperti Chess.com)">—</span>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <span id="clockBlack"
@@ -612,8 +614,8 @@
 
                             <!-- Player Bottom (White by default) -->
                             <div class="player-row player-row--bottom"
-                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-top: 4px;">
-                                <div style="display:flex; gap:10px; align-items:center;">
+                                style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-top: 4px; flex-wrap:wrap; row-gap:4px;">
+                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; row-gap:4px;">
                                     <div
                                         style="width:28px; height:28px; background:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid #ddd; font-size:0.8rem; color:#000;">
                                     </div>
@@ -621,6 +623,8 @@
                                     <span id="accWhite"
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
                                         title="Lichess Accuracy Metric">-</span>
+                                    <span id="estRatingWhite" class="est-rating-badge"
+                                        title="Estimasi performa rating pada game ini, berdasarkan akurasi (seperti Chess.com)">—</span>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <span id="clockWhite"
@@ -4474,8 +4478,43 @@
 
                         const accW = $('#accWhite');
                         const accB = $('#accBlack');
-                        if (accW) accW.innerText = computeGameAccuracy('w') + '%';
-                        if (accB) accB.innerText = computeGameAccuracy('b') + '%';
+                        const accWVal = computeGameAccuracy('w');
+                        const accBVal = computeGameAccuracy('b');
+                        if (accW) accW.innerText = accWVal + '%';
+                        if (accB) accB.innerText = accBVal + '%';
+
+                        const ratingW = estimatePerformanceRating(parseFloat(accWVal));
+                        const ratingB = estimatePerformanceRating(parseFloat(accBVal));
+                        const estW = $('#estRatingWhite');
+                        const estB = $('#estRatingBlack');
+                        if (estW) estW.textContent = ratingW !== null ? `📈~${ratingW}` : '—';
+                        if (estB) estB.textContent = ratingB !== null ? `📈~${ratingB}` : '—';
+                    }
+
+                    // Approximate accuracy% -> Elo-style performance rating for this one game,
+                    // like Chess.com's "Estimated Rating Performance" in its Game Report. Chess.com
+                    // doesn't publish its exact formula (same caveat as move classification), so
+                    // this piecewise-linear curve is a best-effort reconstruction from widely-cited
+                    // accuracy/strength reference points — not a precise reverse-engineering.
+                    const ACCURACY_RATING_CURVE = [
+                        [100, 3200], [98, 2700], [95, 2400], [90, 2100], [85, 1900],
+                        [80, 1700], [70, 1400], [60, 1100], [50, 800], [40, 550], [0, 300],
+                    ];
+
+                    function estimatePerformanceRating(accuracy) {
+                        if (accuracy === null || accuracy === undefined || isNaN(accuracy)) return null;
+                        const pts = ACCURACY_RATING_CURVE;
+                        if (accuracy >= pts[0][0]) return pts[0][1];
+                        if (accuracy <= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+                        for (let i = 0; i < pts.length - 1; i++) {
+                            const [accHi, ratingHi] = pts[i];
+                            const [accLo, ratingLo] = pts[i + 1];
+                            if (accuracy <= accHi && accuracy >= accLo) {
+                                const t = (accuracy - accLo) / (accHi - accLo);
+                                return Math.round(ratingLo + t * (ratingHi - ratingLo));
+                            }
+                        }
+                        return null;
                     }
 
                     function updateEvalBar(scoreCp) {
