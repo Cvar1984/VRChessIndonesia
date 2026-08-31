@@ -2404,14 +2404,18 @@
                     let isLiveEngineEnabled = true;
                     let currentAnalysisId = null; // Tracks the ID if analysis was loaded from a saved link
 
-                    // Default engine = in-browser stockfish-web (WASM); server /stockfish.php is
-                    // the fallback used when the client build can't run or errors out.
+                    // Default: browser (stockfish-web) and server (Stockfish 18) engines run
+                    // TOGETHER — whichever produces a deeper result at any moment wins the
+                    // display, and a per-position failure in one just means it contributes
+                    // nothing for that position (never a sticky "disabled" state, so there's
+                    // nothing to manually "switch back"). enginePreference lets the user pin it
+                    // to one engine only; 'both' is the default.
                     let clientEngineAvailable = null;    // capability cache: null=unprobed, true/false=detected
-                    let enginePreference = localStorage.getItem('vrchess-engine-pref') || 'client'; // user's choice: 'client' | 'server'
+                    let enginePreference = localStorage.getItem('vrchess-engine-pref') || 'both'; // 'both' | 'client' | 'server'
+                    const ENGINE_MODE_CYCLE = ['both', 'client', 'server'];
+                    const ENGINE_MODE_LABEL = { both: 'Keduanya (Browser + Server)', client: 'Browser saja', server: 'Server saja' };
 
-                    // Probes (once) whether the browser can actually run the client engine —
-                    // independent of enginePreference, so the toggle can tell the user why
-                    // "Browser" isn't selectable.
+                    // Probes (once) whether the browser can actually run the client engine.
                     async function probeClientEngine() {
                         if (clientEngineAvailable === null) {
                             try {
@@ -2422,16 +2426,11 @@
                             if (clientEngineAvailable) {
                                 console.info('[Engine] In-browser Stockfish (stockfish-web) is available.');
                             } else {
-                                console.info('[Engine] In-browser Stockfish unavailable — server engine (/stockfish.php) will be used.');
+                                console.info('[Engine] In-browser Stockfish unavailable — the server engine will cover it.');
                             }
                             updateEngineSourceUI();
                         }
                         return clientEngineAvailable;
-                    }
-
-                    async function useClientEngine() {
-                        if (enginePreference === 'server') return false;
-                        return await probeClientEngine();
                     }
 
                     // Reflects the user's choice + actual capability in the toolbar toggle button.
@@ -2439,23 +2438,23 @@
                         const btn = $('#btnEngineSource');
                         if (!btn) return;
 
-                        if (enginePreference === 'client' && clientEngineAvailable === null) {
-                            btn.textContent = '⏳ Engine: Checking…';
-                            btn.style.color = '#aaa';
-                            btn.style.borderColor = '#444';
-                            btn.title = 'Mendeteksi dukungan mesin browser…';
-                        } else if (enginePreference === 'client' && clientEngineAvailable) {
-                            btn.textContent = '🖥️ Engine: Browser';
+                        if (enginePreference === 'both') {
+                            btn.textContent = '⚡ Engine: Both';
                             btn.style.color = '#7fa650';
                             btn.style.borderColor = 'rgba(127,166,80,0.5)';
-                            btn.title = 'Analisis berjalan di browser (stockfish-web). Klik untuk beralih ke server.';
+                            btn.title = clientEngineAvailable === false
+                                ? 'Mesin browser tidak tersedia — hanya server yang aktif. Klik untuk beralih mode.'
+                                : 'Browser + server bekerja bersama: lebih cepat & lebih akurat. Klik untuk beralih mode.';
+                        } else if (enginePreference === 'client') {
+                            btn.textContent = '🖥️ Engine: Browser Only';
+                            btn.style.color = '#7fa650';
+                            btn.style.borderColor = 'rgba(127,166,80,0.5)';
+                            btn.title = 'Hanya mesin browser (stockfish-web). Klik untuk beralih mode.';
                         } else {
-                            btn.textContent = '☁️ Engine: Server';
+                            btn.textContent = '☁️ Engine: Server Only';
                             btn.style.color = '#5b9bd5';
                             btn.style.borderColor = 'rgba(91,155,213,0.5)';
-                            btn.title = clientEngineAvailable === false
-                                ? 'Mesin browser tidak tersedia di perangkat/hosting ini — menggunakan Stockfish server. Klik untuk mencoba mesin browser lagi.'
-                                : 'Analisis berjalan di server (Stockfish 18). Klik untuk beralih ke mesin browser.';
+                            btn.title = 'Hanya Stockfish server. Klik untuk beralih mode.';
                         }
                     }
 
@@ -2537,10 +2536,6 @@
                             $('#analysisPgnImportCard').style.display = 'none';
                             $('#analysisMainLayout').style.display = 'block';
 
-                            setTimeout(() => {
-                                if (analysisBoard) analysisBoard.redrawAll();
-                            }, 50);
-
                             $('#infoWhite').textContent = 'Pemain Bebas';
                             $('#infoBlack').textContent = 'Pemain Bebas';
                             $('#infoEvent').textContent = 'Analisis Live';
@@ -2548,8 +2543,14 @@
                             $('#infoResult').textContent = '';
 
                             analysisChess.reset();
-                            gotoMove(0);
-                            analyzeLivePosition(0, analysisPositions[0].fen);
+                            // Deferred so chessground has real dimensions before gotoMove(0) draws
+                            // anything (the container just switched from display:none to block).
+                            // gotoMove already kicks off analyzeLivePosition for the position it lands
+                            // on, so no separate call is needed here.
+                            setTimeout(() => {
+                                if (analysisBoard) analysisBoard.redrawAll();
+                                gotoMove(0);
+                            }, 50);
                         });
 
                         // Nav buttons
@@ -2722,28 +2723,23 @@
                         }
                         if (btnEngineSource) {
                             btnEngineSource.addEventListener('click', async () => {
-                                if (enginePreference === 'client') {
-                                    enginePreference = 'server';
-                                } else {
-                                    enginePreference = 'client';
-                                    clientEngineAvailable = null; // re-probe — the environment may have changed
+                                let next = ENGINE_MODE_CYCLE[(ENGINE_MODE_CYCLE.indexOf(enginePreference) + 1) % ENGINE_MODE_CYCLE.length];
+
+                                // "Browser only" needs the client engine to actually work — everything
+                                // else degrades gracefully on its own (server always covers "both",
+                                // and "server only" never touches the client engine at all).
+                                if (next === 'client') {
+                                    if (clientEngineAvailable === null) await probeClientEngine();
+                                    if (!clientEngineAvailable) {
+                                        toast('Mesin browser tidak tersedia di perangkat ini — dilewati.', 'error');
+                                        next = 'server';
+                                    }
                                 }
+
+                                enginePreference = next;
                                 localStorage.setItem('vrchess-engine-pref', enginePreference);
                                 updateEngineSourceUI();
-
-                                if (enginePreference === 'client') {
-                                    const ok = await probeClientEngine();
-                                    if (!ok) {
-                                        toast('Mesin browser tidak tersedia — tetap menggunakan Stockfish server.', 'error');
-                                        enginePreference = 'server';
-                                        localStorage.setItem('vrchess-engine-pref', enginePreference);
-                                        updateEngineSourceUI();
-                                    } else {
-                                        toast('Beralih ke mesin browser (stockfish-web).', 'info');
-                                    }
-                                } else {
-                                    toast('Beralih ke mesin server (Stockfish 18).', 'info');
-                                }
+                                toast(`Mode mesin: ${ENGINE_MODE_LABEL[enginePreference]}.`, 'info');
 
                                 triggerReanalysis();
                             });
@@ -2775,14 +2771,65 @@
 
                         badge.style.display = 'inline-flex';
                         let npsStr = nps > 0 ? ` · ${(nps / 1000000).toFixed(1)}M nps` : '';
-                        let sourceStr = source === 'client' ? '🖥️ Browser · ' : source === 'server' ? '☁️ Server · ' : '';
+                        // source is 'client', 'server', or 'client+server' (both engines contributing)
+                        const icons = (source || '').split('+').map((s) => s === 'client' ? '🖥️' : s === 'server' ? '☁️' : '').join('');
+                        let sourceStr = icons ? `${icons} · ` : '';
                         textEl.textContent = `${sourceStr}Depth ${depth}/${targetDepth}${npsStr}`;
                     }
 
+                    // Streams one server-side analysis over SSE, feeding onUpdate the same
+                    // {depth, score, score_type, bestmove, pv, multipv, nps} shape the client
+                    // engine produces, so both sources can be merged by analyzeLivePosition.
+                    async function runServerLive(fen, depth, multipv, signal, onUpdate) {
+                        const res = await fetch('/stockfish.php?stream=1', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ fen, depth, multipv, stream: true, chess960: isCurrentGame960 }),
+                            signal
+                        });
+
+                        if (!res.ok) {
+                            const data = await res.json().catch(() => ({}));
+                            throw new Error(data.error || 'Server error');
+                        }
+
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder();
+                        let buffer = '';
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop(); // keep last partial line in buffer
+
+                            for (const line of lines) {
+                                const trimmed = line.trim();
+                                if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                                let data;
+                                try {
+                                    data = JSON.parse(trimmed.substring(6));
+                                } catch (e) {
+                                    continue;
+                                }
+                                onUpdate(data);
+                            }
+                        }
+                    }
+
+                    // Runs the browser engine and the server engine on the same position at the
+                    // same time (subject to enginePreference), and always displays whichever
+                    // result is currently deepest — so the two "collaborate": you get the faster
+                    // one's early feedback and the more thorough one's eventual depth, and a
+                    // failure/unavailability in either one just means it contributes nothing for
+                    // this position — never a sticky fallback that has to be "switched back".
                     async function analyzeLivePosition(idx, fen) {
                         if (!isLiveEngineEnabled) return;
                         if (liveAnalysisAbort) liveAnalysisAbort.abort();
                         liveAnalysisAbort = new AbortController();
+                        const signal = liveAnalysisAbort.signal;
 
                         const depth = parseInt($('#liveDepthSelect')?.value) || 18;
                         const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
@@ -2793,15 +2840,27 @@
                             clearArrows();
                         }
 
-                        let engineSource = (await useClientEngine()) ? 'client' : 'server';
-                        updateEngineStreamBadge(true, 1, depth, 0, engineSource);
+                        const wantServer = enginePreference !== 'client';
+                        const willUseClient = (enginePreference !== 'server') && await probeClientEngine();
+
+                        const attemptedSources = [];
+                        if (willUseClient) attemptedSources.push('client');
+                        if (wantServer) attemptedSources.push('server');
+                        updateEngineStreamBadge(true, 1, depth, 0, attemptedSources.join('+'));
 
                         let lastRenderTime = 0;
-                        // Shared per-update handler — fed either by the client engine's onUpdate
-                        // callback or by parsed SSE frames from the server, since both produce
-                        // the same {depth, score, score_type, bestmove, pv, multipv, nps} shape.
-                        function applyLiveInfo(data) {
+                        let bestDepthSeen = -1;
+                        const sourcesShown = new Set();
+
+                        // Shared per-update handler — fed by whichever engine(s) are running.
+                        // Only lets an update win if it's at least as deep as what's already
+                        // displayed, so the two engines "race" and the more advanced one leads.
+                        function applyLiveInfo(data, source) {
                             if (!analysisPositions[idx]) return;
+                            const d = data.depth || 0;
+                            if (d < bestDepthSeen) return;
+                            bestDepthSeen = d;
+                            sourcesShown.add(source);
 
                             let scoreDisplay = null;
                             let scoreCp = null;
@@ -2826,7 +2885,7 @@
                             analysisPositions[idx].depth = data.depth;
                             analysisPositions[idx].nps = data.nps;
 
-                            updateEngineStreamBadge(true, data.depth || 0, depth, data.nps || 0, engineSource);
+                            updateEngineStreamBadge(true, d, depth, data.nps || 0, [...sourcesShown].join('+'));
 
                             if (currentMoveIdx === idx) {
                                 if (scoreDisplay !== null && scoreDisplay !== undefined) {
@@ -2859,92 +2918,45 @@
                             }
                         }
 
-                        // ── Default: in-browser stockfish-web ───────────────────────────────
-                        if (engineSource === 'client') {
-                            try {
-                                const result = await window.VRChessEngine.analyze(
-                                    fen,
-                                    { depth, multipv, chess960: isCurrentGame960 },
-                                    applyLiveInfo,
-                                    liveAnalysisAbort.signal
-                                );
-                                applyLiveInfo(result);
-                                // Only touch the shared badge/render for the position the user is
-                                // still looking at — a search that resolves late (it kept running
-                                // briefly after being told to stop) for a position they've since
-                                // navigated away from shouldn't hide the badge for the new one.
-                                if (currentMoveIdx === idx) {
-                                    updateEngineStreamBadge(false);
-                                    renderMoveList();
-                                    renderEvalChart();
-                                }
-                                return;
-                            } catch (e) {
-                                if (e.name === 'AbortError') {
-                                    if (currentMoveIdx === idx) updateEngineStreamBadge(false);
-                                    return;
-                                }
-                                console.warn('Client engine failed, falling back to server engine:', e);
-                                clientEngineAvailable = false; // don't retry the client engine again this session
-                                engineSource = 'server';
-                                updateEngineSourceUI();
-                                toast('Mesin browser gagal — beralih ke Stockfish server.', 'error');
-                            }
+                        const tasks = [];
+
+                        if (willUseClient) {
+                            tasks.push(
+                                window.VRChessEngine.analyze(
+                                    fen, { depth, multipv, chess960: isCurrentGame960 },
+                                    (d) => applyLiveInfo(d, 'client'), signal
+                                )
+                                    .then((r) => { applyLiveInfo(r, 'client'); return true; })
+                                    .catch((e) => {
+                                        if (e.name === 'AbortError') return null;
+                                        console.warn('Client engine failed for this position (server will still cover it if enabled):', e);
+                                        return false;
+                                    })
+                            );
                         }
 
-                        // ── Fallback: server-side Stockfish via SSE ─────────────────────────
-                        try {
-                            const res = await fetch('/stockfish.php?stream=1', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ fen: fen, depth: depth, multipv: multipv, stream: true, chess960: isCurrentGame960 }),
-                                signal: liveAnalysisAbort.signal
-                            });
+                        if (wantServer) {
+                            tasks.push(
+                                runServerLive(fen, depth, multipv, signal, (d) => applyLiveInfo(d, 'server'))
+                                    .then(() => true)
+                                    .catch((e) => {
+                                        if (e.name === 'AbortError') return null;
+                                        console.error('Server engine failed for this position:', e);
+                                        return false;
+                                    })
+                            );
+                        }
 
-                            if (!res.ok) {
-                                const data = await res.json().catch(() => ({}));
-                                throw new Error(data.error || 'Server error');
-                            }
+                        const outcomes = tasks.length ? await Promise.all(tasks) : [];
 
-                            const reader = res.body.getReader();
-                            const decoder = new TextDecoder();
-                            let buffer = '';
+                        if (currentMoveIdx === idx) {
+                            updateEngineStreamBadge(false);
+                            renderMoveList();
+                            renderEvalChart();
+                        }
 
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) break;
-
-                                buffer += decoder.decode(value, { stream: true });
-                                const lines = buffer.split('\n');
-                                buffer = lines.pop(); // keep last partial line in buffer
-
-                                for (const line of lines) {
-                                    const trimmed = line.trim();
-                                    if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-                                    const jsonStr = trimmed.substring(6);
-                                    let data;
-                                    try {
-                                        data = JSON.parse(jsonStr);
-                                    } catch (e) {
-                                        continue;
-                                    }
-
-                                    applyLiveInfo(data);
-                                }
-                            }
-
-                            if (currentMoveIdx === idx) {
-                                updateEngineStreamBadge(false);
-                                renderMoveList();
-                                renderEvalChart();
-                            }
-
-                        } catch (e) {
-                            if (e.name !== 'AbortError') {
-                                console.error('Live analysis error:', e);
-                            }
-                            if (currentMoveIdx === idx) updateEngineStreamBadge(false);
+                        if (tasks.length && outcomes.every((o) => o === false)) {
+                            toast('Analisis gagal di semua mesin yang aktif.', 'error');
                         }
                     }
 
@@ -3388,84 +3400,126 @@
                             };
                         }
 
-                        // Analyse in chunks of 20 to show progress. Default: in-browser stockfish-web,
-                        // one FEN at a time. Falls back to /stockfish.php (batched) if the client
-                        // engine isn't available or errors out mid-batch — the failing chunk is retried
-                        // on the server.
-                        analysisPositions = [];
+                        // Work-shared batch: browser and server engines both pull positions off the
+                        // same queue and analyze concurrently, instead of one engine sitting idle
+                        // while the other does all the work — a healthy pair finishes roughly twice
+                        // as fast as either alone. A position the client engine fails on is simply
+                        // handed to the server rather than disabling the client for the rest of the
+                        // batch — the very next position it claims is tried fresh.
+                        analysisPositions = new Array(total);
                         const chunkSize = 20;
-                        await useClientEngine();
-                        if ($('#analysisEngineLabel')) {
-                            $('#analysisEngineLabel').textContent = clientEngineAvailable ? '(🖥️ Browser)' : '(☁️ Server)';
+                        let nextClaim = 0;
+                        let completedCount = 0;
+                        const serverBacklog = [];
+                        let batchFailed = false;
+
+                        function buildPosEntry(pos, globalIdx) {
+                            return {
+                                fen: pos.fen,
+                                move_san: globalIdx === 0 ? null : analysisMovesSan[globalIdx - 1],
+                                clock: globalIdx === 0 ? null : (movesParsed[globalIdx - 1] ? movesParsed[globalIdx - 1].clock : null),
+                                score: pos.score,
+                                score_cp: pos.score_cp,
+                                score_type: pos.score_type,
+                                bestmove: pos.bestmove,
+                                pv: pos.pv || [],
+                                multipv: pos.multipv || [],
+                            };
                         }
-                        for (let start = 0; start < total; start += chunkSize) {
-                            const chunk = fenList.slice(start, start + chunkSize);
-                            try {
-                                let positions;
-                                if (clientEngineAvailable) {
-                                    positions = [];
-                                    for (let i = 0; i < chunk.length; i++) {
-                                        positions.push(await analyzeFenClient(chunk[i], i));
-                                        $('#analysisCurrent').textContent = Math.min(start + i + 1, total);
-                                        $('#analysisProgressBar').style.width = Math.min(100, Math.round(((start + i + 1) / total) * 100)) + '%';
-                                    }
-                                } else {
-                                    const res = await fetch('/stockfish.php', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ fens: chunk, depth: depth, multipv: multipv, chess960: isCurrentGame960 })
-                                    });
-                                    const data = await res.json();
-                                    if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
-                                    positions = data.positions;
-                                }
 
-                                for (const pos of positions) {
-                                    const globalIdx = start + pos.move_index;
-                                    analysisPositions.push({
-                                        fen: pos.fen,
-                                        move_san: globalIdx === 0 ? null : analysisMovesSan[globalIdx - 1],
-                                        clock: globalIdx === 0 ? null : (movesParsed[globalIdx - 1] ? movesParsed[globalIdx - 1].clock : null),
-                                        score: pos.score,
-                                        score_cp: pos.score_cp,
-                                        score_type: pos.score_type,
-                                        bestmove: pos.bestmove,
-                                        pv: pos.pv || [],
-                                        multipv: pos.multipv || [],
-                                    });
-                                }
-                                mainPositions = [...analysisPositions];
-                                $('#analysisCurrent').textContent = Math.min(start + chunkSize, total);
-                                $('#analysisProgressBar').style.width = Math.min(100, Math.round(((start + chunkSize) / total) * 100)) + '%';
+                        function recordProgress() {
+                            completedCount++;
+                            $('#analysisCurrent').textContent = completedCount;
+                            $('#analysisProgressBar').style.width = Math.round((completedCount / total) * 100) + '%';
+                        }
 
-                            } catch (err) {
-                                if (clientEngineAvailable) {
-                                    console.warn('Client engine failed during batch analysis, falling back to server engine:', err);
-                                    clientEngineAvailable = false;
-                                    updateEngineSourceUI();
-                                    if ($('#analysisEngineLabel')) $('#analysisEngineLabel').textContent = '(☁️ Server)';
-                                    toast('Mesin browser gagal — beralih ke Stockfish server.', 'error');
-                                    start -= chunkSize; // retry this same chunk on the server
-                                    continue;
+                        async function clientBatchWorker() {
+                            if (enginePreference === 'server') return;
+                            if (!(await probeClientEngine())) return;
+                            while (!batchFailed) {
+                                const i = nextClaim < total ? nextClaim++ : null;
+                                if (i === null) return;
+                                try {
+                                    const pos = await analyzeFenClient(fenList[i], i);
+                                    analysisPositions[i] = buildPosEntry(pos, i);
+                                } catch (err) {
+                                    console.warn(`Client engine failed on position ${i}, handing it to the server:`, err);
+                                    serverBacklog.push(i);
                                 }
-                                toast('Analisis gagal: ' + err.message, 'error');
-                                $('#btnStartPgnAnalysis').disabled = false;
-                                $('#analysisProgress').style.display = 'none';
-                                return;
+                                recordProgress();
                             }
                         }
+
+                        async function serverBatchWorker() {
+                            if (enginePreference === 'client') {
+                                // Even in "browser only" mode, the server still mops up positions the
+                                // client engine couldn't handle — it just never competes for fresh work.
+                                while (!batchFailed) {
+                                    if (completedCount >= total) return;
+                                    if (serverBacklog.length === 0) {
+                                        await new Promise((r) => setTimeout(r, 60));
+                                        continue;
+                                    }
+                                    await runServerBatchChunk(serverBacklog.splice(0, chunkSize));
+                                }
+                                return;
+                            }
+
+                            while (!batchFailed) {
+                                const batchIdxs = [];
+                                while (batchIdxs.length < chunkSize) {
+                                    if (serverBacklog.length) { batchIdxs.push(serverBacklog.shift()); continue; }
+                                    if (nextClaim < total) { batchIdxs.push(nextClaim++); continue; }
+                                    break;
+                                }
+                                if (batchIdxs.length === 0) {
+                                    if (completedCount >= total) return;
+                                    await new Promise((r) => setTimeout(r, 60)); // wait for a possible client-engine handoff
+                                    continue;
+                                }
+                                await runServerBatchChunk(batchIdxs);
+                            }
+                        }
+
+                        async function runServerBatchChunk(batchIdxs) {
+                            try {
+                                const res = await fetch('/stockfish.php', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ fens: batchIdxs.map((i) => fenList[i]), depth, multipv, chess960: isCurrentGame960 })
+                                });
+                                const data = await res.json();
+                                if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
+                                for (const pos of data.positions) {
+                                    const globalIdx = batchIdxs[pos.move_index];
+                                    analysisPositions[globalIdx] = buildPosEntry(pos, globalIdx);
+                                    recordProgress();
+                                }
+                            } catch (err) {
+                                batchFailed = true;
+                                toast('Analisis gagal: ' + err.message, 'error');
+                            }
+                        }
+
+                        if ($('#analysisEngineLabel')) {
+                            const label = enginePreference === 'both' ? '(🖥️ Browser + ☁️ Server)'
+                                : enginePreference === 'client' ? '(🖥️ Browser)' : '(☁️ Server)';
+                            $('#analysisEngineLabel').textContent = label;
+                        }
+
+                        await Promise.all([clientBatchWorker(), serverBatchWorker()]);
 
                         $('#btnStartPgnAnalysis').disabled = false;
                         $('#analysisProgress').style.display = 'none';
 
+                        if (batchFailed) return;
+
+                        analysisPositions = analysisPositions.filter(Boolean); // defensive — should already be fully populated
+                        mainPositions = [...analysisPositions];
+
                         // Show main layout
                         $('#analysisPgnImportCard').style.display = 'none';
                         $('#analysisMainLayout').style.display = 'block';
-
-                        // Force resize if needed
-                        setTimeout(() => {
-                            if (analysisBoard) analysisBoard.redrawAll();
-                        }, 50);
 
                         // Populate game info
                         $('#infoWhite').textContent = analysisHeaders.White || '?';
@@ -3476,7 +3530,16 @@
 
                         renderMoveList();
                         renderEvalChart();
-                        gotoMove(0);
+
+                        // Deferred: the board container was just switched from display:none to
+                        // block, so chessground doesn't have real pixel dimensions on this tick yet
+                        // — redrawAll() (to pick up the new size) and gotoMove(0) (which draws the
+                        // best-move arrow) both need to run after that first layout/paint, or the
+                        // arrow's square-to-pixel math produces NaN SVG coordinates.
+                        setTimeout(() => {
+                            if (analysisBoard) analysisBoard.redrawAll();
+                            gotoMove(0);
+                        }, 50);
 
                         // Auto-save back to DB if this was a shared link that needed re-analysis
                         if (currentAnalysisId && mainPositions.length > 1) {
@@ -3989,9 +4052,14 @@
 
                                     renderMoveList();
                                     renderEvalChart();
-                                    gotoMove(0);
 
-                                    setTimeout(() => { if (analysisBoard) analysisBoard.redrawAll(); }, 50);
+                                    // Deferred for the same reason as after PGN batch analysis: the
+                                    // board container just went display:none -> block, so chessground
+                                    // has no real dimensions yet this tick.
+                                    setTimeout(() => {
+                                        if (analysisBoard) analysisBoard.redrawAll();
+                                        gotoMove(0);
+                                    }, 50);
                                     toast('Analysis loaded!', 'success');
                                 } else if (data.success && data.data && data.data.pgn) {
                                     // Fallback: analysis not saved, just populate PGN and re-run

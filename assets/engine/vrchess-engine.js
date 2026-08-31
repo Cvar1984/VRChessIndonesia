@@ -231,7 +231,29 @@ class EngineSession {
             if (movetime != null) this.send(`go movetime ${movetime}`);
             else this.send(`go depth ${Math.max(1, Math.min(99, depth ?? 18))}`);
 
-            return await donePromise;
+            // Safety net: if the worker ever wedges (crashed thread, browser throttling a
+            // background tab, etc.) donePromise would hang forever and jam the queue for every
+            // position after it. A generous timeout — scaled to how long the search was asked
+            // to run — turns that into "this position falls back to the server" instead, and
+            // discards the whole engine/session so the *next* position gets a fresh worker
+            // rather than being queued behind a permanently-stuck one.
+            const budgetMs = movetime != null ? movetime : (depth ?? 18) * 1500;
+            const timeoutMs = Math.max(15000, budgetMs * 3);
+            let timeoutHandle;
+            const timeout = new Promise((_, reject) => {
+                timeoutHandle = setTimeout(() => reject(new Error('Engine search timed out')), timeoutMs);
+            });
+            try {
+                return await Promise.race([donePromise, timeout]);
+            } catch (e) {
+                if (/timed out/.test(e.message)) {
+                    this.search = null;
+                    resetSession(); // next getSession() call boots a fresh worker
+                }
+                throw e;
+            } finally {
+                clearTimeout(timeoutHandle);
+            }
         } finally {
             if (signal && onAbort) signal.removeEventListener('abort', onAbort);
         }
@@ -246,4 +268,12 @@ export async function getSession() {
         sessionPromise = getEngine().then((sf) => (sf ? new EngineSession(sf) : null));
     }
     return sessionPromise;
+}
+
+// Discards the cached engine/session so the next getSession() call boots a fresh worker.
+// Used to recover from a wedged search (see the timeout in _runSearch) — never call this for
+// an ordinary per-position failure, only for "the engine stopped responding entirely".
+export function resetSession() {
+    sessionPromise = null;
+    enginePromise = null;
 }
