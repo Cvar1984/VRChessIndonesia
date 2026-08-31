@@ -187,7 +187,7 @@
                         <p class="app-header__subtitle">Rating &amp; Match Management System</p>
                     </div>
                 </div>
-                <div style="position: absolute; right: 0; top: 28px; display: flex; align-items: center; gap: 10px;">
+                <div class="app-header__actions">
                     <span id="authBadge" class="auth-badge admin-only"></span>
                     <button class="btn btn--primary btn--sm visitor-only" id="btnOpenLoginModal" type="button">🔑 Admin
                         Login</button>
@@ -568,11 +568,12 @@
                         style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
 
                         <!-- Left: Board Area -->
-                        <div
+                        <div class="board-column"
                             style="flex:1 1 450px; min-width:320px; max-width:600px; display:flex; flex-direction:column; gap:8px; position: sticky; top: 20px; z-index: 100;">
 
-                            <!-- Player Top (Black) -->
-                            <div
+                            <!-- Player Top (Black by default — swaps with the bottom row when the
+                                 board is flipped, see .board-column.flipped in style.css) -->
+                            <div class="player-row player-row--top"
                                 style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-bottom: 4px;">
                                 <div style="display:flex; gap:10px; align-items:center;">
                                     <div
@@ -592,7 +593,7 @@
                             </div>
 
                             <!-- Eval Bar + Board -->
-                            <div
+                            <div class="board-row"
                                 style="display:flex; gap:0; align-items:stretch; border-radius:6px; overflow:hidden; box-shadow:var(--shadow-lg); background: #2f2e2c;">
                                 <!-- Eval Bar (vertical) -->
                                 <div id="evalBarOuter"
@@ -609,8 +610,8 @@
                                 </div>
                             </div>
 
-                            <!-- Player Bottom (White) -->
-                            <div
+                            <!-- Player Bottom (White by default) -->
+                            <div class="player-row player-row--bottom"
                                 style="display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:0.9rem; font-weight:700; color:#ddd; margin-top: 4px;">
                                 <div style="display:flex; gap:10px; align-items:center;">
                                     <div
@@ -630,7 +631,7 @@
                             </div>
 
                             <!-- Board Controls -->
-                            <div
+                            <div class="board-controls-row"
                                 style="display:flex; justify-content:center; gap:0; background:#262421; border-radius:6px; overflow:hidden; margin-top:4px; border: 1px solid #33312e;">
                                 <button class="btn-cc" id="btnAnalysisFlip2" title="Flip board">⇅</button>
                                 <button class="btn-cc" id="btnAnalysisFirst" title="First move">⏮</button>
@@ -652,22 +653,23 @@
                             <div
                                 style="background:#262421; border-radius:6px; border: 1px solid #33312e; overflow:hidden; display:flex; flex-direction:column;">
                                 <!-- Tabs -->
-                                <div style="display:flex; background:#1f1e1b; border-bottom: 1px solid #33312e;">
+                                <div
+                                    style="display:flex; flex-wrap:wrap; background:#1f1e1b; border-bottom: 1px solid #33312e;">
                                     <div
                                         style="padding:12px 20px; font-weight:800; color:#fff; border-bottom:3px solid #7fa650; font-size:0.85rem; background:#262421;">
                                         Analysis</div>
                                     <div style="padding:12px 20px; font-weight:700; color:#888; font-size:0.85rem;">
                                         Details</div>
                                     <div
-                                        style="margin-left:auto; display:flex; align-items:center; padding-right:12px;">
+                                        style="margin-left:auto; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:6px 12px;">
                                         <button class="btn btn--secondary btn--xs" id="btnExportPgn"
-                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; margin-right: 8px;">📥
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">📥
                                             Export</button>
                                         <button class="btn btn--secondary btn--xs" id="btnSaveAnalysis"
-                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; margin-right: 8px;">🔗
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">🔗
                                             Share Link</button>
                                         <button class="btn btn--secondary btn--xs" id="btnNewAnalysis"
-                                            style="background:#33312e; border:none; color:#ddd; font-weight:600;">➕
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">➕
                                             New</button>
                                     </div>
                                 </div>
@@ -694,9 +696,9 @@
                                 <!-- Evaluation & Engine Lines -->
                                 <div style="padding:16px 20px; display:flex; flex-direction:column; gap:10px;">
                                     <!-- Live Engine Settings Toolbar -->
-                                    <div
-                                        style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#1a1917; padding:6px 12px; border-radius:6px; border:1px solid #33312e; font-size:0.78rem;">
-                                        <div style="display:flex; align-items:center; gap:12px;">
+                                    <div class="live-engine-toolbar"
+                                        style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; background:#1a1917; padding:6px 12px; border-radius:6px; border:1px solid #33312e; font-size:0.78rem;">
+                                        <div style="display:flex; align-items:center; gap:12px; min-width:0;">
                                             <div style="display:flex; align-items:center; gap:6px;">
                                                 <label for="liveDepthSelect"
                                                     style="color:#aaa; font-weight:600; font-size:0.75rem;">Depth:</label>
@@ -716,20 +718,20 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        <div style="display:flex; align-items:center; gap:6px;">
+                                        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                                             <button id="btnEngineSource" class="btn btn--secondary btn--xs"
-                                                style="background:#33312e; color:#aaa; border:1px solid #444; font-weight:700; padding:3px 8px;"
+                                                style="background:#33312e; color:#aaa; border:1px solid #444; font-weight:700; padding:3px 8px; white-space:nowrap;"
                                                 type="button" title="Klik untuk beralih mesin analisis">
-                                                ⏳ Engine: Checking…
+                                                ⏳ …
                                             </button>
                                             <button id="btnToggleLiveEngine" class="btn btn--secondary btn--xs"
-                                                style="background:#33312e; color:#7fa650; border:1px solid rgba(127,166,80,0.5); font-weight:700; padding:3px 8px;"
+                                                style="background:#33312e; color:#7fa650; border:1px solid rgba(127,166,80,0.5); font-weight:700; padding:3px 8px; white-space:nowrap;"
                                                 type="button" title="Toggle Live Engine">
-                                                ⚡ Live Engine: ON
+                                                ⚡ Live: ON
                                             </button>
                                         </div>
                                     </div>
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; row-gap:6px;">
                                         <div style="display:flex; align-items:baseline; gap:12px;">
                                             <span id="posEvalScore"
                                                 style="font-size:2rem; font-weight:800; font-family:var(--font-mono); color:#fff; line-height:1;">+0.00</span>
@@ -809,6 +811,15 @@
             <!-- ── Footer ── -->
             <footer class="app-footer">
                 VRChess Indonesia &copy; 2026 — Built with ♥ for the Indonesian Chess Community
+                <span class="app-footer__sep">·</span>
+                <a class="app-footer__link" href="https://github.com/Cvar1984/VRChessIndonesia" target="_blank"
+                    rel="noopener">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                        <path
+                            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+                    </svg>
+                    GitHub
+                </a>
             </footer>
 
         </div>
@@ -2872,20 +2883,22 @@
                         const btn = $('#btnEngineSource');
                         if (!btn) return;
 
+                        // Kept short (full explanation lives in the tooltip) so this never forces
+                        // horizontal overflow in the toolbar on narrow/foldable-width screens.
                         if (enginePreference === 'both') {
-                            btn.textContent = '⚡ Engine: Both';
+                            btn.textContent = '⚡ Both';
                             btn.style.color = '#7fa650';
                             btn.style.borderColor = 'rgba(127,166,80,0.5)';
                             btn.title = clientEngineAvailable === false
                                 ? 'Mesin browser tidak tersedia — hanya server yang aktif. Klik untuk beralih mode.'
                                 : 'Browser mesin utama (tidak pernah menunggu server); server menambah kedalaman di latar belakang tanpa memperlambat. Klik untuk beralih mode.';
                         } else if (enginePreference === 'client') {
-                            btn.textContent = '🖥️ Engine: Browser Only';
+                            btn.textContent = '🖥️ Browser';
                             btn.style.color = '#7fa650';
                             btn.style.borderColor = 'rgba(127,166,80,0.5)';
                             btn.title = 'Hanya mesin browser (stockfish-web). Klik untuk beralih mode.';
                         } else {
-                            btn.textContent = '☁️ Engine: Server Only';
+                            btn.textContent = '☁️ Server';
                             btn.style.color = '#5b9bd5';
                             btn.style.borderColor = 'rgba(91,155,213,0.5)';
                             btn.title = 'Hanya Stockfish server. Klik untuk beralih mode.';
@@ -2994,6 +3007,10 @@
                         $('#btnAnalysisLast').addEventListener('click', () => gotoMove(analysisPositions.length - 1));
                         $('#btnAnalysisFlip2').addEventListener('click', () => {
                             analysisBoard.toggleOrientation();
+                            // Keep the player rows (name/clock/accuracy/stats) and eval bar in
+                            // sync with which side is now visually on top/bottom.
+                            const isFlipped = analysisBoard.state.orientation === 'black';
+                            $('.board-column')?.classList.toggle('flipped', isFlipped);
                             drawBestMoveArrow();
                         });
 
@@ -3144,12 +3161,12 @@
                                 if (isLiveEngineEnabled) {
                                     btnToggleEngine.style.color = '#7fa650';
                                     btnToggleEngine.style.borderColor = 'rgba(127,166,80,0.5)';
-                                    btnToggleEngine.innerHTML = '⚡ Live Engine: ON';
+                                    btnToggleEngine.innerHTML = '⚡ Live: ON';
                                     triggerReanalysis();
                                 } else {
                                     btnToggleEngine.style.color = '#aaa';
                                     btnToggleEngine.style.borderColor = '#444';
-                                    btnToggleEngine.innerHTML = '⏸ Live Engine: OFF';
+                                    btnToggleEngine.innerHTML = '⏸ Live: OFF';
                                     if (liveAnalysisAbort) liveAnalysisAbort.abort();
                                     updateEngineStreamBadge(false);
                                 }
