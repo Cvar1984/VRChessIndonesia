@@ -86,6 +86,14 @@ class EngineSession {
         this.sf = sf;
         this.waiters = [];
         this.search = null; // { onUpdate, resolve, result }
+        // Serializes analyze() calls. UCI only allows one search at a time, and stopping a
+        // search is asynchronous (send "stop", wait for the engine to actually emit
+        // "bestmove"). Without this queue, calling analyze() again right away — e.g. the user
+        // moves to the next position while the engine is still winding down the previous
+        // search — would throw "Engine is busy" and look like the client engine failed,
+        // triggering an unwanted fallback to the server. Queueing just waits the handful of
+        // milliseconds for the stop to land, then proceeds, so the local engine keeps being used.
+        this.queue = Promise.resolve();
         sf.listen = (line) => this.onLine(line);
         sf.onError = (msg) => console.error('[vrchess-engine]', msg);
         this.ready = this.init();
@@ -177,35 +185,52 @@ class EngineSession {
 
     // Runs one search to completion. Resolves with the final result; onUpdate (optional)
     // fires on every info line so callers can render live progress, matching the
-    // server's SSE stream behaviour.
-    async analyze(fen, { depth, movetime, multipv = 1, chess960 = false } = {}, onUpdate, signal) {
+    // server's SSE stream behaviour. Queued — see the `queue` comment in the constructor.
+    analyze(fen, opts, onUpdate, signal) {
+        const run = () => this._runSearch(fen, opts, onUpdate, signal);
+        const result = this.queue.then(run);
+        // Keep the queue itself always-resolving so one failed/aborted search doesn't jam
+        // up whatever's queued behind it.
+        this.queue = result.then(() => { }, () => { });
+        return result;
+    }
+
+    async _runSearch(fen, { depth, movetime, multipv = 1, chess960 = false } = {}, onUpdate, signal) {
         await this.ready;
-        if (this.search) throw new Error('Engine is busy with another search');
+        // By the time its turn comes up, a queued call may already be stale (the user
+        // navigated past it again) — skip engaging the engine entirely for it.
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        if (this.search) throw new Error('Engine is busy with another search'); // should be unreachable — queue serializes calls
 
-        this.send('ucinewgame');
-        this.send('isready');
-        await this.waitFor('readyok');
-
-        this.send(`setoption name MultiPV value ${Math.max(1, Math.min(5, multipv))}`);
-        this.send(`setoption name UCI_Chess960 value ${chess960 ? 'true' : 'false'}`);
-        this.send(`position fen ${fen}`);
-
-        const result = freshResult();
-        const donePromise = new Promise((resolve) => {
-            this.search = { onUpdate, resolve, result };
-        });
-
+        // Attach the abort listener before the ucinewgame/isready handshake (not just
+        // around "go") so a navigation that happens during that handshake still stops
+        // this search promptly instead of running it to completion unstopped, which would
+        // otherwise delay whatever search is queued behind it.
         let onAbort;
         if (signal) {
             onAbort = () => this.send('stop');
             signal.addEventListener('abort', onAbort, { once: true });
         }
 
-        if (movetime != null) this.send(`go movetime ${movetime}`);
-        else this.send(`go depth ${Math.max(1, Math.min(99, depth ?? 18))}`);
-
         try {
+            this.send('ucinewgame');
+            this.send('isready');
+            await this.waitFor('readyok');
+
+            if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+            this.send(`setoption name MultiPV value ${Math.max(1, Math.min(5, multipv))}`);
+            this.send(`setoption name UCI_Chess960 value ${chess960 ? 'true' : 'false'}`);
+            this.send(`position fen ${fen}`);
+
+            const result = freshResult();
+            const donePromise = new Promise((resolve) => {
+                this.search = { onUpdate, resolve, result };
+            });
+
+            if (movetime != null) this.send(`go movetime ${movetime}`);
+            else this.send(`go depth ${Math.max(1, Math.min(99, depth ?? 18))}`);
+
             return await donePromise;
         } finally {
             if (signal && onAbort) signal.removeEventListener('abort', onAbort);

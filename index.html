@@ -2869,15 +2869,19 @@
                                     liveAnalysisAbort.signal
                                 );
                                 applyLiveInfo(result);
-                                updateEngineStreamBadge(false);
+                                // Only touch the shared badge/render for the position the user is
+                                // still looking at — a search that resolves late (it kept running
+                                // briefly after being told to stop) for a position they've since
+                                // navigated away from shouldn't hide the badge for the new one.
                                 if (currentMoveIdx === idx) {
+                                    updateEngineStreamBadge(false);
                                     renderMoveList();
                                     renderEvalChart();
                                 }
                                 return;
                             } catch (e) {
                                 if (e.name === 'AbortError') {
-                                    updateEngineStreamBadge(false);
+                                    if (currentMoveIdx === idx) updateEngineStreamBadge(false);
                                     return;
                                 }
                                 console.warn('Client engine failed, falling back to server engine:', e);
@@ -2930,8 +2934,8 @@
                                 }
                             }
 
-                            updateEngineStreamBadge(false);
                             if (currentMoveIdx === idx) {
+                                updateEngineStreamBadge(false);
                                 renderMoveList();
                                 renderEvalChart();
                             }
@@ -2940,7 +2944,7 @@
                             if (e.name !== 'AbortError') {
                                 console.error('Live analysis error:', e);
                             }
-                            updateEngineStreamBadge(false);
+                            if (currentMoveIdx === idx) updateEngineStreamBadge(false);
                         }
                     }
 
