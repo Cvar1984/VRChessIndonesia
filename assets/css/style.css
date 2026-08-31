@@ -142,6 +142,51 @@ body::before {
     letter-spacing: 0.02em;
 }
 
+.app-header__actions {
+    position: absolute;
+    right: 0;
+    top: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ── Analysis board flip ── */
+/* toggleOrientation() only rotates the chessground board itself. These rules keep the
+   player name/clock/stats rows and the eval bar in sync with it — otherwise, after a flip,
+   the row still labeled "Black" visually sits over the side now showing White's pieces. */
+.board-column .player-row--top {
+    order: 1;
+}
+
+.board-column .board-row {
+    order: 2;
+}
+
+.board-column .player-row--bottom {
+    order: 3;
+}
+
+.board-column .board-controls-row {
+    order: 4;
+}
+
+.board-column.flipped .player-row--top {
+    order: 3;
+}
+
+.board-column.flipped .player-row--bottom {
+    order: 1;
+}
+
+.board-column.flipped #evalBarBlack {
+    order: 2;
+}
+
+.board-column.flipped #evalBarWhite {
+    order: 1;
+}
+
 /* ── Connection Status Bar ── */
 .connection-bar {
     display: flex;
@@ -1096,6 +1141,23 @@ body::before {
     color: var(--text-muted);
 }
 
+.app-footer__sep {
+    margin: 0 6px;
+}
+
+.app-footer__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.app-footer__link:hover {
+    color: var(--accent-primary);
+}
+
 /* ── Modal Overlay ── */
 .modal-overlay {
     position: fixed;
@@ -1333,9 +1395,12 @@ body::before {
     }
 }
 
-/* Wide foldables have enough room for a compact board and analysis sidebar.
-   Keep the move history beside the board instead of stacking it underneath. */
-@media (min-width: 600px) and (max-width: 768px) {
+/* Wide foldables/tablets have enough room for a compact board and analysis sidebar. Keep the
+   move history fixed beside the board instead of letting it wrap underneath — this covers
+   everything from a small unfolded foldable up through where the default (unmedia-queried)
+   desktop layout already fits both at their natural max-width without any help
+   (board 600px + sidebar 400px + gap fits any viewport past ~1024px on its own). */
+@media (min-width: 600px) and (max-width: 1024px) {
     .chesscom-layout {
         flex-direction: row !important;
         flex-wrap: nowrap !important;
@@ -1345,7 +1410,7 @@ body::before {
     .chesscom-layout > div:first-child {
         flex: 1 1 0 !important;
         width: auto !important;
-        max-width: none !important;
+        max-width: 600px !important;
         min-width: 0 !important;
         position: sticky !important;
         top: 20px !important;
@@ -1355,6 +1420,7 @@ body::before {
         flex: 0 0 280px !important;
         width: 280px !important;
         max-width: 280px !important;
+        min-width: 0 !important;
         height: calc(100vh - 40px) !important;
         position: sticky !important;
         top: 20px !important;
@@ -1372,6 +1438,15 @@ body::before {
 
     .card {
         padding: 16px;
+    }
+
+    /* Narrow phones / a folded foldable's cover screen: the centered title can run under the
+       absolutely-positioned Admin Login button. Drop it back into normal flow, stacked below
+       the title, instead of floating over it. */
+    .app-header__actions {
+        position: static;
+        justify-content: center;
+        margin-top: 12px;
     }
 
     .leaderboard-table .hide-mobile {
@@ -1408,6 +1483,10 @@ body::before {
     padding: 4px 10px;
     border-radius: 12px;
     transition: all var(--transition-fast);
+    /* Long text ("Browser+Server · Depth 12/18 · 2.1M nps") must wrap within the sidebar
+       instead of forcing it wider — narrow/foldable-width columns rely on this. */
+    max-width: 100%;
+    white-space: normal;
 }
 
 /* ── Player Profile: avatars ── */
