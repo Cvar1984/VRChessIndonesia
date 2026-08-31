@@ -945,47 +945,64 @@
                         <div class="modal-avatar" id="modalPlayerAvatar">♚</div>
                         <div>
                             <h3 id="modalPlayerUsername" style="margin:0;">Player</h3>
-                            <span class="player-rating-badge" id="modalPlayerRatingBadge">Rating: 400</span>
+                            <div class="modal-header__badges">
+                                <span class="player-rating-badge" id="modalPlayerRatingBadge">Rating: 400</span>
+                                <span class="player-rating-badge player-rating-badge--rank" id="modalPlayerRankBadge">—</span>
+                            </div>
                         </div>
                     </div>
                     <button class="modal-close-btn" id="btnClosePlayerStats" aria-label="Close">&times;</button>
                 </div>
 
-                <div class="stats-overview-grid" id="modalPlayerStatsGrid">
-                    <div class="stat-box">
-                        <div class="stat-box__val" id="statGames">0</div>
-                        <div class="stat-box__lbl">Main</div>
+                <div class="form-guide" id="modalFormGuide" style="display:none;">
+                    <span class="form-guide__label">Performa Terakhir</span>
+                    <span class="form-guide__dots" id="modalFormDots"></span>
+                </div>
+
+                <div class="wdl-bar" id="modalWdlBar" title="Proporsi Menang / Seri / Kalah">
+                    <span class="wdl-bar__seg wdl-bar__seg--win" id="wdlSegWin" style="width:0%"></span>
+                    <span class="wdl-bar__seg wdl-bar__seg--draw" id="wdlSegDraw" style="width:0%"></span>
+                    <span class="wdl-bar__seg wdl-bar__seg--loss" id="wdlSegLoss" style="width:0%"></span>
+                </div>
+                <div class="wdl-bar__legend">
+                    <span class="wdl-bar__legend-item"><i class="wdl-dot wdl-dot--win"></i>Menang <b id="legendWins">0</b></span>
+                    <span class="wdl-bar__legend-item"><i class="wdl-dot wdl-dot--draw"></i>Seri <b id="legendDraws">0</b></span>
+                    <span class="wdl-bar__legend-item"><i class="wdl-dot wdl-dot--loss"></i>Kalah <b id="legendLosses">0</b></span>
+                </div>
+
+                <div class="tab-nav tab-nav--modal">
+                    <button class="modal-tab-btn active" data-modal-tab="overview" type="button">
+                        <span class="tab-btn__icon">📊</span><span class="tab-btn__label">Ringkasan</span>
+                    </button>
+                    <button class="modal-tab-btn" data-modal-tab="history" type="button">
+                        <span class="tab-btn__icon">📜</span><span class="tab-btn__label">Riwayat</span>
+                        <span class="tab-btn__count" id="modalHistoryCount">0</span>
+                    </button>
+                </div>
+
+                <div class="modal-tab-content active" id="modalTabOverview">
+                    <div class="stats-overview-grid">
+                        <div class="stat-box">
+                            <div class="stat-box__val" id="statGames">0</div>
+                            <div class="stat-box__lbl">Main</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-box__val" id="statWinRate">0%</div>
+                            <div class="stat-box__lbl">Win Rate</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-box__val" id="statRank">—</div>
+                            <div class="stat-box__lbl">Peringkat</div>
+                        </div>
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-box__val stat-win" id="statWins">0</div>
-                        <div class="stat-box__lbl">Menang</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-box__val stat-draw" id="statDraws">0</div>
-                        <div class="stat-box__lbl">Seri</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-box__val stat-loss" id="statLosses">0</div>
-                        <div class="stat-box__lbl">Kalah</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-box__val" id="statValidMatches">0</div>
-                        <div class="stat-box__lbl">Valid</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-box__val" id="statInvalidMatches">0</div>
-                        <div class="stat-box__lbl">Invalid</div>
+                    <div class="profile-meta-row">
+                        <span id="statValidMatches">0 valid</span>
+                        <span id="statInvalidMatches">0 dianulir</span>
                     </div>
                 </div>
 
-                <div class="winrate-section">
-                    <div class="winrate-section__header">
-                        <span>Win Rate</span>
-                        <span id="statWinRatePercent">0%</span>
-                    </div>
-                    <div class="winrate-bar-lg">
-                        <div class="winrate-bar-lg__fill" id="statWinRateBar" style="width:0%"></div>
-                    </div>
+                <div class="modal-tab-content" id="modalTabHistory">
+                    <div class="profile-history-list" id="profileHistoryList"></div>
                 </div>
 
                 <div class="modal-footer"
@@ -1360,6 +1377,175 @@
                     container.innerHTML = html;
                 }
 
+                // ── Profile / Formatting Helpers ──
+                function getInitials(username) {
+                    const s = String(username || '').trim();
+                    if (!s) return '?';
+                    const parts = s.split(/\s+/);
+                    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+                    return (parts[0][0] + parts[1][0]).toUpperCase();
+                }
+
+                function hashHue(str) {
+                    let hash = 0;
+                    const s = String(str || '');
+                    for (let i = 0; i < s.length; i++) {
+                        hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+                    }
+                    return hash % 360;
+                }
+
+                function avatarGradient(username) {
+                    const hue = hashHue(username);
+                    const hue2 = (hue + 40) % 360;
+                    return `linear-gradient(135deg, hsl(${hue}, 70%, 55%), hsl(${hue2}, 70%, 45%))`;
+                }
+
+                function relativeTime(dateStr) {
+                    if (!dateStr) return '';
+                    const t = Date.parse(String(dateStr).replace(' ', 'T'));
+                    if (isNaN(t)) return String(dateStr);
+                    const diffSec = Math.round((Date.now() - t) / 1000);
+                    if (diffSec < 60) return 'Baru saja';
+                    const diffMin = Math.round(diffSec / 60);
+                    if (diffMin < 60) return `${diffMin} menit lalu`;
+                    const diffHour = Math.round(diffMin / 60);
+                    if (diffHour < 24) return `${diffHour} jam lalu`;
+                    const diffDay = Math.round(diffHour / 24);
+                    if (diffDay < 30) return `${diffDay} hari lalu`;
+                    const d = new Date(t);
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+                }
+
+                // Resolve a saved analysis reference (raw hex ID, or legacy path/absolute URL
+                // containing ?analysis=<id>) into a shareable full URL, or null if none.
+                function resolveAnalysisUrl(rawUrl) {
+                    if (!rawUrl) return null;
+                    const trimmed = String(rawUrl).trim();
+                    if (!trimmed) return null;
+                    if (/^[a-f0-9]{8,}$/i.test(trimmed)) {
+                        return window.location.origin + window.location.pathname + '?analysis=' + trimmed;
+                    }
+                    const analysisMatch = trimmed.match(/[?&]analysis=([a-f0-9]+)/i);
+                    if (analysisMatch) {
+                        return window.location.origin + window.location.pathname + '?analysis=' + analysisMatch[1];
+                    }
+                    return null;
+                }
+
+                function isMatchValid(m) {
+                    return !('is_valid' in m) || m.is_valid === true;
+                }
+
+                // Builds this player's match history (newest first) from the already-loaded
+                // matchesCache, enriched with opponent/outcome/rating-change from their POV.
+                function buildPlayerHistory(playerId) {
+                    return matchesCache
+                        .filter(m => m.white_id === playerId || m.black_id === playerId)
+                        .map(m => {
+                            const isWhite = m.white_id === playerId;
+                            const opponentId = isWhite ? m.black_id : m.white_id;
+                            const opponentName = playerIdMap[opponentId] || null;
+
+                            let outcome = 'draw';
+                            if (m.result === '1-0') outcome = isWhite ? 'win' : 'loss';
+                            else if (m.result === '0-1') outcome = isWhite ? 'loss' : 'win';
+
+                            const rawChange = isWhite ? m.rating_change_white : m.rating_change_black;
+                            const ratingChange = Math.round(parseFloat(rawChange)) || 0;
+
+                            return {
+                                id: m.id,
+                                date: m.date || '',
+                                opponentId,
+                                opponentName,
+                                color: isWhite ? 'white' : 'black',
+                                outcome,
+                                ratingChange,
+                                isValid: isMatchValid(m),
+                                analysisUrl: m.analysis_url || null
+                            };
+                        })
+                        .sort((a, b) => {
+                            const ta = Date.parse(String(a.date).replace(' ', 'T'));
+                            const tb = Date.parse(String(b.date).replace(' ', 'T'));
+                            if (!isNaN(ta) && !isNaN(tb) && ta !== tb) return tb - ta;
+                            return (b.id || 0) - (a.id || 0);
+                        });
+                }
+
+                function renderFormGuide(history) {
+                    const recent = history.filter(h => h.isValid).slice(0, 5).reverse();
+                    const guideEl = $('#modalFormGuide');
+                    const dotsEl = $('#modalFormDots');
+
+                    if (recent.length === 0) {
+                        guideEl.style.display = 'none';
+                        dotsEl.innerHTML = '';
+                        return;
+                    }
+
+                    guideEl.style.display = 'flex';
+                    dotsEl.innerHTML = recent.map(h => {
+                        const letter = h.outcome === 'win' ? 'M' : h.outcome === 'draw' ? 'S' : 'K';
+                        const label = h.outcome === 'win' ? 'Menang' : h.outcome === 'draw' ? 'Seri' : 'Kalah';
+                        const opp = h.opponentName || `Pemain #${h.opponentId}`;
+                        return `<span class="form-dot form-dot--${h.outcome}" title="${escHtml(label)} vs ${escHtml(opp)}">${letter}</span>`;
+                    }).join('');
+                }
+
+                function renderProfileHistory(history) {
+                    $('#modalHistoryCount').textContent = history.length;
+                    const container = $('#profileHistoryList');
+
+                    if (history.length === 0) {
+                        container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state__icon">🗒️</div>
+                            <div class="empty-state__text">Belum ada pertandingan tercatat</div>
+                        </div>`;
+                        return;
+                    }
+
+                    container.innerHTML = history.map(h => {
+                        const outcomeLetter = h.outcome === 'win' ? 'W' : h.outcome === 'draw' ? 'D' : 'L';
+                        const sideIcon = h.color === 'white' ? '⬜' : '⬛';
+                        const changeClass = h.ratingChange > 0 ? 'pos' : h.ratingChange < 0 ? 'neg' : 'zero';
+                        const changeLabel = h.ratingChange > 0 ? `+${h.ratingChange}` : `${h.ratingChange}`;
+                        const analysisUrl = resolveAnalysisUrl(h.analysisUrl);
+                        const opponentHtml = h.opponentName
+                            ? `<button class="profile-history-row__opponent" onclick="window.appViewPlayer('${escHtml(h.opponentName)}')">${escHtml(h.opponentName)}</button>`
+                            : `<span class="profile-history-row__opponent profile-history-row__opponent--deleted">Pemain Dihapus</span>`;
+
+                        return `
+                        <div class="profile-history-row ${!h.isValid ? 'is-invalid' : ''}">
+                            <span class="profile-history-row__result profile-history-row__result--${h.outcome}">${outcomeLetter}</span>
+                            <div class="profile-history-row__main">
+                                ${opponentHtml}
+                                <div class="profile-history-row__meta">
+                                    <span class="profile-history-row__side">${sideIcon}</span>
+                                    <span>${escHtml(relativeTime(h.date))}</span>
+                                    ${!h.isValid ? '<span class="profile-history-row__invalid-tag">🚫 Dianulir</span>' : ''}
+                                    ${analysisUrl ? `<a class="profile-history-row__link" href="${escHtml(analysisUrl)}" target="_blank" rel="noopener">📊 Analisis</a>` : ''}
+                                </div>
+                            </div>
+                            <div class="profile-history-row__end">
+                                <span class="profile-history-row__rating profile-history-row__rating--${changeClass}">${changeLabel}</span>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+
+                function switchModalTab(tabName) {
+                    $$('.tab-nav--modal .modal-tab-btn').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.modalTab === tabName);
+                    });
+                    $$('.modal-tab-content').forEach(panel => {
+                        panel.classList.toggle('active', panel.id === 'modalTab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+                    });
+                }
+
                 function renderLeaderboard(filter = '') {
                     const container = $('#leaderboardContainer');
                     let players = playersCache;
@@ -1409,9 +1595,14 @@
                             </td>` : '';
 
                         html += `
-                        <tr class="leaderboard-row" data-username="${escHtml(p.username)}">
+                        <tr class="leaderboard-row" data-username="${escHtml(p.username)}" tabindex="0" role="button" title="Lihat profil ${escHtml(p.username)}">
                             <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
-                            <td><span class="player-name">${escHtml(p.username)}</span></td>
+                            <td>
+                                <span class="leaderboard-row__player">
+                                    <span class="player-avatar-sm" style="background:${avatarGradient(p.username)}">${escHtml(getInitials(p.username))}</span>
+                                    <span class="player-name">${escHtml(p.username)}</span>
+                                </span>
+                            </td>
                             <td><span class="player-rating">${p.rating}</span></td>
                             <td class="hide-mobile"><span class="stat-value stat-win">${p.wins}</span></td>
                             <td class="hide-mobile"><span class="stat-value stat-draw">${p.draws}</span></td>
@@ -1432,6 +1623,13 @@
                         row.addEventListener('click', () => {
                             const username = row.dataset.username;
                             if (username) openPlayerStats(username);
+                        });
+                        row.addEventListener('keydown', (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                const username = row.dataset.username;
+                                if (username) openPlayerStats(username);
+                            }
                         });
                     });
                 }
@@ -1502,19 +1700,7 @@
                         else if (m.result === '0-1') { resultClass = 'black'; resultLabel = '0-1'; }
 
                         // Resolve analysis URL: build full URL from raw ID or legacy path/absolute URLs
-                        let resolvedAnalysisUrl = m.analysis_url || null;
-                        if (resolvedAnalysisUrl) {
-                            // Raw hex ID (e.g. "bfc44a8496005d38") — no slashes or query chars
-                            if (/^[a-f0-9]{8,}$/i.test(resolvedAnalysisUrl.trim())) {
-                                resolvedAnalysisUrl = window.location.origin + window.location.pathname + '?analysis=' + resolvedAnalysisUrl.trim();
-                            } else {
-                                // Legacy: absolute or relative URL containing ?analysis=<id>
-                                const analysisMatch = resolvedAnalysisUrl.match(/[?&]analysis=([a-f0-9]+)/);
-                                if (analysisMatch) {
-                                    resolvedAnalysisUrl = window.location.origin + window.location.pathname + '?analysis=' + analysisMatch[1];
-                                }
-                            }
-                        }
+                        const resolvedAnalysisUrl = resolveAnalysisUrl(m.analysis_url);
 
                         const analysisLink = resolvedAnalysisUrl
                             ? `<a class="match-card__link" href="${escHtml(resolvedAnalysisUrl)}" target="_blank" rel="noopener">📊 Analisis</a>`
@@ -1832,33 +2018,66 @@
                     }
                 };
 
-                async function openPlayerStats(username) {
+                function renderPlayerProfile(player, history) {
+                    const games = parseInt(player.games) || 0;
+                    const wins = parseInt(player.wins) || 0;
+                    const draws = parseInt(player.draws) || 0;
+                    const losses = parseInt(player.losses) || 0;
+                    const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+                    const total = Math.max(wins + draws + losses, 1);
+
+                    $('#statGames').textContent = games;
+                    $('#statWinRate').textContent = `${winRate}%`;
+
+                    $('#legendWins').textContent = wins;
+                    $('#legendDraws').textContent = draws;
+                    $('#legendLosses').textContent = losses;
+
+                    $('#wdlSegWin').style.width = `${(wins / total) * 100}%`;
+                    $('#wdlSegDraw').style.width = `${(draws / total) * 100}%`;
+                    $('#wdlSegLoss').style.width = `${(losses / total) * 100}%`;
+
+                    const validCount = history.filter(h => h.isValid).length;
+                    const invalidCount = history.length - validCount;
+                    $('#statValidMatches').textContent = `${validCount} valid`;
+                    $('#statInvalidMatches').textContent = `${invalidCount} dianulir`;
+
+                    renderFormGuide(history);
+                    renderProfileHistory(history);
+                }
+
+                function openPlayerStats(username) {
+                    const player = playersCache.find(p => p.username === username);
+                    if (!player) {
+                        toast('Data pemain tidak ditemukan.', 'error');
+                        return;
+                    }
+
                     activePlayerUsername = username;
+
                     $('#modalPlayerUsername').textContent = username;
-                    $('#modalPlayerRatingBadge').textContent = 'Loading…';
+                    $('#modalPlayerAvatar').textContent = getInitials(username);
+                    $('#modalPlayerAvatar').style.background = avatarGradient(username);
+                    $('#modalPlayerRatingBadge').textContent = `Rating: ${player.rating}`;
+
+                    const rankIndex = playersCache.findIndex(p => p.username === username);
+                    const rankLabel = rankIndex >= 0 ? `#${rankIndex + 1} dari ${playersCache.length}` : '—';
+                    $('#modalPlayerRankBadge').textContent = rankLabel;
+                    $('#statRank').textContent = rankIndex >= 0 ? `#${rankIndex + 1}` : '—';
+
+                    switchModalTab('overview');
                     $('#playerStatsModal').style.display = 'flex';
 
-                    try {
-                        const data = await apiCall(`/index.php?player-stats=1&username=${encodeURIComponent(username)}`);
-                        if (data.success && data.stats) {
-                            const s = data.stats;
-                            const p = s.player || {};
-                            $('#modalPlayerRatingBadge').textContent = `Rating: ${s.current_rating || p.rating || 400}`;
-                            $('#statGames').textContent = s.games || 0;
-                            $('#statWins').textContent = s.wins || 0;
-                            $('#statDraws').textContent = s.draws || 0;
-                            $('#statLosses').textContent = s.losses || 0;
-                            $('#statValidMatches').textContent = s.valid_matches || 0;
-                            $('#statInvalidMatches').textContent = s.invalid_matches || 0;
+                    const history = buildPlayerHistory(player.id);
+                    renderPlayerProfile(player, history);
 
-                            const games = parseInt(s.games) || 0;
-                            const wins = parseInt(s.wins) || 0;
-                            const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
-                            $('#statWinRatePercent').textContent = `${winRate}%`;
-                            $('#statWinRateBar').style.width = `${winRate}%`;
-                        }
-                    } catch (e) {
-                        toast('Gagal memuat statistik: ' + e.message, 'error');
+                    // Guard against the rare case a profile is opened before the initial
+                    // matches fetch (kicked off in checkConnection) has resolved yet.
+                    if (matchesCache.length === 0 && (parseInt(player.games) || 0) > 0) {
+                        fetchMatches(true).then(() => {
+                            if (activePlayerUsername !== username) return;
+                            renderPlayerProfile(player, buildPlayerHistory(player.id));
+                        });
                     }
                 }
 
@@ -1909,6 +2128,10 @@
                 };
 
                 // ── Global Handlers for Players/Matches ──
+                window.appViewPlayer = function (username) {
+                    openPlayerStats(username);
+                };
+
                 window.appOpenEditPlayer = function (username, rating) {
                     $('#editPlayerOldUsername').value = username;
                     $('#editPlayerUsername').value = username;
@@ -2317,6 +2540,25 @@
                     });
                     $('#btnDeletePlayerModalAction').addEventListener('click', () => {
                         if (activePlayerUsername) window.appDeletePlayer(activePlayerUsername);
+                    });
+
+                    // Player profile modal: internal tab switching
+                    $$('.tab-nav--modal .modal-tab-btn').forEach(btn => {
+                        btn.addEventListener('click', () => switchModalTab(btn.dataset.modalTab));
+                    });
+
+                    // Any modal: click the dimmed backdrop, or press Escape, to close it
+                    $$('.modal-overlay').forEach(overlay => {
+                        overlay.addEventListener('click', (e) => {
+                            if (e.target === overlay) overlay.style.display = 'none';
+                        });
+                    });
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape') {
+                            $$('.modal-overlay').forEach(overlay => {
+                                if (overlay.style.display === 'flex') overlay.style.display = 'none';
+                            });
+                        }
                     });
 
                     // Search & Filters
