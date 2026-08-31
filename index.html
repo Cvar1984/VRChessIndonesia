@@ -252,6 +252,8 @@
                         <div style="display:flex; gap:8px;">
                             <button class="btn btn--primary btn--sm admin-only" id="btnAddPlayerBtn" type="button">➕
                                 Tambah Pemain</button>
+                            <button class="btn btn--secondary btn--sm admin-only" id="btnRefreshVrchatAvatars"
+                                title="Segarkan foto profil VRChat" type="button">🔄 Avatar VRChat</button>
                             <button class="btn btn--secondary btn--sm" id="btnRefreshPlayers"
                                 title="Refresh leaderboard" type="button">↻ Refresh</button>
                         </div>
@@ -1038,6 +1040,16 @@
                         <button type="submit" class="btn btn--primary" id="btnSavePlayer">Simpan Perubahan</button>
                     </div>
                 </form>
+
+                <div class="vrchat-link-section">
+                    <label class="form-label">Akun VRChat</label>
+                    <div class="vrchat-link-status" id="vrchatLinkStatus"></div>
+                    <div class="vrchat-search-row">
+                        <input type="text" class="form-input" id="vrchatSearchInput" placeholder="Cari nama VRChat...">
+                        <button type="button" class="btn btn--secondary btn--sm" id="btnVrchatSearch">🔍 Cari</button>
+                    </div>
+                    <div class="vrchat-search-results" id="vrchatSearchResults"></div>
+                </div>
             </div>
         </div>
 
@@ -1401,6 +1413,25 @@
                     return `linear-gradient(135deg, hsl(${hue}, 70%, 55%), hsl(${hue2}, 70%, 45%))`;
                 }
 
+                // If an <img> avatar 404s/times out (VRChat CDN hiccup, revoked link, etc.),
+                // swap it for the generated initials avatar instead of showing a broken image.
+                window.__avatarFallback = function (img, displayName, sizeClass) {
+                    const span = document.createElement('span');
+                    span.className = sizeClass;
+                    span.style.background = avatarGradient(displayName);
+                    span.textContent = getInitials(displayName);
+                    img.replaceWith(span);
+                };
+
+                // Real VRChat photo when linked & cached, otherwise a generated initials avatar.
+                function avatarHtml(displayName, avatarUrl, sizeClass = 'player-avatar-sm') {
+                    const name = displayName || '';
+                    if (avatarUrl) {
+                        return `<img class="${sizeClass}" src="${escHtml(avatarUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="window.__avatarFallback(this, '${escHtml(name)}', '${sizeClass}')">`;
+                    }
+                    return `<span class="${sizeClass}" style="background:${avatarGradient(name)}">${escHtml(getInitials(name))}</span>`;
+                }
+
                 function relativeTime(dateStr) {
                     if (!dateStr) return '';
                     const t = Date.parse(String(dateStr).replace(' ', 'T'));
@@ -1599,7 +1630,7 @@
                             <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
                             <td>
                                 <span class="leaderboard-row__player">
-                                    <span class="player-avatar-sm" style="background:${avatarGradient(p.username)}">${escHtml(getInitials(p.username))}</span>
+                                    ${avatarHtml(p.vrchat_display_name || p.username, p.avatar_url)}
                                     <span class="player-name">${escHtml(p.username)}</span>
                                 </span>
                             </td>
@@ -2056,8 +2087,13 @@
                     activePlayerUsername = username;
 
                     $('#modalPlayerUsername').textContent = username;
-                    $('#modalPlayerAvatar').textContent = getInitials(username);
-                    $('#modalPlayerAvatar').style.background = avatarGradient(username);
+                    if (player.avatar_url) {
+                        $('#modalPlayerAvatar').style.background = 'none';
+                        $('#modalPlayerAvatar').innerHTML = avatarHtml(player.vrchat_display_name || username, player.avatar_url, 'modal-avatar-img');
+                    } else {
+                        $('#modalPlayerAvatar').style.background = avatarGradient(username);
+                        $('#modalPlayerAvatar').textContent = getInitials(username);
+                    }
                     $('#modalPlayerRatingBadge').textContent = `Rating: ${player.rating}`;
 
                     const rankIndex = playersCache.findIndex(p => p.username === username);
@@ -2136,8 +2172,131 @@
                     $('#editPlayerOldUsername').value = username;
                     $('#editPlayerUsername').value = username;
                     $('#editPlayerRating').value = rating;
+
+                    const player = playersCache.find(p => p.username === username) || null;
+                    renderVrchatLinkStatus(player);
+                    $('#vrchatSearchInput').value = username;
+                    $('#vrchatSearchResults').innerHTML = '';
+
                     $('#editPlayerModal').style.display = 'flex';
                 };
+
+                // ── VRChat Profile Linking (Admin) ──
+                function renderVrchatLinkStatus(player) {
+                    const box = $('#vrchatLinkStatus');
+                    if (!player || !player.vrchat_user_id) {
+                        box.innerHTML = `<span class="vrchat-link-status__empty">Belum ditautkan ke akun VRChat</span>`;
+                        return;
+                    }
+
+                    box.innerHTML = `
+                    <div class="vrchat-link-status__linked">
+                        ${avatarHtml(player.vrchat_display_name || player.username, player.avatar_url)}
+                        <span>Tertaut sebagai <strong>${escHtml(player.vrchat_display_name || player.vrchat_user_id)}</strong></span>
+                        <button type="button" class="btn btn--danger btn--xs" id="btnVrchatUnlink">Putuskan</button>
+                    </div>`;
+
+                    $('#btnVrchatUnlink').addEventListener('click', () => unlinkVrchat(player.username));
+                }
+
+                async function searchVrchat() {
+                    const query = $('#vrchatSearchInput').value.trim();
+                    const resultsEl = $('#vrchatSearchResults');
+                    if (!query) {
+                        toast('Ketik nama VRChat untuk dicari', 'error');
+                        return;
+                    }
+
+                    resultsEl.innerHTML = `<div class="vrchat-search-results__loading"><span class="spinner"></span> Mencari...</div>`;
+
+                    try {
+                        const res = await apiCall(`/index.php?vrchat-search=1&q=${encodeURIComponent(query)}`);
+                        if (!res.success) {
+                            resultsEl.innerHTML = '';
+                            toast(res.error || 'Pencarian VRChat gagal', 'error');
+                            return;
+                        }
+                        renderVrchatSearchResults(res.results || []);
+                    } catch (e) {
+                        resultsEl.innerHTML = '';
+                        toast('Pencarian VRChat gagal: ' + e.message, 'error');
+                    }
+                }
+
+                function renderVrchatSearchResults(results) {
+                    const resultsEl = $('#vrchatSearchResults');
+                    const username = $('#editPlayerOldUsername').value;
+
+                    if (results.length === 0) {
+                        resultsEl.innerHTML = `<div class="vrchat-search-results__empty">Tidak ada hasil.</div>`;
+                        return;
+                    }
+
+                    resultsEl.innerHTML = results.map(r => `
+                        <button type="button" class="vrchat-candidate" onclick="window.appLinkVrchat('${escHtml(username)}', '${escHtml(r.id)}', '${escHtml(r.displayName)}')">
+                            ${avatarHtml(r.displayName, r.thumbnail)}
+                            <span class="vrchat-candidate__name">${escHtml(r.displayName)}</span>
+                        </button>`
+                    ).join('');
+                }
+
+                window.appLinkVrchat = async function (username, vrchatUserId, displayName) {
+                    try {
+                        const res = await apiCall('/index.php?action=link-vrchat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username, vrchat_user_id: vrchatUserId })
+                        });
+
+                        if (res.success) {
+                            toast(`Ditautkan ke '${displayName}'.`, 'success');
+                            $('#vrchatSearchResults').innerHTML = '';
+                            await fetchPlayers(true);
+                            const player = playersCache.find(p => p.username === username) || null;
+                            renderVrchatLinkStatus(player);
+                        } else {
+                            toast(res.error || 'Gagal menautkan akun VRChat', 'error');
+                        }
+                    } catch (e) {
+                        toast('Gagal menautkan akun VRChat: ' + e.message, 'error');
+                    }
+                };
+
+                async function unlinkVrchat(username) {
+                    if (!confirm(`Putuskan tautan VRChat untuk '${username}'?`)) return;
+                    try {
+                        const res = await apiCall('/index.php?action=unlink-vrchat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username })
+                        });
+
+                        if (res.success) {
+                            toast('Tautan VRChat dihapus.', 'success');
+                            await fetchPlayers(true);
+                            const player = playersCache.find(p => p.username === username) || null;
+                            renderVrchatLinkStatus(player);
+                        } else {
+                            toast(res.error || 'Gagal memutuskan tautan', 'error');
+                        }
+                    } catch (e) {
+                        toast('Gagal memutuskan tautan: ' + e.message, 'error');
+                    }
+                }
+
+                async function refreshVrchatAvatars() {
+                    try {
+                        const res = await apiCall('/index.php?action=refresh-vrchat-avatars', { method: 'POST' });
+                        if (res.success) {
+                            toast(res.message || 'Avatar VRChat diperbarui.', 'success');
+                            await fetchPlayers(true);
+                        } else {
+                            toast(res.error || 'Gagal memperbarui avatar VRChat', 'error');
+                        }
+                    } catch (e) {
+                        toast('Gagal memperbarui avatar VRChat: ' + e.message, 'error');
+                    }
+                }
 
                 window.appDeletePlayer = async function (username) {
                     if (!confirm(`Hapus pemain '${username}'?`)) return;
@@ -2412,6 +2571,18 @@
 
                     $('#btnCloseEditPlayerModal').addEventListener('click', () => { $('#editPlayerModal').style.display = 'none'; });
                     $('#btnCancelEditPlayer').addEventListener('click', () => { $('#editPlayerModal').style.display = 'none'; });
+
+                    $('#btnVrchatSearch').addEventListener('click', searchVrchat);
+                    $('#vrchatSearchInput').addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            searchVrchat();
+                        }
+                    });
+
+                    if ($('#btnRefreshVrchatAvatars')) {
+                        $('#btnRefreshVrchatAvatars').addEventListener('click', refreshVrchatAvatars);
+                    }
 
                     // Edit Match Form
                     $('#editMatchForm').addEventListener('submit', async (e) => {

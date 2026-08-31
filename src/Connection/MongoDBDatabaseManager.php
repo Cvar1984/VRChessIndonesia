@@ -449,6 +449,99 @@ class MongoDBDatabaseManager implements DatabaseManager
         ];
     }
 
+    // ── VRChat Profile Linking ──
+    // Kept as targeted updateOne()/find() calls straight to $playersCollection,
+    // deliberately bypassing loadPlayers()/savePlayers() — those two only ever
+    // round-trip the rating fields (id/username/rating/games/wins/draws/losses),
+    // so routing avatar data through them would just get it silently dropped.
+    /**
+     * Retrieves cached VRChat link/avatar metadata for every player, keyed by username.
+     *
+     * @return array<string, array{vrchat_user_id: ?string, vrchat_display_name: ?string, avatar_url: ?string, avatar_cached_at: ?string}>
+     */
+    public function getPlayersVrchatMeta(): array
+    {
+        $meta = [];
+        $cursor = $this->playersCollection->find([], [
+            'projection' => [
+                'username' => 1,
+                'vrchat_user_id' => 1,
+                'vrchat_display_name' => 1,
+                'avatar_url' => 1,
+                'avatar_cached_at' => 1,
+            ],
+        ]);
+
+        foreach ($cursor as $doc) {
+            $username = trim((string) ($doc['username'] ?? ''));
+            if ($username === '') {
+                continue;
+            }
+
+            $meta[$username] = [
+                'vrchat_user_id' => isset($doc['vrchat_user_id']) ? (string) $doc['vrchat_user_id'] : null,
+                'vrchat_display_name' => isset($doc['vrchat_display_name']) ? (string) $doc['vrchat_display_name'] : null,
+                'avatar_url' => isset($doc['avatar_url']) ? (string) $doc['avatar_url'] : null,
+                'avatar_cached_at' => isset($doc['avatar_cached_at']) ? (string) $doc['avatar_cached_at'] : null,
+            ];
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Links a player to a VRChat account and caches their current picture.
+     *
+     * @return bool True if the player exists and was updated.
+     */
+    public function setPlayerVrchatLink(string $username, string $vrchatUserId, ?string $vrchatDisplayName, ?string $avatarUrl): bool
+    {
+        $res = $this->playersCollection->updateOne(
+            ['username' => trim($username)],
+            ['$set' => [
+                'vrchat_user_id' => trim($vrchatUserId),
+                'vrchat_display_name' => $vrchatDisplayName,
+                'avatar_url' => $avatarUrl,
+                'avatar_cached_at' => date('Y-m-d H:i:s'),
+            ]]
+        );
+        return $res->getMatchedCount() > 0;
+    }
+
+    /**
+     * Removes a player's VRChat link and cached picture.
+     *
+     * @return bool True if the player exists and was updated.
+     */
+    public function clearPlayerVrchatLink(string $username): bool
+    {
+        $res = $this->playersCollection->updateOne(
+            ['username' => trim($username)],
+            ['$unset' => [
+                'vrchat_user_id' => '',
+                'vrchat_display_name' => '',
+                'avatar_url' => '',
+                'avatar_cached_at' => '',
+            ]]
+        );
+        return $res->getMatchedCount() > 0;
+    }
+
+    /**
+     * Updates only the cached avatar URL/timestamp for an already-linked player
+     * (used by the periodic refresh, which doesn't touch the link itself).
+     */
+    public function updatePlayerAvatarCache(string $username, ?string $avatarUrl): void
+    {
+        $this->playersCollection->updateOne(
+            ['username' => trim($username)],
+            ['$set' => [
+                'avatar_url' => $avatarUrl,
+                'avatar_cached_at' => date('Y-m-d H:i:s'),
+            ]]
+        );
+    }
+
     // ── Settings Management ──
     /**
      * Gets a setting value by key.

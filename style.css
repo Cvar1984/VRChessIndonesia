@@ -1752,3 +1752,103 @@ body::before {
         border-top: 1px dashed var(--border-subtle);
     }
 }
+
+/* Avatar <img> variant (falls back to the initials <span> on load error) */
+img.player-avatar-sm {
+    object-fit: cover;
+}
+
+.modal-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
+/* ── Admin: VRChat account linking (Edit Pemain modal) ── */
+.vrchat-link-section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.vrchat-link-status {
+    margin: 8px 0 12px;
+}
+
+.vrchat-link-status__empty {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.vrchat-link-status__linked {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    font-size: 0.82rem;
+}
+
+.vrchat-link-status__linked > span {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-secondary);
+}
+
+.vrchat-search-row {
+    display: flex;
+    gap: 8px;
+}
+
+.vrchat-search-row .form-input {
+    flex: 1;
+}
+
+.vrchat-search-results {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.vrchat-search-results__loading,
+.vrchat-search-results__empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 8px 2px;
+}
+
+.vrchat-candidate {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    text-align: left;
+    transition: all var(--transition-fast);
+}
+
+.vrchat-candidate:hover {
+    border-color: var(--border-glow);
+    background: rgba(124, 92, 255, 0.08);
+}
+
+.vrchat-candidate__name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Dotenv\Dotenv;
 use VRchessIndo\Connection\MongoDBDatabaseManager;
+use VRchessIndo\Connection\VRChatClient;
 use VRchessIndo\Logic\MatchManager;
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -115,6 +116,47 @@ function requireApiAccess(MongoDBDatabaseManager $db): void
         'success' => false,
         'error' => 'Akses API ditolak: Diperlukan API Token yang valid.'
     ], 401);
+}
+
+/**
+ * Builds a VRChat API client that persists its login session (auth + 2FA
+ * cookies) in the 'settings' collection via getSetting/setSetting, so we
+ * only log in to VRChat again once that cached session actually expires.
+ *
+ * @param MongoDBDatabaseManager $db The database manager instance.
+ */
+function buildVrchatClient(MongoDBDatabaseManager $db): VRChatClient
+{
+    return VRChatClient::fromEnv(
+        function () use ($db): ?array {
+            $raw = $db->getSetting('vrchat_session', '');
+            $decoded = json_decode((string) $raw, true);
+            return is_array($decoded) ? $decoded : null;
+        },
+        function (?array $session) use ($db): void {
+            $db->setSetting('vrchat_session', $session === null ? '' : json_encode($session));
+        }
+    );
+}
+
+/**
+ * Merges cached VRChat link/avatar data into a list of player records.
+ *
+ * @param array $players Player records as returned by MatchManager::getPlayers().
+ * @param MongoDBDatabaseManager $db The database manager instance.
+ * @return array The same players, each with vrchat_user_id/vrchat_display_name/avatar_url added.
+ */
+function mergeVrchatMeta(array $players, MongoDBDatabaseManager $db): array
+{
+    $meta = $db->getPlayersVrchatMeta();
+    foreach ($players as &$player) {
+        $info = $meta[$player['username']] ?? null;
+        $player['vrchat_user_id'] = $info['vrchat_user_id'] ?? null;
+        $player['vrchat_display_name'] = $info['vrchat_display_name'] ?? null;
+        $player['avatar_url'] = $info['avatar_url'] ?? null;
+    }
+    unset($player);
+    return $players;
 }
 
 try {
@@ -333,7 +375,7 @@ try {
         jsonResponse([
             'success' => true,
             'count' => $manager->getPlayerCount(),
-            'players' => $manager->getPlayers()
+            'players' => mergeVrchatMeta($manager->getPlayers(), $db)
         ]);
     }
 
@@ -379,7 +421,7 @@ try {
     if (isset($_GET['rankings'])) {
         jsonResponse([
             'success' => true,
-            'rankings' => $manager->getPlayers()
+            'rankings' => mergeVrchatMeta($manager->getPlayers(), $db)
         ]);
     }
 
@@ -567,6 +609,121 @@ try {
             'success' => $updated,
             'message' => $updated ? "Pemain '{$username}' berhasil diperbarui." : "Pemain tidak ditemukan."
         ], $updated ? 200 : 404);
+    }
+
+    // ── VRChat Profile Linking (Admin Only) ──
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['vrchat-search'])) {
+        requireAdmin($db);
+        $query = trim((string) ($_GET['q'] ?? ''));
+
+        if ($query === '') {
+            jsonResponse(['success' => false, 'error' => 'Parameter q (kata kunci pencarian) diperlukan'], 400);
+        }
+
+        try {
+            $client = buildVrchatClient($db);
+            $results = $client->searchUsers($query, 10);
+            jsonResponse(['success' => true, 'results' => $results]);
+        } catch (\Throwable $e) {
+            jsonResponse(['success' => false, 'error' => $e->getMessage()], 502);
+        }
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'link-vrchat') {
+        requireAdmin($db);
+        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $username = trim((string) ($input['username'] ?? ''));
+        $vrchatUserId = trim((string) ($input['vrchat_user_id'] ?? ''));
+
+        if ($username === '' || $vrchatUserId === '') {
+            jsonResponse(['success' => false, 'error' => 'username dan vrchat_user_id diperlukan'], 400);
+        }
+
+        if (!$db->playerExists($username)) {
+            jsonResponse(['success' => false, 'error' => "Pemain '{$username}' tidak ditemukan"], 404);
+        }
+
+        try {
+            $client = buildVrchatClient($db);
+            $vrchatUser = $client->getUser($vrchatUserId);
+
+            if ($vrchatUser === null) {
+                jsonResponse(['success' => false, 'error' => 'Akun VRChat tidak ditemukan'], 404);
+            }
+
+            $db->setPlayerVrchatLink($username, $vrchatUser['id'], $vrchatUser['displayName'], $vrchatUser['avatarUrl']);
+
+            jsonResponse([
+                'success' => true,
+                'message' => "'{$username}' berhasil ditautkan ke VRChat '{$vrchatUser['displayName']}'.",
+                'vrchat' => $vrchatUser
+            ]);
+        } catch (\Throwable $e) {
+            jsonResponse(['success' => false, 'error' => $e->getMessage()], 502);
+        }
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'unlink-vrchat') {
+        requireAdmin($db);
+        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $username = trim((string) ($input['username'] ?? ''));
+
+        if ($username === '') {
+            jsonResponse(['success' => false, 'error' => 'username diperlukan'], 400);
+        }
+
+        $cleared = $db->clearPlayerVrchatLink($username);
+
+        jsonResponse([
+            'success' => $cleared,
+            'message' => $cleared ? "Tautan VRChat untuk '{$username}' dihapus." : "Pemain tidak ditemukan."
+        ], $cleared ? 200 : 404);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'refresh-vrchat-avatars') {
+        requireAdmin($db);
+        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $force = !empty($input['force']);
+        $ttlSeconds = 24 * 60 * 60;
+
+        try {
+            $client = buildVrchatClient($db);
+        } catch (\Throwable $e) {
+            jsonResponse(['success' => false, 'error' => $e->getMessage()], 502);
+        }
+
+        $meta = $db->getPlayersVrchatMeta();
+        $refreshed = 0;
+        $skipped = 0;
+        $failed = 0;
+
+        foreach ($meta as $username => $info) {
+            if (empty($info['vrchat_user_id'])) {
+                continue;
+            }
+
+            $cachedAt = $info['avatar_cached_at'] ? strtotime($info['avatar_cached_at']) : false;
+            if (!$force && $cachedAt !== false && (time() - $cachedAt) < $ttlSeconds) {
+                $skipped++;
+                continue;
+            }
+
+            try {
+                $vrchatUser = $client->getUser($info['vrchat_user_id']);
+                $db->updatePlayerAvatarCache($username, $vrchatUser !== null ? $vrchatUser['avatarUrl'] : null);
+                $refreshed++;
+            } catch (\Throwable $e) {
+                $failed++;
+            }
+        }
+
+        jsonResponse([
+            'success' => true,
+            'message' => "Selesai: {$refreshed} diperbarui, {$skipped} dilewati (masih baru), {$failed} gagal.",
+            'refreshed' => $refreshed,
+            'skipped' => $skipped,
+            'failed' => $failed
+        ]);
     }
 
     // Serve Frontend HTML page
