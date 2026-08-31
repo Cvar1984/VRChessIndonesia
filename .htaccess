@@ -1,0 +1,13 @@
+# Cross-origin isolation — required for the in-browser Stockfish (stockfish-web) engine,
+# which uses SharedArrayBuffer/threaded WASM. "credentialless" (rather than "require-corp")
+# is used for COEP so third-party assets (jquery, chess.js, chessground from CDNs) keep
+# loading without needing to opt in via Cross-Origin-Resource-Policy.
+# If these headers can't be set, the app falls back to the server-side engine automatically.
+<IfModule mod_headers.c>
+    Header always set Cross-Origin-Opener-Policy "same-origin"
+    Header always set Cross-Origin-Embedder-Policy "credentialless"
+</IfModule>
+
+<IfModule mod_mime.c>
+    AddType application/wasm .wasm
+</IfModule>

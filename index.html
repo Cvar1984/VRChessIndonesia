@@ -51,6 +51,29 @@
             window.Chessground = Chessground;
         </script>
 
+        <!-- ── In-browser Stockfish (lichess-org/stockfish-web), default analysis engine ──
+             Falls back to /stockfish.php (native Stockfish on the server) when the browser
+             can't run the threaded WASM build — see assets/engine/vrchess-engine.js. -->
+        <script type="module">
+            import { getSession } from './assets/engine/vrchess-engine.js';
+
+            window.VRChessEngine = {
+                async isAvailable() {
+                    try {
+                        return !!(await getSession());
+                    } catch (e) {
+                        console.warn('[VRChessEngine] unavailable:', e);
+                        return false;
+                    }
+                },
+                async analyze(fen, opts, onUpdate, signal) {
+                    const session = await getSession();
+                    if (!session) throw new Error('Client engine unavailable');
+                    return session.analyze(fen, opts, onUpdate, signal);
+                },
+            };
+        </script>
+
         <link rel="stylesheet" href="style.css">
         <style>
             /* Base fixes for chessground */
@@ -323,19 +346,15 @@
                             </select>
                         </div>
 
+                        <!-- PGN is the primary option — saved automatically on submit -->
                         <div class="form-group">
-                            <label class="form-label" for="playUrl">📊 URL Analisis / Chessigma (Opsional)</label>
-                            <input type="url" class="form-input" id="playUrl"
-                                placeholder="https://www.chessigma.com/games/...">
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">📄 Atau Upload PGN (Opsional)</label>
+                            <label class="form-label">📄 Upload PGN <span
+                                    style="font-weight:400;color:var(--text-secondary);">(Diutamakan)</span></label>
                             <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:8px;">
-                                Jika PGN diisi, analisis akan disimpan otomatis dan link-nya akan digunakan sebagai URL
-                                analisis.
+                                PGN akan disimpan otomatis sebagai analisis saat pertandingan dicatat.
+                                Jika tidak ada PGN, gunakan URL di bawah sebagai gantinya.
                             </p>
-                            <textarea class="form-input" id="playPgn" rows="4"
+                            <textarea class="form-input" id="playPgn" rows="5"
                                 placeholder="[Event &#34;?&#34;]&#10;[White &#34;Player1&#34;]&#10;[Black &#34;Player2&#34;]&#10;&#10;1. e4 e5 ..."
                                 style="font-family: var(--font-mono); font-size: 0.78rem; resize: vertical;"></textarea>
                             <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
@@ -345,6 +364,15 @@
                                 <button type="button" class="btn btn--secondary btn--sm" id="btnClearPlayPgn">✕
                                     Hapus</button>
                             </div>
+                        </div>
+
+                        <!-- URL fallback — only used if no PGN is provided -->
+                        <div class="form-group">
+                            <label class="form-label" for="playUrl">🔗 URL Analisis Eksternal <span
+                                    style="font-weight:400;color:var(--text-secondary);">(Opsional, diabaikan jika PGN
+                                    diisi)</span></label>
+                            <input type="text" class="form-input" id="playUrl"
+                                placeholder="https://www.chessigma.com/games/...">
                         </div>
 
                         <button type="submit" class="btn btn--primary btn--full" id="btnSubmitMatch">
@@ -479,6 +507,7 @@
                     <div id="analysisProgress" style="display:none; margin-top:16px;">
                         <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px;">
                             Menganalisis posisi <span id="analysisCurrent">0</span> / <span id="analysisTotal">0</span>…
+                            <span id="analysisEngineLabel" style="color:#7fa650; font-weight:600;"></span>
                         </div>
                         <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:8px; overflow:hidden;">
                             <div id="analysisProgressBar"
@@ -652,6 +681,14 @@
                                         id="openingName">Starting Position</span>
                                 </div>
 
+                                <!-- Game Info (Event / Date / Result) -->
+                                <div id="gameInfoBar"
+                                    style="display:flex; align-items:center; gap:10px; padding:6px 20px; font-size:0.72rem; color:#888; border-bottom:1px solid #33312e; flex-wrap:wrap;">
+                                    <span id="infoEvent"></span>
+                                    <span id="infoDate"></span>
+                                    <span id="infoResult" style="margin-left:auto; font-weight:700; color:#aaa;"></span>
+                                </div>
+
                                 <!-- Evaluation & Engine Lines -->
                                 <div style="padding:16px 20px; display:flex; flex-direction:column; gap:10px;">
                                     <!-- Live Engine Settings Toolbar -->
@@ -677,11 +714,18 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        <button id="btnToggleLiveEngine" class="btn btn--secondary btn--xs"
-                                            style="background:#33312e; color:#7fa650; border:1px solid rgba(127,166,80,0.5); font-weight:700; padding:3px 8px;"
-                                            type="button" title="Toggle Live Engine">
-                                            ⚡ Live Engine: ON
-                                        </button>
+                                        <div style="display:flex; align-items:center; gap:6px;">
+                                            <button id="btnEngineSource" class="btn btn--secondary btn--xs"
+                                                style="background:#33312e; color:#aaa; border:1px solid #444; font-weight:700; padding:3px 8px;"
+                                                type="button" title="Klik untuk beralih mesin analisis">
+                                                ⏳ Engine: Checking…
+                                            </button>
+                                            <button id="btnToggleLiveEngine" class="btn btn--secondary btn--xs"
+                                                style="background:#33312e; color:#7fa650; border:1px solid rgba(127,166,80,0.5); font-weight:700; padding:3px 8px;"
+                                                type="button" title="Toggle Live Engine">
+                                                ⚡ Live Engine: ON
+                                            </button>
+                                        </div>
                                     </div>
                                     <div style="display:flex; justify-content:space-between; align-items:center;">
                                         <div style="display:flex; align-items:baseline; gap:12px;">
@@ -2191,53 +2235,39 @@
 
                     $('#playMatchForm').addEventListener('submit', async (e) => {
                         e.preventDefault();
+
                         const white = $('#playWhite').value.trim();
                         const black = $('#playBlack').value.trim();
                         const result = $('#playResult').value;
-                        let url = $('#playUrl').value.trim();
                         const pgn = $('#playPgn').value.trim();
+                        const url = $('#playUrl').value.trim();
 
                         if (white.toLowerCase() === black.toLowerCase()) {
                             toast('Pemain Putih dan Hitam harus berbeda!', 'error');
                             return;
                         }
 
-                        // If PGN is provided but no external URL, save it as an internal analysis
-                        if (pgn && !url) {
-                            try {
-                                toast('Menyimpan analisis PGN...', 'info');
-                                const saveRes = await fetch('/index.php?action=save-analysis', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ pgn: pgn })
-                                });
-                                const saveData = await saveRes.json();
-                                if (saveData.success) {
-                                    // Store only the raw analysis ID — host-agnostic
-                                    url = saveData.id;
-                                } else {
-                                    toast('Gagal menyimpan PGN: ' + saveData.error, 'error');
-                                    return;
-                                }
-                            } catch (err) {
-                                toast('Gagal menyimpan PGN analisis.', 'error');
-                                return;
-                            }
-                        }
+                        // Priority: PGN > URL > blank — resolved server-side in one request
+                        const btn = $('#btnSubmitMatch');
+                        btn.disabled = true;
+                        btn.textContent = pgn ? '⏳ Menyimpan PGN & Mencatat...' : '⏳ Mencatat Pertandingan...';
 
                         try {
-                            const params = new URLSearchParams({
-                                play: '1',
-                                white: white,
-                                black: black,
-                                result: result,
-                                url: url
+                            const body = { white, black, result };
+                            if (pgn) body.pgn = pgn;   // backend saves analysis internally
+                            else if (url) body.url = url;   // use external URL as-is
+                            // else: no analysis link — submitted with blank url
+
+                            const res = await apiCall('/index.php?play=1', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(body)
                             });
 
-                            const res = await apiCall(`/index.php?${params.toString()}`);
                             if (res.success && res.match) {
                                 const m = res.match;
                                 $('#playResultPanel').style.display = 'block';
+
                                 $('#resWhiteName').textContent = m.white.username;
                                 $('#resWhiteOld').textContent = m.white.old_rating;
                                 $('#resWhiteNew').textContent = m.white.new_rating;
@@ -2261,9 +2291,13 @@
 
                                 await fetchPlayers(true);
                                 await fetchMatches(true);
+                                if (pgn) await fetchAnalyses(true);
                             }
                         } catch (err) {
                             toast(err.message || 'Gagal mencatat pertandingan', 'error');
+                        } finally {
+                            btn.disabled = false;
+                            btn.textContent = '⚡ Catat Pertandingan & Hitung Ulang Rating';
                         }
                     });
 
@@ -2369,6 +2403,61 @@
                     let liveAnalysisAbort = null;
                     let isLiveEngineEnabled = true;
                     let currentAnalysisId = null; // Tracks the ID if analysis was loaded from a saved link
+
+                    // Default engine = in-browser stockfish-web (WASM); server /stockfish.php is
+                    // the fallback used when the client build can't run or errors out.
+                    let clientEngineAvailable = null;    // capability cache: null=unprobed, true/false=detected
+                    let enginePreference = localStorage.getItem('vrchess-engine-pref') || 'client'; // user's choice: 'client' | 'server'
+
+                    // Probes (once) whether the browser can actually run the client engine —
+                    // independent of enginePreference, so the toggle can tell the user why
+                    // "Browser" isn't selectable.
+                    async function probeClientEngine() {
+                        if (clientEngineAvailable === null) {
+                            try {
+                                clientEngineAvailable = window.VRChessEngine ? await window.VRChessEngine.isAvailable() : false;
+                            } catch (e) {
+                                clientEngineAvailable = false;
+                            }
+                            if (clientEngineAvailable) {
+                                console.info('[Engine] In-browser Stockfish (stockfish-web) is available.');
+                            } else {
+                                console.info('[Engine] In-browser Stockfish unavailable — server engine (/stockfish.php) will be used.');
+                            }
+                            updateEngineSourceUI();
+                        }
+                        return clientEngineAvailable;
+                    }
+
+                    async function useClientEngine() {
+                        if (enginePreference === 'server') return false;
+                        return await probeClientEngine();
+                    }
+
+                    // Reflects the user's choice + actual capability in the toolbar toggle button.
+                    function updateEngineSourceUI() {
+                        const btn = $('#btnEngineSource');
+                        if (!btn) return;
+
+                        if (enginePreference === 'client' && clientEngineAvailable === null) {
+                            btn.textContent = '⏳ Engine: Checking…';
+                            btn.style.color = '#aaa';
+                            btn.style.borderColor = '#444';
+                            btn.title = 'Mendeteksi dukungan mesin browser…';
+                        } else if (enginePreference === 'client' && clientEngineAvailable) {
+                            btn.textContent = '🖥️ Engine: Browser';
+                            btn.style.color = '#7fa650';
+                            btn.style.borderColor = 'rgba(127,166,80,0.5)';
+                            btn.title = 'Analisis berjalan di browser (stockfish-web). Klik untuk beralih ke server.';
+                        } else {
+                            btn.textContent = '☁️ Engine: Server';
+                            btn.style.color = '#5b9bd5';
+                            btn.style.borderColor = 'rgba(91,155,213,0.5)';
+                            btn.title = clientEngineAvailable === false
+                                ? 'Mesin browser tidak tersedia di perangkat/hosting ini — menggunakan Stockfish server. Klik untuk mencoba mesin browser lagi.'
+                                : 'Analisis berjalan di server (Stockfish 18). Klik untuk beralih ke mesin browser.';
+                        }
+                    }
 
                     function getLegalMoves() {
                         const dests = new Map();
@@ -2599,6 +2688,7 @@
                         const liveDepth = $('#liveDepthSelect');
                         const liveMultiPv = $('#liveMultiPvSelect');
                         const btnToggleEngine = $('#btnToggleLiveEngine');
+                        const btnEngineSource = $('#btnEngineSource');
 
                         const triggerReanalysis = () => {
                             if (isLiveEngineEnabled && analysisPositions[currentMoveIdx]) {
@@ -2630,6 +2720,37 @@
                                 }
                             });
                         }
+                        if (btnEngineSource) {
+                            btnEngineSource.addEventListener('click', async () => {
+                                if (enginePreference === 'client') {
+                                    enginePreference = 'server';
+                                } else {
+                                    enginePreference = 'client';
+                                    clientEngineAvailable = null; // re-probe — the environment may have changed
+                                }
+                                localStorage.setItem('vrchess-engine-pref', enginePreference);
+                                updateEngineSourceUI();
+
+                                if (enginePreference === 'client') {
+                                    const ok = await probeClientEngine();
+                                    if (!ok) {
+                                        toast('Mesin browser tidak tersedia — tetap menggunakan Stockfish server.', 'error');
+                                        enginePreference = 'server';
+                                        localStorage.setItem('vrchess-engine-pref', enginePreference);
+                                        updateEngineSourceUI();
+                                    } else {
+                                        toast('Beralih ke mesin browser (stockfish-web).', 'info');
+                                    }
+                                } else {
+                                    toast('Beralih ke mesin server (Stockfish 18).', 'info');
+                                }
+
+                                triggerReanalysis();
+                            });
+                        }
+                        // Kick off capability detection immediately so the toggle shows the
+                        // real state (not just "Checking…") before the user's first analysis.
+                        probeClientEngine();
 
                         // Keyboard navigation
                         document.addEventListener('keydown', (e) => {
@@ -2642,7 +2763,7 @@
                         });
                     }
 
-                    function updateEngineStreamBadge(isComputing, depth = 0, targetDepth = 18, nps = 0) {
+                    function updateEngineStreamBadge(isComputing, depth = 0, targetDepth = 18, nps = 0, source = null) {
                         const badge = $('#engineStreamBadge');
                         const textEl = $('#engineStreamText');
                         if (!badge || !textEl) return;
@@ -2654,7 +2775,8 @@
 
                         badge.style.display = 'inline-flex';
                         let npsStr = nps > 0 ? ` · ${(nps / 1000000).toFixed(1)}M nps` : '';
-                        textEl.textContent = `Depth ${depth}/${targetDepth}${npsStr}`;
+                        let sourceStr = source === 'client' ? '🖥️ Browser · ' : source === 'server' ? '☁️ Server · ' : '';
+                        textEl.textContent = `${sourceStr}Depth ${depth}/${targetDepth}${npsStr}`;
                     }
 
                     async function analyzeLivePosition(idx, fen) {
@@ -2671,8 +2793,102 @@
                             clearArrows();
                         }
 
-                        updateEngineStreamBadge(true, 1, depth, 0);
+                        let engineSource = (await useClientEngine()) ? 'client' : 'server';
+                        updateEngineStreamBadge(true, 1, depth, 0, engineSource);
 
+                        let lastRenderTime = 0;
+                        // Shared per-update handler — fed either by the client engine's onUpdate
+                        // callback or by parsed SSE frames from the server, since both produce
+                        // the same {depth, score, score_type, bestmove, pv, multipv, nps} shape.
+                        function applyLiveInfo(data) {
+                            if (!analysisPositions[idx]) return;
+
+                            let scoreDisplay = null;
+                            let scoreCp = null;
+                            if (data.score_type === 'cp') {
+                                scoreCp = data.score;
+                                const turn = fen.split(' ')[1] || 'w';
+                                if (turn === 'b') scoreCp = -scoreCp;
+                                scoreDisplay = scoreCp / 100;
+                            } else if (data.score_type === 'mate') {
+                                scoreCp = data.score > 0 ? 9999 : -9999;
+                                const turn = fen.split(' ')[1] || 'w';
+                                if (turn === 'b') scoreCp = -scoreCp;
+                                scoreDisplay = "M" + Math.abs(data.score);
+                            }
+
+                            analysisPositions[idx].score = scoreDisplay;
+                            analysisPositions[idx].score_cp = scoreCp;
+                            analysisPositions[idx].score_type = data.score_type;
+                            analysisPositions[idx].bestmove = data.bestmove;
+                            analysisPositions[idx].pv = data.pv || [];
+                            analysisPositions[idx].multipv = data.multipv || [];
+                            analysisPositions[idx].depth = data.depth;
+                            analysisPositions[idx].nps = data.nps;
+
+                            updateEngineStreamBadge(true, data.depth || 0, depth, data.nps || 0, engineSource);
+
+                            if (currentMoveIdx === idx) {
+                                if (scoreDisplay !== null && scoreDisplay !== undefined) {
+                                    const isNum = typeof scoreDisplay === 'number';
+                                    let display = isNum ? (scoreDisplay >= 0 ? `+${scoreDisplay.toFixed(2)}` : scoreDisplay.toFixed(2)) : String(scoreDisplay);
+                                    $('#posEvalScore').textContent = display;
+                                    $('#posEvalScore').style.color = isNum
+                                        ? (scoreDisplay > 0.2 ? '#fff' : scoreDisplay < -0.2 ? 'var(--accent-red)' : '#fff')
+                                        : '#fff';
+                                    updateEvalBar(scoreCp);
+                                }
+
+                                if ($('#posEvalDepth')) $('#posEvalDepth').textContent = data.depth || depth;
+                                $('#posEvalBest').textContent = data.bestmove || '—';
+
+                                // Limit PV display to avoid it taking up too much vertical space
+                                const pvText = data.pv && data.pv.length ? data.pv.join(' ') : '—';
+                                $('#posEvalPv').textContent = pvText;
+
+                                // Update arrow on board live as engine calculates!
+                                drawBestMoveArrow();
+                                drawMoveAnnotationOnBoard();
+                            }
+
+                            const now = Date.now();
+                            if (now - lastRenderTime > 150) {
+                                lastRenderTime = now;
+                                renderMoveList(true);  // live patch only
+                                renderEvalChart();
+                            }
+                        }
+
+                        // ── Default: in-browser stockfish-web ───────────────────────────────
+                        if (engineSource === 'client') {
+                            try {
+                                const result = await window.VRChessEngine.analyze(
+                                    fen,
+                                    { depth, multipv, chess960: isCurrentGame960 },
+                                    applyLiveInfo,
+                                    liveAnalysisAbort.signal
+                                );
+                                applyLiveInfo(result);
+                                updateEngineStreamBadge(false);
+                                if (currentMoveIdx === idx) {
+                                    renderMoveList();
+                                    renderEvalChart();
+                                }
+                                return;
+                            } catch (e) {
+                                if (e.name === 'AbortError') {
+                                    updateEngineStreamBadge(false);
+                                    return;
+                                }
+                                console.warn('Client engine failed, falling back to server engine:', e);
+                                clientEngineAvailable = false; // don't retry the client engine again this session
+                                engineSource = 'server';
+                                updateEngineSourceUI();
+                                toast('Mesin browser gagal — beralih ke Stockfish server.', 'error');
+                            }
+                        }
+
+                        // ── Fallback: server-side Stockfish via SSE ─────────────────────────
                         try {
                             const res = await fetch('/stockfish.php?stream=1', {
                                 method: 'POST',
@@ -2689,7 +2905,6 @@
                             const reader = res.body.getReader();
                             const decoder = new TextDecoder();
                             let buffer = '';
-                            let lastRenderTime = 0;
 
                             while (true) {
                                 const { done, value } = await reader.read();
@@ -2711,62 +2926,7 @@
                                         continue;
                                     }
 
-                                    if (!analysisPositions[idx]) continue;
-
-                                    let scoreDisplay = null;
-                                    let scoreCp = null;
-                                    if (data.score_type === 'cp') {
-                                        scoreCp = data.score;
-                                        const turn = fen.split(' ')[1] || 'w';
-                                        if (turn === 'b') scoreCp = -scoreCp;
-                                        scoreDisplay = scoreCp / 100;
-                                    } else if (data.score_type === 'mate') {
-                                        scoreCp = data.score > 0 ? 9999 : -9999;
-                                        const turn = fen.split(' ')[1] || 'w';
-                                        if (turn === 'b') scoreCp = -scoreCp;
-                                        scoreDisplay = "M" + Math.abs(data.score);
-                                    }
-
-                                    analysisPositions[idx].score = scoreDisplay;
-                                    analysisPositions[idx].score_cp = scoreCp;
-                                    analysisPositions[idx].score_type = data.score_type;
-                                    analysisPositions[idx].bestmove = data.bestmove;
-                                    analysisPositions[idx].pv = data.pv || [];
-                                    analysisPositions[idx].multipv = data.multipv || [];
-                                    analysisPositions[idx].depth = data.depth;
-                                    analysisPositions[idx].nps = data.nps;
-
-                                    updateEngineStreamBadge(true, data.depth || 0, depth, data.nps || 0);
-
-                                    if (currentMoveIdx === idx) {
-                                        if (scoreDisplay !== null && scoreDisplay !== undefined) {
-                                            const isNum = typeof scoreDisplay === 'number';
-                                            let display = isNum ? (scoreDisplay >= 0 ? `+${scoreDisplay.toFixed(2)}` : scoreDisplay.toFixed(2)) : String(scoreDisplay);
-                                            $('#posEvalScore').textContent = display;
-                                            $('#posEvalScore').style.color = isNum
-                                                ? (scoreDisplay > 0.2 ? '#fff' : scoreDisplay < -0.2 ? 'var(--accent-red)' : '#fff')
-                                                : '#fff';
-                                            updateEvalBar(scoreCp);
-                                        }
-
-                                        if ($('#posEvalDepth')) $('#posEvalDepth').textContent = data.depth || depth;
-                                        $('#posEvalBest').textContent = data.bestmove || '—';
-
-                                        // Limit PV display to avoid it taking up too much vertical space
-                                        const pvText = data.pv && data.pv.length ? data.pv.join(' ') : '—';
-                                        $('#posEvalPv').textContent = pvText;
-
-                                        // Update arrow on board live as engine calculates!
-                                        drawBestMoveArrow();
-                                        drawMoveAnnotationOnBoard();
-                                    }
-
-                                    const now = Date.now();
-                                    if (now - lastRenderTime > 150) {
-                                        lastRenderTime = now;
-                                        renderMoveList(true);  // live patch only
-                                        renderEvalChart();
-                                    }
+                                    applyLiveInfo(data);
                                 }
                             }
 
@@ -3054,25 +3214,31 @@
 
                         // Parse PGN client-side
                         function parsePGNToMoves(pgnText) {
-                            const lines = pgnText.split('\n');
+                            // Normalize line endings so both \r\n and \n are handled uniformly
+                            pgnText = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
                             let headers = {};
-                            let moveText = '';
-                            let inMoves = false;
-                            for (let line of lines) {
-                                line = line.trim();
-                                if (line.startsWith('[')) {
-                                    if (inMoves) break; // Break on second game
-                                    const match = line.match(/\[(\w+)\s+"([^"]*)"\]/);
-                                    if (match) headers[match[1]] = match[2];
-                                } else if (line !== '') {
-                                    inMoves = true;
-                                    moveText += line + ' ';
-                                }
+
+                            // Extract ALL [Tag "Value"] pairs globally — works whether headers are on
+                            // separate lines (standard PGN) or all on one line (VRChess compact format)
+                            const headerRe = /\[(\w+)\s+"([^"]*)"\]/g;
+                            let hm;
+                            let lastHeaderEnd = 0;
+                            while ((hm = headerRe.exec(pgnText)) !== null) {
+                                headers[hm[1]] = hm[2];
+                                lastHeaderEnd = hm.index + hm[0].length;
                             }
+
+                            // Move text is everything after the last header tag.
+                            // Handles both standard blank-line separator and compact single-line format.
+                            let moveText = lastHeaderEnd > 0
+                                ? pgnText.substring(lastHeaderEnd)
+                                : pgnText;
+
                             moveText = moveText.replace(/\d+\.{1,3}/g, ' ');
                             moveText = moveText.replace(/1-0|0-1|1\/2-1\/2|\*/g, ' ');
 
-                            const regex = /(\{[^}]*\})|([a-zA-Z0-9\-+=#]+)/g;
+                            const regex = /({[^}]*})|([a-zA-Z0-9\-+=#]+)/g;
                             let match;
                             let tokens = [];
                             while ((match = regex.exec(moveText)) !== null) {
@@ -3088,7 +3254,8 @@
                                         if (clkMatch) currentMove.clock = clkMatch[1];
                                     }
                                 } else {
-                                    currentMove = { san: t, clock: null };
+                                    let san = t.replace(/^0-0-0/, 'O-O-O').replace(/^0-0/, 'O-O');
+                                    currentMove = { san: san, clock: null };
                                     moves.push(currentMove);
                                 }
                             }
@@ -3188,21 +3355,68 @@
                         $('#analysisTotal').textContent = total;
                         $('#analysisProgressBar').style.width = '0%';
 
-                        // Send batch to server (analyse in chunks of 20 to show progress)
+                        // Analyzes one FEN with the in-browser engine, shaped like a /stockfish.php position entry.
+                        async function analyzeFenClient(fen, moveIndex) {
+                            const result = await window.VRChessEngine.analyze(fen, { depth, multipv, chess960: isCurrentGame960 });
+
+                            let scoreDisplay = null;
+                            let scoreCp = null;
+                            const turn = fen.split(' ')[1] || 'w';
+                            if (result.score_type === 'cp') {
+                                scoreCp = turn === 'b' ? -result.score : result.score;
+                                scoreDisplay = scoreCp / 100;
+                            } else if (result.score_type === 'mate') {
+                                scoreCp = result.score > 0 ? 9999 : -9999;
+                                if (turn === 'b') scoreCp = -scoreCp;
+                                scoreDisplay = "M" + Math.abs(result.score);
+                            }
+
+                            return {
+                                fen,
+                                move_index: moveIndex,
+                                score: scoreDisplay,
+                                score_cp: scoreCp,
+                                score_type: result.score_type,
+                                bestmove: result.bestmove,
+                                pv: (result.pv || []).slice(0, 6),
+                                depth: result.depth,
+                                multipv: result.multipv || {},
+                            };
+                        }
+
+                        // Analyse in chunks of 20 to show progress. Default: in-browser stockfish-web,
+                        // one FEN at a time. Falls back to /stockfish.php (batched) if the client
+                        // engine isn't available or errors out mid-batch — the failing chunk is retried
+                        // on the server.
                         analysisPositions = [];
                         const chunkSize = 20;
+                        await useClientEngine();
+                        if ($('#analysisEngineLabel')) {
+                            $('#analysisEngineLabel').textContent = clientEngineAvailable ? '(🖥️ Browser)' : '(☁️ Server)';
+                        }
                         for (let start = 0; start < total; start += chunkSize) {
                             const chunk = fenList.slice(start, start + chunkSize);
                             try {
-                                const res = await fetch('/stockfish.php', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ fens: chunk, depth: depth, multipv: multipv, chess960: isCurrentGame960 })
-                                });
-                                const data = await res.json();
-                                if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
+                                let positions;
+                                if (clientEngineAvailable) {
+                                    positions = [];
+                                    for (let i = 0; i < chunk.length; i++) {
+                                        positions.push(await analyzeFenClient(chunk[i], i));
+                                        $('#analysisCurrent').textContent = Math.min(start + i + 1, total);
+                                        $('#analysisProgressBar').style.width = Math.min(100, Math.round(((start + i + 1) / total) * 100)) + '%';
+                                    }
+                                } else {
+                                    const res = await fetch('/stockfish.php', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ fens: chunk, depth: depth, multipv: multipv, chess960: isCurrentGame960 })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
+                                    positions = data.positions;
+                                }
 
-                                for (const pos of data.positions) {
+                                for (const pos of positions) {
                                     const globalIdx = start + pos.move_index;
                                     analysisPositions.push({
                                         fen: pos.fen,
@@ -3221,6 +3435,15 @@
                                 $('#analysisProgressBar').style.width = Math.min(100, Math.round(((start + chunkSize) / total) * 100)) + '%';
 
                             } catch (err) {
+                                if (clientEngineAvailable) {
+                                    console.warn('Client engine failed during batch analysis, falling back to server engine:', err);
+                                    clientEngineAvailable = false;
+                                    updateEngineSourceUI();
+                                    if ($('#analysisEngineLabel')) $('#analysisEngineLabel').textContent = '(☁️ Server)';
+                                    toast('Mesin browser gagal — beralih ke Stockfish server.', 'error');
+                                    start -= chunkSize; // retry this same chunk on the server
+                                    continue;
+                                }
                                 toast('Analisis gagal: ' + err.message, 'error');
                                 $('#btnStartPgnAnalysis').disabled = false;
                                 $('#analysisProgress').style.display = 'none';
@@ -3756,11 +3979,9 @@
                                     // Populate player info
                                     $('#infoWhite').textContent = headers.White || '?';
                                     $('#infoBlack').textContent = headers.Black || '?';
-                                    if (typeof $('#infoEvent') !== 'undefined' && $('#infoEvent')) {
-                                        $('#infoEvent').textContent = headers.Event && headers.Event !== '?' ? headers.Event : '';
-                                        $('#infoDate').textContent = headers.Date || '';
-                                        $('#infoResult').textContent = headers.Result || '';
-                                    }
+                                    $('#infoEvent').textContent = headers.Event && headers.Event !== '?' ? headers.Event : '';
+                                    $('#infoDate').textContent = headers.Date || '';
+                                    $('#infoResult').textContent = headers.Result || '';
 
                                     renderMoveList();
                                     renderEvalChart();

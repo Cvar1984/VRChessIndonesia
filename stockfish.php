@@ -102,6 +102,8 @@ function parsePgn(string $pgn): array
     foreach ($tokens as $t) {
         $t = trim($t);
         if ($t !== '') {
+            $t = preg_replace('/^0-0-0/', 'O-O-O', $t);
+            $t = preg_replace('/^0-0/', 'O-O', $t);
             $movesSan[] = $t;
         }
     }

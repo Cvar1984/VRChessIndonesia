@@ -387,18 +387,23 @@ try {
     if (isset($_GET['play'])) {
         requireApiAccess($db);
 
-        $white = trim($_GET['white'] ?? '');
-        $black = trim($_GET['black'] ?? '');
+        // Accept params from both query-string (legacy) and JSON body
+        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+
+        $white       = trim($input['white']        ?? $_GET['white']  ?? '');
+        $black       = trim($input['black']        ?? $_GET['black']  ?? '');
+        $rawResult   = $input['result']            ?? $_GET['result'] ?? '';
+        $pgn         = trim($input['pgn']          ?? '');
+        $analysisUrl = trim($input['url']          ?? $input['analysis_url'] ?? $_GET['url'] ?? '');
 
         if ($white === '' || $black === '') {
-            $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-            $white = trim($input['white'] ?? $white);
-            $black = trim($input['black'] ?? $black);
-            $rawResult = $input['result'] ?? $_GET['result'] ?? '';
-            $analysisUrl = trim($input['url'] ?? $input['analysis_url'] ?? $_GET['url'] ?? '');
-        } else {
-            $rawResult = $_GET['result'] ?? '';
-            $analysisUrl = trim($_GET['url'] ?? '');
+            jsonResponse(['success' => false, 'error' => 'Nama pemain tidak boleh kosong'], 400);
+        }
+
+        // Priority: PGN > URL > blank
+        // If PGN is supplied, save it as an analysis and use the returned ID
+        if ($pgn !== '') {
+            $analysisUrl = $db->saveAnalysis($pgn, null);
         }
 
         switch ((string) $rawResult) {
@@ -426,7 +431,7 @@ try {
             jsonResponse([
                 'success' => true,
                 'message' => 'Pertandingan berhasil dicatat!',
-                'match' => $matchResult
+                'match'   => $matchResult
             ]);
         } catch (\Exception $e) {
             jsonResponse([
