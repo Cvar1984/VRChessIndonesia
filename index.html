@@ -1457,8 +1457,10 @@
                     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
                 }
 
-                // Resolve a saved analysis reference (raw hex ID, or legacy path/absolute URL
-                // containing ?analysis=<id>) into a shareable full URL, or null if none.
+                // Resolve a saved analysis reference into a shareable link: a raw hex ID
+                // or a legacy URL containing ?analysis=<id> becomes our own analysis-viewer
+                // link; anything else (a plain external URL, e.g. chessigma.com) passes
+                // through unchanged, since that's a valid analysis_url value in its own right.
                 function resolveAnalysisUrl(rawUrl) {
                     if (!rawUrl) return null;
                     const trimmed = String(rawUrl).trim();
@@ -1470,7 +1472,7 @@
                     if (analysisMatch) {
                         return window.location.origin + window.location.pathname + '?analysis=' + analysisMatch[1];
                     }
-                    return null;
+                    return trimmed;
                 }
 
                 function isMatchValid(m) {
