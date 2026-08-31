@@ -3012,6 +3012,12 @@
                             const isFlipped = analysisBoard.state.orientation === 'black';
                             $('.board-column')?.classList.toggle('flipped', isFlipped);
                             drawBestMoveArrow();
+                            // drawMoveAnnotationOnBoard() already computes its position from
+                            // analysisBoard.state.orientation, but it's only invoked on move
+                            // navigation — without this call the move-classification badge
+                            // (Brilliant/Blunder/etc.) stays put at its pre-flip square instead
+                            // of following the board.
+                            drawMoveAnnotationOnBoard();
                         });
 
                         // New analysis — clear saved ID
