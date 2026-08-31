@@ -1454,6 +1454,19 @@ body::before {
     }
 }
 
+/* ── Estimated Rating Performance (accuracy-derived, like Chess.com's Game Report) ── */
+.est-rating-badge {
+    background: rgba(124, 92, 255, 0.16);
+    border: 1px solid rgba(124, 92, 255, 0.35);
+    color: #b9a7ff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 /* ── Real-Time Engine Stream Badge ── */
 .pulse-dot {
     width: 8px;
