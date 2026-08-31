@@ -1007,6 +1007,14 @@
                             <div class="stat-box__val" id="statRank">—</div>
                             <div class="stat-box__lbl">Peringkat</div>
                         </div>
+                        <div class="stat-box" id="statAccuracyBox" title="Rata-rata akurasi Stockfish dari game yang sudah dianalisis">
+                            <div class="stat-box__val" id="statAvgAccuracy">—</div>
+                            <div class="stat-box__lbl">Akurasi</div>
+                        </div>
+                        <div class="stat-box" id="statBrilliantBox" title="Total langkah Brilliant dari game yang sudah dianalisis">
+                            <div class="stat-box__val" id="statBrilliantCount">—</div>
+                            <div class="stat-box__lbl">✨ Brilliant</div>
+                        </div>
                     </div>
                     <div class="profile-meta-row">
                         <span id="statValidMatches">0 valid</span>
@@ -1485,6 +1493,23 @@
                     }
                     return trimmed;
                 }
+
+                // Inverse of resolveAnalysisUrl: pulls the raw internal analysis ID out of a
+                // match's analysis_url, or null if it's a plain external URL (e.g. chessigma.com)
+                // we have no positions data for.
+                function extractInternalAnalysisId(rawUrl) {
+                    if (!rawUrl) return null;
+                    const trimmed = String(rawUrl).trim();
+                    if (!trimmed) return null;
+                    if (/^[a-f0-9]{8,}$/i.test(trimmed)) return trimmed;
+                    const m = trimmed.match(/[?&]analysis=([a-f0-9]+)/i);
+                    return m ? m[1] : null;
+                }
+
+                // computePlayerAnalysisStats lives inside setupEvents() (near
+                // getMoveAnnotationIcon/computeGameAccuracy/classificationLeniency, which it
+                // depends on) and is bridged onto window from there — see near
+                // window.gotoMainMove for the same pattern.
 
                 function isMatchValid(m) {
                     return !('is_valid' in m) || m.is_valid === true;
@@ -2127,15 +2152,47 @@
 
                     const history = buildPlayerHistory(player.id);
                     renderPlayerProfile(player, history);
+                    refreshPlayerAnalysisStats(username, history);
 
                     // Guard against the rare case a profile is opened before the initial
                     // matches fetch (kicked off in checkConnection) has resolved yet.
                     if (matchesCache.length === 0 && (parseInt(player.games) || 0) > 0) {
                         fetchMatches(true).then(() => {
                             if (activePlayerUsername !== username) return;
-                            renderPlayerProfile(player, buildPlayerHistory(player.id));
+                            const freshHistory = buildPlayerHistory(player.id);
+                            renderPlayerProfile(player, freshHistory);
+                            refreshPlayerAnalysisStats(username, freshHistory);
                         });
                     }
+                }
+
+                // Populates the Akurasi / Brilliant stat boxes — async since it fetches each
+                // analyzed game's stored positions. Guarded against the profile having been
+                // closed or switched to a different player while this was in flight.
+                function refreshPlayerAnalysisStats(username, history) {
+                    $('#statAvgAccuracy').textContent = '…';
+                    $('#statBrilliantCount').textContent = '…';
+
+                    window.computePlayerAnalysisStats(username, history).then(stats => {
+                        if (activePlayerUsername !== username) return;
+                        if (stats.gamesAnalyzed === 0) {
+                            $('#statAvgAccuracy').textContent = '—';
+                            $('#statBrilliantCount').textContent = '—';
+                            const note = 'Belum ada game dengan PGN yang sudah dianalisis Stockfish.';
+                            $('#statAccuracyBox').title = note;
+                            $('#statBrilliantBox').title = note;
+                        } else {
+                            $('#statAvgAccuracy').textContent = `${stats.avgAccuracy}%`;
+                            $('#statBrilliantCount').textContent = stats.brilliants;
+                            const note = `Dari ${stats.gamesAnalyzed} game yang sudah dianalisis.`;
+                            $('#statAccuracyBox').title = `Rata-rata akurasi Stockfish. ${note}`;
+                            $('#statBrilliantBox').title = `Total langkah Brilliant. ${note}`;
+                        }
+                    }).catch(() => {
+                        if (activePlayerUsername !== username) return;
+                        $('#statAvgAccuracy').textContent = '—';
+                        $('#statBrilliantCount').textContent = '—';
+                    });
                 }
 
                 // ── Global Handlers for Admins ──
@@ -2838,6 +2895,47 @@
                     let isLiveEngineEnabled = true;
                     let currentAnalysisId = null; // Tracks the ID if analysis was loaded from a saved link
 
+                    // Rating-aware move classification: if the PGN's White/Black name matches a
+                    // registered player, use their actual rating to adjust how easily they earn
+                    // Brilliant/Great/Excellent/etc. — chess.com's own docs describe these labels
+                    // as rating-dependent ("more generous criteria for lower-rated players").
+                    // null when there's no match, which is treated as perfectly neutral (no
+                    // adjustment) rather than guessing a rating.
+                    let analysisWhiteRating = null;
+                    let analysisBlackRating = null;
+                    const CLASSIFICATION_RATING_BASELINE = 400; // this app's own starting rating (see MatchManager::INITIAL_RATING) — neutral point, not standard chess Elo's 1500
+
+                    function lookupPlayerRating(username) {
+                        if (!username) return null;
+                        const uname = String(username).trim().toLowerCase();
+                        if (!uname) return null;
+                        const found = playersCache.find(p => (p.username || '').trim().toLowerCase() === uname);
+                        return found && typeof found.rating === 'number' ? found.rating : null;
+                    }
+
+                    // Refreshes analysisWhiteRating/analysisBlackRating from analysisHeaders —
+                    // call this any time analysisHeaders.White/Black changes. Also updates the
+                    // player-name tooltip so a matched rating (and its effect on classification)
+                    // isn't a silent black box.
+                    function updateAnalysisRatings() {
+                        analysisWhiteRating = lookupPlayerRating(analysisHeaders.White);
+                        analysisBlackRating = lookupPlayerRating(analysisHeaders.Black);
+
+                        const ratingTitle = (rating) => rating !== null
+                            ? `Terdaftar di database, rating ${rating} — memengaruhi klasifikasi langkah (Brilliant/Great/Blunder/dll).`
+                            : '';
+                        if ($('#infoWhite')) $('#infoWhite').title = ratingTitle(analysisWhiteRating);
+                        if ($('#infoBlack')) $('#infoBlack').title = ratingTitle(analysisBlackRating);
+                    }
+
+                    // >1 = more generous (harder-to-reach bad labels, easier-to-reach good ones,
+                    // matching a lower-rated player being cut more slack); <1 = stricter. Clamped
+                    // so a very new (400) or very strong player never swings to an absurd extreme.
+                    function classificationLeniency(rating) {
+                        if (rating === null || rating === undefined) return 1;
+                        return Math.max(0.6, Math.min(1.6, 1 + (CLASSIFICATION_RATING_BASELINE - rating) / 1000));
+                    }
+
                     // Default: the in-browser engine (stockfish-web) — no network round-trip, so
                     // it's never at the mercy of the server being slow or overloaded. In "Both"
                     // mode the browser engine leads: the UI finishes as soon as IT is done, and
@@ -2979,6 +3077,7 @@
                             analysisMovesSan = [];
                             currentMoveIdx = 0;
                             analysisHeaders = { White: 'Player', Black: 'Player', Event: 'Free Analysis' };
+                            updateAnalysisRatings();
 
                             $('#analysisPgnImportCard').style.display = 'none';
                             $('#analysisMainLayout').style.display = 'block';
@@ -3538,11 +3637,14 @@
                     }
 
                     //https://lichess.org/page/accuracy
-                    function computeGameAccuracy(color) {
-                        if (!analysisPositions || analysisPositions.length <= 1) return '-';
+                    // positions defaults to the currently-loaded analysis; pass an explicit array
+                    // to score a different (e.g. historical) game without touching global state.
+                    function computeGameAccuracy(color, positions) {
+                        if (!positions) positions = analysisPositions;
+                        if (!positions || positions.length <= 1) return '-';
                         const cps = [0]; // Initial state eval is ~0
-                        for (let i = 1; i < analysisPositions.length; i++) {
-                            cps.push(analysisPositions[i].score_cp || 0);
+                        for (let i = 1; i < positions.length; i++) {
+                            cps.push(positions[i].score_cp || 0);
                         }
 
                         const allWinPercents = cps.map(cp => getWinPct(cp));
@@ -3601,21 +3703,100 @@
 
                         return ((weightedMean + harmonicMean) / 2).toFixed(1);
                     }
+                    // Counts Brilliant-classified moves for `color` across a saved-analysis
+                    // positions array, using the player's own rating (matched by username, same
+                    // lookup as live classification) so this stays consistent with what they'd
+                    // see if they re-opened the game in the Analysis tab.
+                    function countBrilliantMoves(positions, color, username) {
+                        if (!positions || positions.length <= 1) return 0;
+                        const leniency = classificationLeniency(lookupPlayerRating(username));
+                        let count = 0;
+                        for (let i = 1; i < positions.length; i++) {
+                            const turn = i % 2 === 1 ? 'w' : 'b';
+                            if (turn !== color) continue;
+                            const prevPos = positions[i - 1];
+                            const currPos = positions[i];
+                            if (!prevPos || !currPos) continue;
+                            const prevPrevPos = i >= 2 ? positions[i - 2] : null;
+                            const moveNum = Math.ceil(i / 2);
+                            const ann = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos, prevPrevPos, leniency);
+                            if (ann && ann.src === './assets/images/brilliant.png') count++;
+                        }
+                        return count;
+                    }
 
-                    function getMoveAnnotationIcon(prevCp, currCp, turn, moveNum, prevPos, currPos) {
+                    // Average accuracy + total Brilliant count for `username`, across their own
+                    // matches (from `history`, as built by buildPlayerHistory) whose PGN was
+                    // actually run through the engine and saved — i.e. has stored per-position
+                    // evaluations. Matches with no saved analysis, or one pointing at an external
+                    // URL (chessigma, etc.), are skipped rather than guessed at; gamesAnalyzed
+                    // tells the caller how many of the player's games this is actually based on.
+                    // Bridged onto window (see window.gotoMainMove for the same pattern) since
+                    // openPlayerStats/refreshPlayerAnalysisStats live outside setupEvents().
+                    async function computePlayerAnalysisStats(username, history) {
+                        const candidates = history
+                            .map(h => ({ h, id: extractInternalAnalysisId(h.analysisUrl) }))
+                            .filter(x => x.id);
+
+                        if (candidates.length === 0) return { avgAccuracy: null, brilliants: 0, gamesAnalyzed: 0 };
+
+                        const results = await Promise.all(candidates.map(async ({ h, id }) => {
+                            try {
+                                const res = await apiCall(`/index.php?action=get-analysis&id=${encodeURIComponent(id)}`);
+                                const positions = res && res.data && res.data.analysis;
+                                if (!res.success || !Array.isArray(positions) || positions.length <= 1) return null;
+                                const color = h.color === 'white' ? 'w' : 'b';
+                                const accuracy = parseFloat(computeGameAccuracy(color, positions));
+                                if (isNaN(accuracy)) return null;
+                                return { accuracy, brilliants: countBrilliantMoves(positions, color, username) };
+                            } catch (e) {
+                                return null;
+                            }
+                        }));
+
+                        const valid = results.filter(Boolean);
+                        if (valid.length === 0) return { avgAccuracy: null, brilliants: 0, gamesAnalyzed: 0 };
+
+                        const avgAccuracy = valid.reduce((sum, r) => sum + r.accuracy, 0) / valid.length;
+                        const totalBrilliants = valid.reduce((sum, r) => sum + r.brilliants, 0);
+                        return { avgAccuracy: avgAccuracy.toFixed(1), brilliants: totalBrilliants, gamesAnalyzed: valid.length };
+                    }
+                    window.computePlayerAnalysisStats = computePlayerAnalysisStats;
+
+                    // Mirrors chess.com's move-classification model (see
+                    // support.chess.com/en/articles/8572705): a fixed ladder by expected-points
+                    // (here, win%) lost, with Brilliant/Great/Miss as special overrides checked
+                    // first, and Book exempted entirely via a real opening-database lookup.
+                    // prevPrevPos (2 plies back, i.e. the position before the opponent's last
+                    // move) is optional — only needed to detect Miss. leniency (see
+                    // classificationLeniency) is 1 by default; every threshold below scales with
+                    // it, so a matched player's own rating shifts the whole ladder for their moves.
+                    function getMoveAnnotationIcon(prevCp, currCp, turn, moveNum, prevPos, currPos, prevPrevPos, leniency) {
                         if (prevCp === null || prevCp === undefined || currCp === null || currCp === undefined) return null;
+                        if (leniency === null || leniency === undefined) leniency = 1;
 
                         let prevPct = playerWinPct(prevCp, turn);
                         let currPct = playerWinPct(currCp, turn);
                         let loss = prevPct - currPct; // How much win% was lost
 
-                        // Book move: theoretical move (first 5 moves, near equal eval)
-                        if (moveNum <= 5 && currPct > 40 && currPct < 60 && loss < 5) {
-                            return { src: './assets/images/theoritical_move.png', title: 'Book: A known opening move' };
+                        // Book: matches a known position in the opening database. Real opening
+                        // theory, not an eval guess — exempt from every other judgment below,
+                        // same as chess.com/lichess. (Not rating-adjusted — theory is theory.)
+                        if (!isCurrentGame960 && currPos && currPos.fen) {
+                            const fenParts = currPos.fen.split(' ');
+                            if (fenParts.length >= 4 && openingsDatabase[fenParts.slice(0, 4).join(' ')]) {
+                                return { src: './assets/images/theoritical_move.png', title: 'Book: A known opening move' };
+                            }
                         }
 
-                        // Brilliant move: A sound sacrifice (loss < 2, win% >= 45, material drops by >= 2 after PV response)
-                        if (loss < 2 && currPct >= 45 && currPos.pv && currPos.pv.length > 0) {
+                        // Brilliant: a sound sacrifice. chess.com's own criteria: you must not be
+                        // in a bad position afterward, AND the position must not have already been
+                        // completely winning beforehand (a flashy sac when you're already crushing
+                        // isn't brilliant, it's just winning). Both bounds loosen for a more
+                        // generous (lower-rated) leniency and tighten for a stricter one.
+                        const brilliantFloor = Math.max(20, Math.min(60, 45 / leniency));
+                        const brilliantCeil = Math.max(80, Math.min(99, 95 * leniency));
+                        if (loss < 2 && currPct >= brilliantFloor && prevPct < brilliantCeil && currPos.pv && currPos.pv.length > 0) {
                             try {
                                 const tempChess = new window.Chess(currPos.fen);
                                 const pvMove = currPos.pv[0];
@@ -3630,42 +3811,69 @@
                             } catch (e) { }
                         }
 
-                        // Great move: The only move that holds. (Beats second best by >= 18 win%)
-                        if (loss < 2 && prevPos && prevPos.multipv && Object.keys(prevPos.multipv).length >= 2) {
-                            const pv1 = prevPos.multipv["1"] || prevPos.multipv[1];
-                            const pv2 = prevPos.multipv["2"] || prevPos.multipv[2];
-                            if (pv1 && pv2) {
-                                let s1 = pv1.score_type === 'mate' ? (pv1.score > 0 ? 9999 : -9999) : pv1.score;
-                                let s2 = pv2.score_type === 'mate' ? (pv2.score > 0 ? 9999 : -9999) : pv2.score;
-                                let pct1 = playerWinPct(s1, turn);
-                                let pct2 = playerWinPct(s2, turn);
-                                if (pct1 - pct2 >= 18) {
-                                    return { src: './assets/images/the_only_move.png', title: "Great: The only good choice" };
+                        // Great: chess.com defines this as EITHER the only good move in the
+                        // position (beats the 2nd-best line by a wide margin — the required margin
+                        // shrinks for a more generous leniency) OR a move that swings the game's
+                        // trajectory — losing to equal, or equal to winning.
+                        if (loss < 2) {
+                            const requiredGap = Math.max(8, Math.min(35, 18 / leniency));
+                            if (prevPos && prevPos.multipv && Object.keys(prevPos.multipv).length >= 2) {
+                                const pv1 = prevPos.multipv["1"] || prevPos.multipv[1];
+                                const pv2 = prevPos.multipv["2"] || prevPos.multipv[2];
+                                if (pv1 && pv2) {
+                                    let s1 = pv1.score_type === 'mate' ? (pv1.score > 0 ? 9999 : -9999) : pv1.score;
+                                    let s2 = pv2.score_type === 'mate' ? (pv2.score > 0 ? 9999 : -9999) : pv2.score;
+                                    let pct1 = playerWinPct(s1, turn);
+                                    let pct2 = playerWinPct(s2, turn);
+                                    if (pct1 - pct2 >= requiredGap) {
+                                        return { src: './assets/images/the_only_move.png', title: "Great: The only good choice" };
+                                    }
                                 }
+                            }
+                            const wasLosing = prevPct < 30;
+                            const wasEqual = prevPct >= 30 && prevPct <= 70;
+                            const nowEqualOrBetter = currPct >= 45;
+                            const nowWinning = currPct > 70;
+                            if ((wasLosing && nowEqualOrBetter) || (wasEqual && nowWinning)) {
+                                return { src: './assets/images/the_only_move.png', title: "Great: Changes the course of the game" };
                             }
                         }
 
-                        // Blunder: Lost at least 20 win%
-                        if (loss >= 20) {
+                        // Miss: the opponent handed you a big swing in your favor (their previous
+                        // move was a mistake) and instead of capitalizing, this move gives a
+                        // meaningful chunk of it back — replaces what would otherwise just be
+                        // labeled Mistake/Blunder. A more generous leniency requires a bigger gift
+                        // squandered before it counts against you.
+                        if (prevPrevPos && prevPrevPos.score_cp !== null && prevPrevPos.score_cp !== undefined) {
+                            const pctTwoAgo = playerWinPct(prevPrevPos.score_cp, turn);
+                            const opponentGift = prevPct - pctTwoAgo;
+                            const requiredGift = Math.max(8, Math.min(30, 15 * leniency));
+                            const requiredMissLoss = Math.max(6, Math.min(18, 10 * leniency));
+                            if (opponentGift >= requiredGift && prevPct >= 60 && loss >= requiredMissLoss) {
+                                return { src: './assets/images/missed_tactic.png', title: "Miss: Missed a winning chance" };
+                            }
+                        }
+
+                        // Primary ladder — win% lost this move (chess.com's expected-points bands,
+                        // scaled from 0-1 to 0-100): Best 0, Excellent 0-2, Good 2-5,
+                        // Inaccuracy 5-10, Mistake 10-20, Blunder 20+. Every cutoff scales with
+                        // leniency, so the whole ladder is easier to climb for a lower-rated player
+                        // and harder for a higher-rated one, same objective loss either way.
+                        if (loss >= 20 * leniency) {
                             return { src: './assets/images/blunder.png', title: "Blunder: Extremely costly mistake" };
                         }
-
-                        // Mistake: Lost at least 10 win%
-                        if (loss >= 10) {
-                            return { src: './assets/images/missed_tactic.png', title: "Mistake: Meaningful chunk of game lost" };
+                        if (loss >= 10 * leniency) {
+                            return { src: './assets/images/strange_move.png', title: "Mistake: Meaningful chunk of game lost" };
                         }
-
-                        // Inaccuracy: Lost at least 5 win%
-                        if (loss >= 5) {
-                            return { src: './assets/images/strange_move.png', title: "Inaccuracy: Slightly worsens position" };
+                        if (loss >= 5 * leniency) {
+                            return { src: './assets/images/tactical_move.png', title: "Inaccuracy: Slightly worsens position" };
                         }
-
-                        // Good Move: Lost less than 5 win%
-                        if (loss >= 1) {
+                        if (loss >= 2 * leniency) {
                             return { src: './assets/images/good_move.png', title: "Good: A solid, sensible move" };
                         }
-
-                        // Best Move: Gives up almost nothing (under 1 win%)
+                        if (loss >= 0.5 * leniency) {
+                            return { src: './assets/images/good_move.png', title: "Excellent: Nearly the top choice" };
+                        }
                         return { src: './assets/images/best_move.png', title: "Best: The engine's top choice" };
                     }
 
@@ -3680,7 +3888,9 @@
 
                         const turn = currentMoveIdx % 2 === 1 ? 'w' : 'b';
                         const moveNum = Math.ceil(currentMoveIdx / 2);
-                        const annIcon = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos);
+                        const prevPrevPos = currentMoveIdx >= 2 ? analysisPositions[currentMoveIdx - 2] : null;
+                        const leniency = classificationLeniency(turn === 'w' ? analysisWhiteRating : analysisBlackRating);
+                        const annIcon = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos, prevPrevPos, leniency);
                         if (!annIcon) return;
 
                         let toSquare = null;
@@ -3779,6 +3989,7 @@
                         analysisHeaders = parsed.headers;
                         const movesParsed = parsed.moves;
                         isCurrentGame960 = analysisHeaders.Variant && (analysisHeaders.Variant.toLowerCase() === 'fischerandom' || analysisHeaders.Variant.toLowerCase() === 'chess960');
+                        updateAnalysisRatings();
 
                         function getInitialClock(tc) {
                             if (!tc || tc === '?' || tc === '-') return null;
@@ -4211,14 +4422,17 @@
                     function renderGameStats() {
                         const statsW = {};
                         const statsB = {};
+                        const leniencyW = classificationLeniency(analysisWhiteRating);
+                        const leniencyB = classificationLeniency(analysisBlackRating);
 
                         for (let i = 1; i < analysisPositions.length; i++) {
                             const turn = i % 2 === 1 ? 'w' : 'b';
                             const moveNum = Math.ceil(i / 2);
                             const currPos = analysisPositions[i];
                             const prevPos = analysisPositions[i - 1];
+                            const prevPrevPos = i >= 2 ? analysisPositions[i - 2] : null;
 
-                            const ann = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos);
+                            const ann = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos, prevPrevPos, turn === 'w' ? leniencyW : leniencyB);
                             if (ann) {
                                 const target = turn === 'w' ? statsW : statsB;
                                 if (!target[ann.src]) {
@@ -4234,6 +4448,7 @@
                             './assets/images/best_move.png',
                             './assets/images/good_move.png',
                             './assets/images/theoritical_move.png',
+                            './assets/images/tactical_move.png',
                             './assets/images/strange_move.png',
                             './assets/images/missed_tactic.png',
                             './assets/images/blunder.png'
@@ -4559,6 +4774,7 @@
                                     isCurrentGame960 = headers.Variant &&
                                         (headers.Variant.toLowerCase() === 'fischerandom' ||
                                             headers.Variant.toLowerCase() === 'chess960');
+                                    updateAnalysisRatings();
 
                                     // Restore positions directly from saved data
                                     currentAnalysisId = analysisId;
