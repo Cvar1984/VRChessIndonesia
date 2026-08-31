@@ -462,31 +462,50 @@ class MongoDBDatabaseManager implements DatabaseManager
     public function getPlayersVrchatMeta(): array
     {
         $meta = [];
-        $cursor = $this->playersCollection->find([], [
-            'projection' => [
-                'username' => 1,
-                'vrchat_user_id' => 1,
-                'vrchat_display_name' => 1,
-                'avatar_url' => 1,
-                'avatar_cached_at' => 1,
-            ],
-        ]);
+        $cursor = $this->playersCollection->find([], ['projection' => self::VRCHAT_META_PROJECTION]);
 
         foreach ($cursor as $doc) {
             $username = trim((string) ($doc['username'] ?? ''));
             if ($username === '') {
                 continue;
             }
-
-            $meta[$username] = [
-                'vrchat_user_id' => isset($doc['vrchat_user_id']) ? (string) $doc['vrchat_user_id'] : null,
-                'vrchat_display_name' => isset($doc['vrchat_display_name']) ? (string) $doc['vrchat_display_name'] : null,
-                'avatar_url' => isset($doc['avatar_url']) ? (string) $doc['avatar_url'] : null,
-                'avatar_cached_at' => isset($doc['avatar_cached_at']) ? (string) $doc['avatar_cached_at'] : null,
-            ];
+            $meta[$username] = $this->mapVrchatMetaDoc($doc);
         }
 
         return $meta;
+    }
+
+    /**
+     * Retrieves cached VRChat link/avatar metadata for a single player.
+     *
+     * @return array{vrchat_user_id: ?string, vrchat_display_name: ?string, avatar_url: ?string, avatar_cached_at: ?string}|null
+     */
+    public function getPlayerVrchatMeta(string $username): ?array
+    {
+        $doc = $this->playersCollection->findOne(
+            ['username' => trim($username)],
+            ['projection' => self::VRCHAT_META_PROJECTION]
+        );
+
+        return $doc ? $this->mapVrchatMetaDoc($doc) : null;
+    }
+
+    private const VRCHAT_META_PROJECTION = [
+        'username' => 1,
+        'vrchat_user_id' => 1,
+        'vrchat_display_name' => 1,
+        'avatar_url' => 1,
+        'avatar_cached_at' => 1,
+    ];
+
+    private function mapVrchatMetaDoc($doc): array
+    {
+        return [
+            'vrchat_user_id' => isset($doc['vrchat_user_id']) ? (string) $doc['vrchat_user_id'] : null,
+            'vrchat_display_name' => isset($doc['vrchat_display_name']) ? (string) $doc['vrchat_display_name'] : null,
+            'avatar_url' => isset($doc['avatar_url']) ? (string) $doc['avatar_url'] : null,
+            'avatar_cached_at' => isset($doc['avatar_cached_at']) ? (string) $doc['avatar_cached_at'] : null,
+        ];
     }
 
     /**

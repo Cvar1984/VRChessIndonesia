@@ -425,6 +425,71 @@ try {
         ]);
     }
 
+    // Proxies a linked player's cached VRChat picture, fetched server-side (VRChat's
+    // CDN rejects browser <img> requests outright — it requires a custom User-Agent
+    // identifying the calling app, which only our own server can send) and cached to
+    // disk so we're not round-tripping to VRChat on every single page view.
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['avatar'])) {
+        $username = trim((string) $_GET['avatar']);
+        $meta = $username !== '' ? $db->getPlayerVrchatMeta($username) : null;
+        $avatarUrl = $meta['avatar_url'] ?? null;
+
+        if (empty($avatarUrl)) {
+            http_response_code(404);
+            header('Content-Type: text/plain');
+            echo 'No cached avatar for this player';
+            exit;
+        }
+
+        $ttlSeconds = 24 * 60 * 60;
+        $cacheDir = __DIR__ . '/cache/avatars';
+        $cacheFile = $cacheDir . '/' . md5($avatarUrl) . '.cache';
+
+        $cached = null;
+        if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < $ttlSeconds) {
+            $cached = @unserialize(file_get_contents($cacheFile), ['allowed_classes' => false]);
+        }
+
+        if (!is_array($cached) || empty($cached['body'])) {
+            $contact = (string) ($_ENV['VRCHAT_CONTACT'] ?? getenv('VRCHAT_CONTACT') ?: '');
+            $userAgent = 'VRchessIndo/1.0' . ($contact !== '' ? " ({$contact})" : '');
+
+            $ch = curl_init($avatarUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_HTTPHEADER => ['User-Agent: ' . $userAgent],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 3,
+                CURLOPT_TIMEOUT => 10,
+            ]);
+            $body = curl_exec($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: 'image/png';
+            curl_close($ch);
+
+            if ($body !== false && $status >= 200 && $status < 300) {
+                $cached = ['content_type' => $contentType, 'body' => $body];
+                if (!is_dir($cacheDir)) {
+                    mkdir($cacheDir, 0755, true);
+                }
+                @file_put_contents($cacheFile, serialize($cached));
+            } elseif (is_file($cacheFile)) {
+                // VRChat fetch failed — fall back to a stale cached copy rather than nothing.
+                $cached = @unserialize(file_get_contents($cacheFile), ['allowed_classes' => false]);
+            }
+        }
+
+        if (!is_array($cached) || empty($cached['body'])) {
+            http_response_code(502);
+            exit;
+        }
+
+        header('Content-Type: ' . $cached['content_type']);
+        header('Cache-Control: public, max-age=' . $ttlSeconds);
+        echo $cached['body'];
+        exit;
+    }
+
     // ── API Token Protected Mutation Endpoints (CRUD) ──
     if (isset($_GET['play'])) {
         requireApiAccess($db);

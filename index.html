@@ -74,7 +74,7 @@
             };
         </script>
 
-        <link rel="stylesheet" href="style.css">
+        <link rel="stylesheet" href="assets/css/style.css">
         <style>
             /* Base fixes for chessground */
             .cg-wrap {
@@ -1423,13 +1423,21 @@
                     img.replaceWith(span);
                 };
 
-                // Real VRChat photo when linked & cached, otherwise a generated initials avatar.
-                function avatarHtml(displayName, avatarUrl, sizeClass = 'player-avatar-sm') {
+                // Real photo (via our own avatar proxy, or a direct URL for not-yet-linked
+                // VRChat search candidates) when available, otherwise a generated initials avatar.
+                function avatarHtml(displayName, imgSrc, sizeClass = 'player-avatar-sm') {
                     const name = displayName || '';
-                    if (avatarUrl) {
-                        return `<img class="${sizeClass}" src="${escHtml(avatarUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="window.__avatarFallback(this, '${escHtml(name)}', '${sizeClass}')">`;
+                    if (imgSrc) {
+                        return `<img class="${sizeClass}" src="${escHtml(imgSrc)}" alt="" loading="lazy" onerror="window.__avatarFallback(this, '${escHtml(name)}', '${sizeClass}')">`;
                     }
                     return `<span class="${sizeClass}" style="background:${avatarGradient(name)}">${escHtml(getInitials(name))}</span>`;
+                }
+
+                // VRChat's CDN rejects direct browser <img> requests (it requires a custom
+                // User-Agent naming the calling app, which only our server can send), so
+                // linked players' photos are always served through our own cached proxy.
+                function proxiedAvatarUrl(username) {
+                    return `/index.php?avatar=${encodeURIComponent(username)}`;
                 }
 
                 function relativeTime(dateStr) {
@@ -1630,7 +1638,7 @@
                             <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
                             <td>
                                 <span class="leaderboard-row__player">
-                                    ${avatarHtml(p.vrchat_display_name || p.username, p.avatar_url)}
+                                    ${avatarHtml(p.vrchat_display_name || p.username, p.avatar_url ? proxiedAvatarUrl(p.username) : null)}
                                     <span class="player-name">${escHtml(p.username)}</span>
                                 </span>
                             </td>
@@ -2089,7 +2097,7 @@
                     $('#modalPlayerUsername').textContent = username;
                     if (player.avatar_url) {
                         $('#modalPlayerAvatar').style.background = 'none';
-                        $('#modalPlayerAvatar').innerHTML = avatarHtml(player.vrchat_display_name || username, player.avatar_url, 'modal-avatar-img');
+                        $('#modalPlayerAvatar').innerHTML = avatarHtml(player.vrchat_display_name || username, proxiedAvatarUrl(username), 'modal-avatar-img');
                     } else {
                         $('#modalPlayerAvatar').style.background = avatarGradient(username);
                         $('#modalPlayerAvatar').textContent = getInitials(username);
@@ -2191,7 +2199,7 @@
 
                     box.innerHTML = `
                     <div class="vrchat-link-status__linked">
-                        ${avatarHtml(player.vrchat_display_name || player.username, player.avatar_url)}
+                        ${avatarHtml(player.vrchat_display_name || player.username, proxiedAvatarUrl(player.username))}
                         <span>Tertaut sebagai <strong>${escHtml(player.vrchat_display_name || player.vrchat_user_id)}</strong></span>
                         <button type="button" class="btn btn--danger btn--xs" id="btnVrchatUnlink">Putuskan</button>
                     </div>`;
