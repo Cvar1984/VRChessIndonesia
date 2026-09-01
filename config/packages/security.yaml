@@ -1,0 +1,58 @@
+security:
+    # Password hashing (bcrypt via 'auto') is only actually invoked by
+    # AdminCredentialsVerifier's own password_hash()/password_verify() calls
+    # (it needs custom fallback logic Symfony's PasswordHasher can't express),
+    # not by the security system directly — kept here anyway since Admin
+    # implements PasswordAuthenticatedUserInterface and some tooling expects it.
+    password_hashers:
+        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
+
+    providers:
+        admin_provider:
+            id: VRchessIndo\Security\AdminUserProvider
+        api_token_provider:
+            id: VRchessIndo\Security\ApiTokenUserProvider
+        # One firewall authenticates two different identity types (Admin
+        # sessions and API tokens); the chain provider lets Symfony refresh
+        # whichever type ends up in the session by trying each in turn.
+        app_provider:
+            chain:
+                providers: ['admin_provider', 'api_token_provider']
+
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+        main:
+            lazy: true
+            provider: app_provider
+            # Stateful (the default): a successful AdminLoginAuthenticator
+            # run persists to the session, matching legacy's
+            # $_SESSION['is_admin'] flag surviving across requests.
+            # ApiTokenAuthenticator re-validates its header/query token fresh
+            # on every request regardless, so statefulness doesn't change its
+            # behavior.
+            custom_authenticators:
+                - VRchessIndo\Security\AdminLoginAuthenticator
+                - VRchessIndo\Security\ApiTokenAuthenticator
+                - VRchessIndo\Security\AdminHeaderAuthenticator
+
+    # Authorization is enforced in-controller (AbstractApiController::
+    # requireAdmin()/requireApiAccess()) rather than here, so the JSON error
+    # bodies can match the legacy requireAdmin()/requireApiAccess() text
+    # exactly. Role hierarchy still applies wherever isGranted() is called.
+    role_hierarchy:
+        ROLE_ADMIN: ROLE_API_TOKEN
+
+when@test:
+    security:
+        password_hashers:
+            # By default, password hashers are resource intensive and take time. This is
+            # important to generate secure password hashes. In tests however, secure hashes
+            # are not important, waste resources and increase test times. The following
+            # reduces the work factor to the lowest possible values.
+            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
+                algorithm: auto
+                cost: 4 # Lowest possible value for bcrypt
+                time_cost: 3 # Lowest possible value for argon
+                memory_cost: 10 # Lowest possible value for argon

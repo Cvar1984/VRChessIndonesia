@@ -4,6 +4,8 @@
 
 This document covers every HTTP endpoint the backend exposes, the rating and move-accuracy formulas behind the numbers, and how to configure the app.
 
+> **Branch note:** this `symfony-migration` branch contains a completed ground-up rewrite onto Symfony 6.4 + Doctrine MongoDB ODM + Twig (`src/Document/`, `src/Repository/`, `src/Service/`, `src/Controller/`, `config/`, `tests/`, `templates/`). The legacy flat-file app this document was originally written for (`index.php`, `index.html`, `stockfish.php`, `src/Logic/`, `src/Connection/`, `test.php`) has been removed **on this branch only** — `main` still has it untouched, and `main` is what's actually deployed at `chess.cvar1984.net` until this branch is merged and the server's document root is repointed at `public/` (a deployment step, not a code change — see the plan). The endpoint reference below still describes the legacy `?query=string` API shape; the new app exposes equivalent clean REST routes under `/api/...` (see `src/Controller/`) with the same response bodies, verified endpoint-by-endpoint against live production data throughout the migration. See `/home/cvar1984/.claude/plans/wondrous-prancing-lobster.md` for the full migration history.
+
 ---
 
 ## 📋 Table of Contents
