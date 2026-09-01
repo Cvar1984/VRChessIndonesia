@@ -178,7 +178,7 @@ try {
         }
 
         $depth = isset($request['depth']) && is_numeric($request['depth'])
-            && $request['depth'] >= 1 && $request['depth'] <= 99
+            && $request['depth'] >= 1 && $request['depth'] <= 26
             ? (int) $request['depth'] : 22; //18 fast, 22 standard, 24 deep, 26 max
 
         // Validate all FENs
@@ -209,8 +209,15 @@ try {
 
     $fen = sanitizeFen($request['fen']);
 
+    $stream = (isset($request['stream']) && ($request['stream'] === true || $request['stream'] === '1' || $request['stream'] === 1)) || (isset($_GET['stream']) && $_GET['stream'] == '1');
+    // Full depth (up to 99, effectively unbounded for Stockfish) is only allowed for live/
+    // streaming analysis of a single position, where the caller can watch it progress and
+    // navigate away anytime. A one-shot request is capped at 26 ("max" tier) to keep response
+    // times reasonable — the batch endpoint above applies the same 26 cap for the same reason.
+    $maxDepth = $stream ? 99 : 26;
+
     $depth = isset($request['depth']) && is_numeric($request['depth'])
-        && $request['depth'] >= 1 && $request['depth'] <= 99
+        && $request['depth'] >= 1 && $request['depth'] <= $maxDepth
         ? (int) $request['depth'] : null;
 
     $movetime = isset($request['movetime']) && is_numeric($request['movetime'])
@@ -224,7 +231,6 @@ try {
     $chess960 = isset($request['chess960']) && (bool)$request['chess960'];
 
     set_time_limit(0);
-    $stream = (isset($request['stream']) && ($request['stream'] === true || $request['stream'] === '1' || $request['stream'] === 1)) || (isset($_GET['stream']) && $_GET['stream'] == '1');
 
     $sf = new Stockfish('/usr/bin/stockfish', 4, 16, $multipv, $chess960);
 
