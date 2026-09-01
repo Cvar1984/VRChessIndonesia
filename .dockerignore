@@ -1,0 +1,24 @@
+# Real secrets — must never be baked into an image layer that could end up
+# pushed to a registry. Railway injects the real values as runtime env vars;
+# the Dockerfile provides safe build-time placeholders instead (see below).
+.env
+.env.local
+.env.*.local
+.env.test
+
+.git
+.gitignore
+.github
+
+var/
+vendor/
+node_modules/
+
+tests/
+.claude/
+data/
+*.md
+
+.platform.app.yaml
+.platform/
+compose*.yaml
