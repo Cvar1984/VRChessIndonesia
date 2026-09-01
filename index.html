@@ -582,7 +582,7 @@
                                     <span id="infoBlack">Black</span>
                                     <span id="accBlack"
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
-                                        title="Lichess Accuracy Metric">-</span>
+                                        title="Accuracy — engine win% comparison, weighted to not let a decisively-lost position's dead moves hide an earlier blunder">-</span>
                                     <span id="estRatingBlack" class="est-rating-badge"
                                         title="Estimasi performa rating pada game ini, berdasarkan akurasi (seperti Chess.com)">—</span>
                                 </div>
@@ -622,7 +622,7 @@
                                     <span id="infoWhite">White</span>
                                     <span id="accWhite"
                                         style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-family:var(--font-mono); color:#a5d6a7;"
-                                        title="Lichess Accuracy Metric">-</span>
+                                        title="Accuracy — engine win% comparison, weighted to not let a decisively-lost position's dead moves hide an earlier blunder">-</span>
                                     <span id="estRatingWhite" class="est-rating-badge"
                                         title="Estimasi performa rating pada game ini, berdasarkan akurasi (seperti Chess.com)">—</span>
                                 </div>
@@ -3633,8 +3633,23 @@
                         return turn === 'w' ? wPct : (100 - wPct);
                     }
 
-                    function getMoveAccuracy(prevPct, nextPct) {
-                        if (nextPct >= prevPct) return 100;
+                    // playedSan/wasInCheck are optional — omit them to fall back to the plain
+                    // win%-only comparison.
+                    function getMoveAccuracy(prevPct, nextPct, playedSan, wasInCheck) {
+                        if (nextPct >= prevPct) {
+                            if (prevPct > 50) return 100; // holding an advantage or equal position: full credit
+
+                            // Already behind: "didn't get worse" isn't the same as "played well".
+                            // A move that gives check or is itself a forced reply to being in check
+                            // still counts as fighting/forced; still get full taper credit for it.
+                            // Otherwise it's a voluntary, purely passive move — no threat created,
+                            // no problems posed for the opponent — and scores lower still, since
+                            // that's exactly the "just surviving instead of creating chances" pattern
+                            // that let a single blunder's aftermath (king shuffling, forced recaptures,
+                            // never a single check offered back) score as if it were fine play.
+                            const isActiveOrForced = wasInCheck || (playedSan && /[+#]$/.test(playedSan));
+                            return isActiveOrForced ? (50 + prevPct) : (25 + prevPct * 0.5);
+                        }
                         const winDiff = prevPct - nextPct;
                         const raw = 103.1668100711649 * Math.exp(-0.04354415386753951 * winDiff) - 3.166924740191411;
                         return Math.max(0, Math.min(100, raw + 1));
@@ -3683,7 +3698,12 @@
 
                             let prevP = isWhite ? prev : (100 - prev);
                             let nextP = isWhite ? next : (100 - next);
-                            const acc = getMoveAccuracy(prevP, nextP);
+
+                            const playedSan = positions[i + 1] ? positions[i + 1].move_san : null;
+                            const precedingSan = positions[i] ? positions[i].move_san : null;
+                            const wasInCheck = !!(precedingSan && /[+#]$/.test(precedingSan));
+
+                            const acc = getMoveAccuracy(prevP, nextP, playedSan, wasInCheck);
 
                             if ((isWhite && color === 'w') || (!isWhite && color === 'b')) {
                                 weightedAccuracies.push({ acc, weight });
