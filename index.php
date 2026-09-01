@@ -485,7 +485,9 @@ try {
         }
 
         header('Content-Type: ' . $cached['content_type']);
+        header_remove('Pragma');
         header('Cache-Control: public, max-age=' . $ttlSeconds);
+        header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $ttlSeconds) . ' GMT');
         echo $cached['body'];
         exit;
     }

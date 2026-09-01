@@ -1133,29 +1133,51 @@ body::before {
 
 /* ── Footer ── */
 .app-footer {
-    text-align: center;
-    padding: 32px 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 32px 20px;
     margin-top: 24px;
     border-top: 1px solid var(--border-subtle);
     font-size: 0.75rem;
     color: var(--text-muted);
 }
 
-.app-footer__sep {
-    margin: 0 6px;
+.app-footer__main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    opacity: 0.6;
+}
+
+.app-footer__brand,
+.app-footer__sep,
+.app-footer__tagline {
+    color: inherit;
+    font-weight: 400;
+}
+
+.app-footer__links {
+    display: flex;
+    align-items: center;
+    opacity: 0.6;
 }
 
 .app-footer__link {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     color: var(--text-muted);
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: opacity var(--transition-fast);
 }
 
 .app-footer__link:hover {
-    color: var(--accent-primary);
+    opacity: 1;
 }
 
 /* ── Modal Overlay ── */
@@ -1456,13 +1478,8 @@ body::before {
 
 /* ── Estimated Rating Performance (accuracy-derived, like Chess.com's Game Report) ── */
 .est-rating-badge {
-    background: rgba(124, 92, 255, 0.16);
-    border: 1px solid rgba(124, 92, 255, 0.35);
-    color: #b9a7ff;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.72rem;
-    font-family: var(--font-mono);
+    color: #fff;
+    font-size: 0.8rem;
     font-weight: 700;
     white-space: nowrap;
 }
