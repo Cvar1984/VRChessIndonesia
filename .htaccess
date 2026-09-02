@@ -1,3 +1,15 @@
+# The vhost's document root is this repo root, not ./public — Symfony's front
+# controller (public/index.php) expects to be the effective webroot instead.
+# This transparently forwards every request into public/ (URL stays clean,
+# no "/public/" ever shown) where public/.htaccess does the real routing to
+# index.php. Requires AllowOverride to include FileInfo (for RewriteRule) in
+# the vhost for both this directory and public/.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
 # Cross-origin isolation — required for the in-browser Stockfish (stockfish-web) engine,
 # which uses SharedArrayBuffer/threaded WASM. "credentialless" (rather than "require-corp")
 # is used for COEP so third-party assets (jquery, chess.js, chessground from CDNs) keep
