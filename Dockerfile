@@ -19,6 +19,14 @@ RUN install-php-extensions mongodb intl opcache zip
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Every RUN in this image executes as root (no USER directive), and Composer
+# disables its own plugins by default when run as root as a safety measure.
+# symfony/runtime relies on a plugin hook to generate vendor/autoload_runtime.php
+# (what bin/console actually boots through) — without this, every console
+# command fails with "Symfony Runtime is missing" even though the package is
+# installed.
+ENV COMPOSER_ALLOW_SUPERUSER=1
+
 WORKDIR /app
 
 # Install dependencies before copying the full source so this layer is
