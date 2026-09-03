@@ -5,8 +5,13 @@
 // (COOP/COEP headers, see .htaccess) because the build uses SharedArrayBuffer.
 // If the browser can't run it, getEngine() resolves to null and callers must fall
 // back to the server-side engine at /stockfish.php.
-
-const ENGINE_DIR = new URL('.', import.meta.url).href;
+//
+// The build outputs (sf_18_smallnet*.js/.wasm, the .nnue net) live in public/engine/
+// rather than assets/engine/: Emscripten's glue code and locateFile() resolve sibling
+// files by their exact original filename, which AssetMapper's content-hashed public
+// paths can never match (only this file, statically imported via asset(), gets a
+// hashed URL). Keeping them in public/ serves them as plain, unhashed static files.
+const ENGINE_DIR = '/engine/';
 const NNUE_FILE = 'nn-4ca89e4b3abf.nnue';
 // Ordered by preference: relaxed-simd is faster but needs newer CPU/browser support,
 // so fall back to the baseline SIMD build before giving up on the client engine.
