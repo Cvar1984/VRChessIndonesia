@@ -1,0 +1,237 @@
+{% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as icons %}
+
+{% block title %}Gallery — VRChess Indonesia{% endblock %}
+
+{% block head_meta %}
+    <meta name="description" content="Photos from the VRChess Indonesia community — in-world chess lounge, meetups, and matches.">
+    <meta name="robots" content="index, follow">
+{% endblock %}
+
+{% block javascripts %}{% endblock %}
+
+{% block stylesheets %}
+        <link rel="stylesheet" href="{{ asset('css/theme-8bit.css') }}">
+        <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+        <style>
+            .gallery-section {
+                margin-bottom: 36px;
+            }
+
+            .gallery-section__title {
+                font-family: var(--font-display);
+                font-size: 0.85rem;
+                color: var(--accent-primary);
+                margin-bottom: 16px;
+                padding-bottom: 8px;
+                border-bottom: 2px solid var(--border-subtle);
+            }
+
+            .gallery-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                gap: 20px;
+            }
+
+            .gallery-card {
+                background: var(--bg-card);
+                border: 2px solid var(--border-subtle);
+                padding: 10px;
+                cursor: pointer;
+                transition: border-color var(--transition-fast);
+            }
+
+            .gallery-card:hover,
+            .gallery-card:focus-visible {
+                border-color: var(--border-strong);
+            }
+
+            .gallery-card__photo {
+                width: 100%;
+                height: 170px;
+                object-fit: cover;
+                display: block;
+            }
+
+            .gallery-card__title {
+                font-family: var(--font-display);
+                font-size: 0.6rem;
+                color: var(--accent-primary);
+                margin-top: 10px;
+                line-height: 1.6;
+            }
+
+            .gallery-card__caption {
+                font-size: 0.9rem;
+                color: var(--text-secondary);
+                margin-top: 4px;
+            }
+
+            .lightbox-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.85);
+                display: none;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+                padding: 20px;
+            }
+
+            .lightbox-overlay.show {
+                display: flex;
+            }
+
+            .lightbox-frame {
+                max-width: 900px;
+                max-height: 85vh;
+                border: var(--pixel-notch, 2px) solid var(--accent-primary);
+                background: var(--bg-card);
+                padding: 8px;
+                position: relative;
+            }
+
+            .lightbox-frame img {
+                display: block;
+                max-width: 100%;
+                max-height: 75vh;
+                object-fit: contain;
+            }
+
+            .lightbox-caption {
+                font-family: var(--font-display);
+                font-size: 0.6rem;
+                color: var(--accent-primary);
+                margin-top: 10px;
+                text-align: center;
+            }
+
+            .lightbox-close {
+                position: absolute;
+                top: -14px;
+                right: -14px;
+                width: 32px;
+                height: 32px;
+                background: var(--accent-red);
+                color: #fff0ef;
+                border: 2px solid var(--bg-primary);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+            }
+        </style>
+{% endblock %}
+
+{% block body %}
+        <div class="app-wrapper">
+
+            <header class="app-header">
+                <div class="hero-banner">
+                    <img src="{{ asset('images/gallery/banner-wide.jpg') }}" alt="VRChess Indonesia">
+                </div>
+                <div class="app-header__logo">
+                    <div class="app-header__icon"><img src="{{ asset('images/gallery/logo.png') }}" alt=""></div>
+                    <div>
+                        <h1 class="app-header__title">Gallery</h1>
+                        <p class="app-header__subtitle">Screenshots from the lounge, meetups, and matches</p>
+                    </div>
+                </div>
+            </header>
+
+            {% include '_nav.html.twig' %}
+
+            {% if galleries is empty %}
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
+                    No approved photos in the VRChat group gallery yet — check back soon.
+                </p>
+            {% else %}
+                {% for gallery in galleries %}
+                    <section class="gallery-section">
+                        <h2 class="gallery-section__title">{{ gallery.name|upper }}</h2>
+                        <div class="gallery-grid">
+                            {% for photo in gallery.photos %}
+                                <div class="gallery-card" tabindex="0" role="button"
+                                     data-full="{{ photo.src }}"
+                                     data-title="{{ photo.title }}">
+                                    <img class="gallery-card__photo" src="{{ photo.src }}"
+                                         alt="{{ photo.title }} — {{ photo.caption }}" loading="lazy">
+                                    <div class="gallery-card__title">{{ photo.title|upper }}</div>
+                                    <div class="gallery-card__caption">{{ photo.caption }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+                {% endfor %}
+            {% endif %}
+
+            <!-- ── Footer ── -->
+            <footer class="app-footer">
+                <div class="app-footer__main">
+                    <span class="app-footer__brand">VRChess Indonesia</span>
+                    <span class="app-footer__sep">&copy; 2026</span>
+                    <span class="app-footer__sep hide-mobile">&middot;</span>
+                    <span class="app-footer__tagline">Built with &hearts; for the Indonesian Chess Community</span>
+                </div>
+                <div class="app-footer__links">
+                    <a class="app-footer__link" href="https://github.com/Cvar1984/VRChessIndonesia" target="_blank"
+                        rel="noopener">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <path
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+                        </svg>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </footer>
+
+        </div>
+
+        <!-- ── Lightbox ── -->
+        <div class="lightbox-overlay" id="lightboxOverlay">
+            <div class="lightbox-frame">
+                <button class="lightbox-close" id="lightboxClose" aria-label="Close">{{ icons.icon('close') }}</button>
+                <img id="lightboxImg" src="" alt="">
+                <div class="lightbox-caption" id="lightboxCaption"></div>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                'use strict';
+                const overlay = document.getElementById('lightboxOverlay');
+                const img = document.getElementById('lightboxImg');
+                const caption = document.getElementById('lightboxCaption');
+
+                function open(card) {
+                    img.src = card.dataset.full;
+                    img.alt = card.dataset.title;
+                    caption.textContent = card.dataset.title.toUpperCase();
+                    overlay.classList.add('show');
+                }
+
+                function close() {
+                    overlay.classList.remove('show');
+                    img.src = '';
+                }
+
+                document.querySelectorAll('.gallery-card').forEach(card => {
+                    card.addEventListener('click', () => open(card));
+                    card.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            open(card);
+                        }
+                    });
+                });
+
+                document.getElementById('lightboxClose').addEventListener('click', close);
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) close();
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') close();
+                });
+            })();
+        </script>
+{% endblock %}

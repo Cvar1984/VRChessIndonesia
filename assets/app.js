@@ -7,12 +7,62 @@
                 let currentAdminName = '';
                 let playersCache = [];
                 let openingsDatabase = {};
+                // Derived from openingsDatabase once it loads (see init()) — maps a bare
+                // ECO code ("B01") to a real opening name ("Scandinavian Defense"), for
+                // PGNs that carry an [ECO] tag but no [Opening] tag.
+                let ecoNameIndex = {};
                 let matchesCache = [];
                 let tokensCache = [];
                 let adminsCache = [];
+                let galleryAdminData = [];
+                let pendingUploadGalleryId = null;
+                let newsletterPostsCache = [];
+                let pendingPostImageId = null;
                 let playerIdMap = {};
                 let currentMatchFilter = 'all';
                 let activePlayerUsername = null;
+
+                // ── Icons ──
+                // Same set/style as templates/_icons.html.twig's macro (24x24, 2px
+                // stroke, round caps) — kept as a separate copy here since app.js is
+                // a plain static asset, not Twig-processed, so it can't import that
+                // file directly.
+                const ICONS = {
+                    key: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.5 12.5 9-9M17 4l3 3M14 7l3 3"/></svg>',
+                    search: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+                    refresh: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>',
+                    plus: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+                    pencil: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+                    trash: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
+                    trophy: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v4a4 4 0 0 1-8 0Z"/><path d="M8 5H5a3 3 0 0 0 3 4M16 5h3a3 3 0 0 1-3 4"/><path d="M12 12v4"/><path d="M9 20h6"/><path d="M10 16h4l1 4H9Z"/></svg>',
+                    shield: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>',
+                    ban: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></svg>',
+                    clipboard: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M9 10h6M9 14h6M9 18h3"/></svg>',
+                    copy: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+                    book: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5v-17Z"/><path d="M4 19a2.5 2.5 0 0 1 2.5-2.5H20"/></svg>',
+                    crown: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M5 18 3 8l5 4 4-7 4 7 5-4-2 10"/></svg>',
+                    link: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 15 15 9"/><path d="M11 6l1-1a4 4 0 1 1 6 6l-1 1"/><path d="M13 18l-1 1a4 4 0 1 1-6-6l1-1"/></svg>',
+                    zap: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6Z"/></svg>',
+                    pawn: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"/><path d="M9 12h6l1 3H8Z"/><path d="M7 20h10l-1-4H8Z"/></svg>',
+                    clock: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg>',
+                    calendar: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+                    pin: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-7.4 7-12a7 7 0 1 0-14 0c0 4.6 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+                    monitor: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
+                    cloud: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 8.5 4.5 4.5 0 0 1 16.5 18Z"/></svg>',
+                    chart: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+                    stopwatch: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 13v-4M9 2h6M18 6l1.5-1.5"/></svg>',
+                    // fill is set via inline style (not the fill="" presentation
+                    // attribute) because svg.icon's stylesheet rule sets fill:none
+                    // for the outline icon set — a stylesheet rule beats a
+                    // presentation attribute, which was silently making both of
+                    // these render as an unfilled outline in the same color.
+                    pieceWhite: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" style="stroke:currentColor;fill:#fff"><rect x="5" y="5" width="14" height="14" rx="3"/></svg>',
+                    pieceBlack: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" style="stroke:currentColor;fill:#111"><rect x="5" y="5" width="14" height="14" rx="3"/></svg>',
+                    image: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+                    filetext: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h7l4 4v16H7Z"/><path d="M14 2v4h4"/><path d="M9.5 13h5M9.5 16.5h5"/></svg>',
+                    eye: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+                    eyeoff: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-3.4 4.3M6.6 6.6C4 8.3 2 12 2 12s3.5 7 10 7a10.4 10.4 0 0 0 4-.8"/><path d="M9.5 9.7A3 3 0 0 0 14.3 14.4"/></svg>',
+                };
 
                 // ── DOM Helpers ──
                 const $ = sel => document.querySelector(sel);
@@ -79,10 +129,12 @@
                     if (isAdmin) {
                         document.body.classList.add('is-admin');
                         $('#authBadge').className = 'auth-badge auth-badge--admin admin-only';
-                        $('#authBadge').textContent = '👑 Admin Mode';
+                        $('#authBadge').innerHTML = `${ICONS.crown} Admin Mode`;
                         $('#currentAdminName').textContent = currentAdminName;
                         fetchTokens(true);
                         fetchAdmins(true);
+                        fetchGalleryPhotos(true);
+                        fetchNewsletterPosts(true);
                     } else {
                         document.body.classList.remove('is-admin');
                         $('#authBadge').className = 'auth-badge admin-only';
@@ -93,17 +145,13 @@
                     renderAnalyses();
                 }
 
-                // ── Server Connection Health Check ──
+                // ── Initial data load (also doubles as a server/DB reachability check —
+                //    failures surface via toast only, no persistent status UI). ──
                 async function checkConnection() {
-                    $('#statusText').textContent = 'Menghubungkan ke server…';
-                    $('#statusDot').className = 'connection-bar__dot';
-
                     try {
                         await checkAuthStatus();
                         const data = await apiCall('/api/players');
                         if (data.success) {
-                            $('#statusDot').className = 'connection-bar__dot online';
-                            $('#statusText').textContent = 'Terhubung ke MongoDB Atlas';
                             playersCache = data.players || [];
                             buildPlayerIdMap();
                             $('#playerCount').textContent = data.count || playersCache.length;
@@ -114,17 +162,11 @@
                                 await fetchAnalyses(true);
                             }
                         } else {
-                            setOffline();
+                            toast('Gagal memuat data pemain', 'error');
                         }
                     } catch (e) {
-                        setOffline();
                         toast('Gagal terhubung ke database: ' + e.message, 'error');
                     }
-                }
-
-                function setOffline() {
-                    $('#statusDot').className = 'connection-bar__dot offline';
-                    $('#statusText').textContent = 'Terputus dari server database';
                 }
 
                 // ── Build ID Map ──
@@ -207,13 +249,41 @@
                     }
                 }
 
+                async function fetchGalleryPhotos(silent = false) {
+                    if (!isAdminState) return;
+                    try {
+                        const data = await apiCall('/api/admin/gallery/photos');
+                        if (data.success) {
+                            galleryAdminData = data.galleries || [];
+                            renderGalleryAdmin();
+                            if (!silent) toast('Daftar galeri VRChat diperbarui', 'success');
+                        }
+                    } catch (e) {
+                        if (!silent) toast('Gagal mengambil galeri VRChat: ' + e.message, 'error');
+                    }
+                }
+
+                async function fetchNewsletterPosts(silent = false) {
+                    if (!isAdminState) return;
+                    try {
+                        const data = await apiCall('/api/admin/newsletter/posts');
+                        if (data.success) {
+                            newsletterPostsCache = data.posts || [];
+                            renderNewsletterAdmin();
+                            if (!silent) toast('Daftar post newsletter diperbarui', 'success');
+                        }
+                    } catch (e) {
+                        if (!silent) toast('Gagal mengambil post newsletter: ' + e.message, 'error');
+                    }
+                }
+
                 // ── Render Views ──
                 function renderTokens() {
                     const container = $('#tokensContainer');
                     if (tokensCache.length === 0) {
                         container.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-state__icon">🔑</div>
+                            <div class="empty-state__icon">${ICONS.key}</div>
                             <div class="empty-state__text">Belum ada API Token</div>
                         </div>`;
                         return;
@@ -242,13 +312,13 @@
                             <td>${statusTag}</td>
                             <td>
                                 <span class="token-code">${escHtml(t.token)}</span>
-                                <button class="btn btn--icon btn--xs" onclick="navigator.clipboard.writeText('${escHtml(t.token)}'); alert('Token berhasil di-copy!');" title="Copy Token">📋</button>
+                                <button class="btn btn--icon btn--xs" onclick="navigator.clipboard.writeText('${escHtml(t.token)}'); alert('Token berhasil di-copy!');" title="Copy Token">${ICONS.copy}</button>
                             </td>
                             <td><span class="stat-value">${escHtml(t.created_at)}</span></td>
                             <td><span class="stat-value">${escHtml(t.last_used)}</span></td>
                             <td>
-                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditToken('${escHtml(t.id)}', '${escHtml(t.name)}', ${isActive})" title="Edit Token">✏</button>
-                                <button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appRevokeToken('${escHtml(t.id)}')" title="Cabut Token">🗑</button>
+                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditToken('${escHtml(t.id)}', '${escHtml(t.name)}', ${isActive})" title="Edit Token">${ICONS.pencil}</button>
+                                <button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appRevokeToken('${escHtml(t.id)}')" title="Cabut Token">${ICONS.trash}</button>
                             </td>
                         </tr>`;
                     });
@@ -262,7 +332,7 @@
                     if (adminsCache.length === 0) {
                         container.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-state__icon">🛡️</div>
+                            <div class="empty-state__icon">${ICONS.shield}</div>
                             <div class="empty-state__text">Belum ada Admin User</div>
                         </div>`;
                         return;
@@ -288,13 +358,97 @@
                             <td><strong>${escHtml(a.username)}</strong>${meTag}</td>
                             <td><span class="stat-value">${escHtml(a.created_at)}</span></td>
                             <td>
-                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditAdmin('${escHtml(a.username)}')" title="Ubah Password">✏ Password</button>
-                                ${!isSelf ? `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteAdmin('${escHtml(a.username)}')" title="Hapus Admin">🗑</button>` : ''}
+                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditAdmin('${escHtml(a.username)}')" title="Ubah Password">${ICONS.pencil} Password</button>
+                                ${!isSelf ? `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteAdmin('${escHtml(a.username)}')" title="Hapus Admin">${ICONS.trash}</button>` : ''}
                             </td>
                         </tr>`;
                     });
 
                     html += '</tbody></table>';
+                    container.innerHTML = html;
+                }
+
+                function renderGalleryAdmin() {
+                    const container = $('#galleryAdminContainer');
+                    if (galleryAdminData.length === 0) {
+                        container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state__icon">${ICONS.image}</div>
+                            <div class="empty-state__text">Belum ada galeri VRChat (atau VRCHAT_GROUP_ID belum dikonfigurasi)</div>
+                        </div>`;
+                        return;
+                    }
+
+                    let html = '';
+                    galleryAdminData.forEach(g => {
+                        html += `
+                        <div class="gallery-admin-section">
+                            <div class="gallery-admin-section__header">
+                                <span class="gallery-admin-section__title">${escHtml(g.name)}</span>
+                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appTriggerGalleryUpload('${escHtml(g.id)}')">${ICONS.plus} Upload Gambar</button>
+                            </div>`;
+
+                        if (g.photos.length === 0) {
+                            html += `<div class="gallery-admin-section__empty">Belum ada foto di galeri ini.</div>`;
+                        } else {
+                            html += '<div class="gallery-admin-grid">';
+                            g.photos.forEach(p => {
+                                html += `
+                                <div class="gallery-admin-card${p.hidden ? ' gallery-admin-card--hidden' : ''}">
+                                    <img class="gallery-admin-card__photo" src="${escHtml(p.src)}" alt="" loading="lazy">
+                                    <div class="gallery-admin-card__meta">
+                                        <span class="gallery-admin-card__date">${escHtml(relativeTime(p.createdAt))}</span>
+                                    </div>
+                                    <button class="btn ${p.hidden ? 'btn--secondary' : 'btn--danger'} btn--xs gallery-admin-card__toggle"
+                                        onclick="window.${p.hidden ? 'appUnhideGalleryPhoto' : 'appHideGalleryPhoto'}('${escHtml(p.id)}')">
+                                        ${p.hidden ? ICONS.eye + ' Tampilkan' : ICONS.eyeoff + ' Sembunyikan'}
+                                    </button>
+                                </div>`;
+                            });
+                            html += '</div>';
+                        }
+
+                        html += '</div>';
+                    });
+                    container.innerHTML = html;
+                }
+
+                function renderNewsletterAdmin() {
+                    const container = $('#newsletterAdminContainer');
+                    if (newsletterPostsCache.length === 0) {
+                        container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state__icon">${ICONS.filetext}</div>
+                            <div class="empty-state__text">Belum ada post grup VRChat (atau VRCHAT_GROUP_ID belum dikonfigurasi)</div>
+                        </div>`;
+                        return;
+                    }
+
+                    let html = '<div class="newsletter-admin-list">';
+                    newsletterPostsCache.forEach(p => {
+                        const isPublic = p.visibility === 'public';
+                        const visTag = isPublic
+                            ? `<span class="card__badge card__badge--green">Publik</span>`
+                            : `<span class="card__badge">Grup</span>`;
+                        html += `
+                        <div class="newsletter-admin-card">
+                            ${p.imageUrl ? `<img class="newsletter-admin-card__photo" src="${escHtml(p.src)}" alt="" loading="lazy">` : ''}
+                            <div class="newsletter-admin-card__body">
+                                <div class="newsletter-admin-card__header">
+                                    <strong>${escHtml(p.title)}</strong>
+                                    ${visTag}
+                                </div>
+                                <p class="newsletter-admin-card__text">${escHtml(p.text)}</p>
+                                <div class="newsletter-admin-card__meta">${escHtml(relativeTime(p.createdAt))}</div>
+                            </div>
+                            <div class="newsletter-admin-card__actions">
+                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appTriggerPostImageUpload('${escHtml(p.id)}')" title="Upload/Ganti Gambar">${ICONS.image}</button>
+                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appOpenEditPost('${escHtml(p.id)}')" title="Edit Post">${ICONS.pencil}</button>
+                                <button type="button" class="btn btn--danger btn--xs" onclick="window.appDeletePost('${escHtml(p.id)}')" title="Hapus Post">${ICONS.trash}</button>
+                            </div>
+                        </div>`;
+                    });
+                    html += '</div>';
                     container.innerHTML = html;
                 }
 
@@ -469,7 +623,7 @@
                     if (history.length === 0) {
                         container.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-state__icon">🗒️</div>
+                            <div class="empty-state__icon">${ICONS.clipboard}</div>
                             <div class="empty-state__text">Belum ada pertandingan tercatat</div>
                         </div>`;
                         return;
@@ -477,7 +631,7 @@
 
                     container.innerHTML = history.map(h => {
                         const outcomeLetter = h.outcome === 'win' ? 'W' : h.outcome === 'draw' ? 'D' : 'L';
-                        const sideIcon = h.color === 'white' ? '⬜' : '⬛';
+                        const sideIcon = h.color === 'white' ? ICONS.pieceWhite : ICONS.pieceBlack;
                         const changeClass = h.ratingChange > 0 ? 'pos' : h.ratingChange < 0 ? 'neg' : 'zero';
                         const changeLabel = h.ratingChange > 0 ? `+${h.ratingChange}` : `${h.ratingChange}`;
                         const analysisUrl = resolveAnalysisUrl(h.analysisUrl);
@@ -493,8 +647,8 @@
                                 <div class="profile-history-row__meta">
                                     <span class="profile-history-row__side">${sideIcon}</span>
                                     <span>${escHtml(relativeTime(h.date))}</span>
-                                    ${!h.isValid ? '<span class="profile-history-row__invalid-tag">🚫 Dianulir</span>' : ''}
-                                    ${analysisUrl ? `<a class="profile-history-row__link" href="${escHtml(analysisUrl)}" target="_blank" rel="noopener">📊 Analisis</a>` : ''}
+                                    ${!h.isValid ? `<span class="profile-history-row__invalid-tag">${ICONS.ban} Dianulir</span>` : ''}
+                                    ${analysisUrl ? `<a class="profile-history-row__link" href="${escHtml(analysisUrl)}" target="_blank" rel="noopener">${ICONS.chart} Analisis</a>` : ''}
                                 </div>
                             </div>
                             <div class="profile-history-row__end">
@@ -525,7 +679,7 @@
                     if (players.length === 0) {
                         container.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-state__icon">♟</div>
+                            <div class="empty-state__icon">${ICONS.pawn}</div>
                             <div class="empty-state__text">${filter ? 'Tidak ada pemain yang cocok' : 'Belum ada pemain'}</div>
                         </div>`;
                         return;
@@ -551,19 +705,21 @@
                     players.forEach((p, i) => {
                         const rank = i + 1;
                         const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'default';
+                        const rankPiece = rank === 1 ? 'king' : rank === 2 ? 'queen' : rank === 3 ? 'rook' : null;
+                        const rankPieceHtml = rankPiece ? `<span class="rank-badge__piece rank-badge__piece--${rankPiece}"></span>` : '';
                         const games = parseInt(p.games) || 0;
                         const wins = parseInt(p.wins) || 0;
                         const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
 
                         const adminActionsTd = isAdminState ? `
                             <td onclick="event.stopPropagation();">
-                                <button class="btn btn--icon btn--xs" onclick="window.appOpenEditPlayer('${escHtml(p.username)}', ${p.rating})" title="Edit Pemain">✏</button>
-                                <button class="btn btn--danger btn--xs" onclick="window.appDeletePlayer('${escHtml(p.username)}')" title="Hapus Pemain">🗑</button>
+                                <button class="btn btn--icon btn--xs" onclick="window.appOpenEditPlayer('${escHtml(p.username)}', ${p.rating})" title="Edit Pemain">${ICONS.pencil}</button>
+                                <button class="btn btn--danger btn--xs" onclick="window.appDeletePlayer('${escHtml(p.username)}')" title="Hapus Pemain">${ICONS.trash}</button>
                             </td>` : '';
 
                         html += `
                         <tr class="leaderboard-row" data-username="${escHtml(p.username)}" tabindex="0" role="button" title="Lihat profil ${escHtml(p.username)}">
-                            <td><span class="rank-badge rank-badge--${rankClass}">${rank}</span></td>
+                            <td><span class="rank-badge rank-badge--${rankClass}"><span class="rank-badge__num">${rank}</span>${rankPieceHtml}</span></td>
                             <td>
                                 <span class="leaderboard-row__player">
                                     ${avatarHtml(p.vrchat_display_name || p.username, p.avatar_url ? proxiedAvatarUrl(p.username) : null)}
@@ -647,7 +803,7 @@
                     if (matches.length === 0) {
                         container.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-state__icon">📋</div>
+                            <div class="empty-state__icon">${ICONS.clipboard}</div>
                             <div class="empty-state__text">Tidak ada pertandingan dalam kategori ini</div>
                         </div>`;
                         return;
@@ -670,28 +826,28 @@
                         const resolvedAnalysisUrl = resolveAnalysisUrl(m.analysis_url);
 
                         const analysisLink = resolvedAnalysisUrl
-                            ? `<a class="match-card__link" href="${escHtml(resolvedAnalysisUrl)}" target="_blank" rel="noopener">📊 Analisis</a>`
+                            ? `<a class="match-card__link" href="${escHtml(resolvedAnalysisUrl)}" target="_blank" rel="noopener">${ICONS.chart} Analisis</a>`
                             : '';
 
                         const statusBadge = !isValid
-                            ? `<span class="match-card__status-tag match-card__status-tag--invalid">🚫 Anulir (Invalid)</span>`
+                            ? `<span class="match-card__status-tag match-card__status-tag--invalid">${ICONS.ban} Anulir (Invalid)</span>`
                             : '';
 
                         let adminButtons = '';
                         if (isAdminState) {
                             if (isValid) {
-                                adminButtons += `<button class="btn btn--warning btn--xs match-actions-btn" onclick="window.appInvalidateMatch(${m.id})" title="Anulir Pertandingan">🚫 Anulir</button>`;
+                                adminButtons += `<button class="btn btn--warning btn--xs match-actions-btn" onclick="window.appInvalidateMatch(${m.id})" title="Anulir Pertandingan">${ICONS.ban} Anulir</button>`;
                             } else {
-                                adminButtons += `<button class="btn btn--success btn--xs match-actions-btn" onclick="window.appRevalidateMatch(${m.id})" title="Pulihkan Pertandingan">🔄 Pulihkan</button>`;
+                                adminButtons += `<button class="btn btn--success btn--xs match-actions-btn" onclick="window.appRevalidateMatch(${m.id})" title="Pulihkan Pertandingan">${ICONS.refresh} Pulihkan</button>`;
                             }
-                            adminButtons += `<button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditMatch(${m.id}, '${m.result}', '${escHtml(m.analysis_url || '')}')" title="Edit Match">✏ Edit</button>`;
-                            adminButtons += `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteMatch(${m.id})" title="Hapus Match">🗑 Hapus</button>`;
+                            adminButtons += `<button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditMatch(${m.id}, '${m.result}', '${escHtml(m.analysis_url || '')}')" title="Edit Match">${ICONS.pencil} Edit</button>`;
+                            adminButtons += `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteMatch(${m.id})" title="Hapus Match">${ICONS.trash} Hapus</button>`;
                         }
 
                         html += `
                         <div class="match-card ${!isValid ? 'is-invalid' : ''}">
                             <div class="match-card__player match-card__player--white">
-                                <span class="match-card__player-label">⬜ White (#${m.white_id})</span>
+                                <span class="match-card__player-label">${ICONS.pieceWhite} White (#${m.white_id})</span>
                                 <span class="match-card__player-name">${escHtml(whiteName)}</span>
                             </div>
                             <div class="match-card__vs">
@@ -701,7 +857,7 @@
                                 ${analysisLink}
                             </div>
                             <div class="match-card__player match-card__player--black">
-                                <span class="match-card__player-label">⬛ Black (#${m.black_id})</span>
+                                <span class="match-card__player-label">${ICONS.pieceBlack} Black (#${m.black_id})</span>
                                 <span class="match-card__player-name">${escHtml(blackName)}</span>
                             </div>
                             ${isAdminState ? `<div class="match-card__actions">${adminButtons}</div>` : ''}
@@ -793,13 +949,13 @@
                         if (allAnalyses.length === 0) {
                             container.innerHTML = `
                             <div class="empty-state">
-                                <div class="empty-state__icon">📚</div>
+                                <div class="empty-state__icon">${ICONS.book}</div>
                                 <div class="empty-state__text">Belum ada analisis tersimpan</div>
                             </div>`;
                         } else {
                             container.innerHTML = `
                             <div class="empty-state">
-                                <div class="empty-state__icon">🔍</div>
+                                <div class="empty-state__icon">${ICONS.search}</div>
                                 <div class="empty-state__text">Tidak ada analisis yang cocok dengan pencarian</div>
                             </div>`;
                         }
@@ -858,7 +1014,7 @@
 
                         // Admin delete button — always re-evaluated so it tracks login/logout instantly
                         const adminBtn = isAdminState
-                            ? `<button class="btn btn--danger btn--xs" onclick="window.appDeleteAnalysis('${an.id}')" title="Hapus Analisis">🗑 Hapus</button>`
+                            ? `<button class="btn btn--danger btn--xs" onclick="window.appDeleteAnalysis('${an.id}')" title="Hapus Analisis">${ICONS.trash} Hapus</button>`
                             : '';
 
                         // ── Parse PGN headers ──
@@ -895,7 +1051,11 @@
                             const rl = resultLabel(result);
 
                             // Meta fields
-                            const opening = getTag('Opening') || getTag('ECO');
+                            // Prefer the PGN's own [Opening] tag; when a game only carries
+                            // [ECO "B01"], resolve it to a real name ("Scandinavian Defense")
+                            // via ecoNameIndex rather than showing the bare code.
+                            const ecoTag = getTag('ECO');
+                            const opening = getTag('Opening') || (ecoTag && ecoNameIndex[ecoTag]) || ecoTag;
                             const eventName = getTag('Event');
                             const site = getTag('Site');
                             const variant = getTag('Variant');
@@ -924,23 +1084,23 @@
 
                                 <!-- Players row -->
                                 <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:0.88rem;">
-                                    <span style="opacity:.6;font-size:0.8rem;">♚</span>
+                                    <span style="opacity:.6;">${ICONS.pieceWhite}</span>
                                     ${playerHtml(whiteName, wTitle, wElo)}
                                     <span style="color:var(--text-secondary);font-size:0.75rem;font-style:italic;margin:0 2px;">vs</span>
-                                    <span style="opacity:.6;font-size:0.8rem;">♔</span>
+                                    <span style="opacity:.6;">${ICONS.pieceBlack}</span>
                                     ${playerHtml(blackName, bTitle, bElo)}
                                     <span style="margin-left:auto;padding:2px 9px;background:${rl.color};border:1px solid ${rl.border};border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:.5px;white-space:nowrap;">${escHtml(rl.text)}</span>
                                 </div>
 
                                 <!-- Meta chips row -->
                                 <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.74rem;color:var(--text-secondary);">
-                                    ${eventName ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">🏆 ${escHtml(eventName)}</span>` : ''}
-                                    ${variant ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">♟ ${escHtml(variant)}</span>` : ''}
-                                    ${timeFmt ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">⏱ ${escHtml(timeFmt)}</span>` : ''}
-                                    ${dateStr ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">📅 ${escHtml(dateStr)}</span>` : ''}
+                                    ${eventName ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.trophy} ${escHtml(eventName)}</span>` : ''}
+                                    ${variant ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.pawn} ${escHtml(variant)}</span>` : ''}
+                                    ${timeFmt ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.stopwatch} ${escHtml(timeFmt)}</span>` : ''}
+                                    ${dateStr ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.calendar} ${escHtml(dateStr)}</span>` : ''}
                                     ${round ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">R${escHtml(round)}</span>` : ''}
-                                    ${site ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">📍 ${escHtml(site)}</span>` : ''}
-                                    ${opening ? `<span style="background:rgba(80,120,255,0.08);border:1px solid rgba(80,120,255,0.2);border-radius:4px;padding:1px 7px;color:var(--accent-primary);">📖 ${escHtml(opening)}</span>` : ''}
+                                    ${site ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.pin} ${escHtml(site)}</span>` : ''}
+                                    ${opening ? `<span style="background:rgba(80,120,255,0.08);border:1px solid rgba(80,120,255,0.2);border-radius:4px;padding:1px 7px;color:var(--accent-primary);">${ICONS.book} ${escHtml(opening)}</span>` : ''}
                                 </div>
 
                                 ${extras.length > 0 ? `<div style="font-size:0.7rem;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:6px;opacity:.75;">${extras.join('')}</div>` : ''}
@@ -953,8 +1113,8 @@
                         <div style="display:flex;flex-direction:column;gap:0;border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.18);">
                             <!-- Card header: date + link -->
                             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.75rem;color:var(--text-secondary);">
-                                <span>🕒 ${escHtml(an.created_at || '—')}</span>
-                                <a href="${escHtml(shareUrl)}" target="_blank" rel="noopener" style="color:var(--accent-primary);text-decoration:none;font-weight:600;font-size:0.75rem;">📊 Open Analysis →</a>
+                                <span>${ICONS.clock} ${escHtml(an.created_at || '—')}</span>
+                                <a href="${escHtml(shareUrl)}" target="_blank" rel="noopener" style="color:var(--accent-primary);text-decoration:none;font-weight:600;font-size:0.75rem;">${ICONS.chart} Open Analysis →</a>
                             </div>
                             <!-- Card body: PGN info -->
                             <div style="padding:12px 14px;">
@@ -962,7 +1122,7 @@
                             </div>
                             <!-- Card footer: actions -->
                             <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:8px 14px;background:rgba(255,255,255,0.02);border-top:1px solid rgba(255,255,255,0.05);">
-                                <button class="btn btn--secondary btn--xs" onclick="navigator.clipboard.writeText('${escHtml(shareUrl)}').then(()=>toast('Link copied!','success'))">📋 Copy Link</button>
+                                <button class="btn btn--secondary btn--xs" onclick="navigator.clipboard.writeText('${escHtml(shareUrl)}').then(()=>toast('Link copied!','success'))">${ICONS.copy} Copy Link</button>
                                 ${adminBtn}
                             </div>
                         </div>`;
@@ -1129,6 +1289,80 @@
                     } catch (e) {
                         toast(e.message, 'error');
                     }
+                };
+
+                // ── Global Handlers for VRChat Gallery ──
+                window.appHideGalleryPhoto = async function (imageId) {
+                    try {
+                        const res = await apiCall('/api/admin/gallery/hide', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image_id: imageId }),
+                        });
+                        if (res.success) {
+                            toast('Foto disembunyikan dari galeri publik.', 'success');
+                            await fetchGalleryPhotos(true);
+                        } else {
+                            toast(res.error || 'Gagal menyembunyikan foto', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                window.appUnhideGalleryPhoto = async function (imageId) {
+                    try {
+                        const res = await apiCall('/api/admin/gallery/unhide', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image_id: imageId }),
+                        });
+                        if (res.success) {
+                            toast('Foto ditampilkan kembali di galeri publik.', 'success');
+                            await fetchGalleryPhotos(true);
+                        } else {
+                            toast(res.error || 'Gagal menampilkan foto', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                window.appTriggerGalleryUpload = function (galleryId) {
+                    pendingUploadGalleryId = galleryId;
+                    $('#galleryUploadInput').click();
+                };
+
+                // ── Global Handlers for Newsletter (VRChat Group Posts) ──
+                window.appOpenEditPost = function (postId) {
+                    const post = newsletterPostsCache.find(p => p.id === postId);
+                    if (!post) return;
+                    $('#editPostId').value = post.id;
+                    $('#editPostTitle').value = post.title;
+                    $('#editPostText').value = post.text;
+                    $('#editPostVisibility').value = post.visibility;
+                    $('#editPostNotify').checked = false;
+                    $('#editPostModal').style.display = 'flex';
+                };
+
+                window.appDeletePost = async function (postId) {
+                    if (!confirm('Hapus post ini dari grup VRChat? Tindakan ini tidak bisa dibatalkan.')) return;
+                    try {
+                        const res = await apiCall(`/api/admin/newsletter/posts/${encodeURIComponent(postId)}`, { method: 'DELETE' });
+                        if (res.success) {
+                            toast('Post berhasil dihapus.', 'success');
+                            await fetchNewsletterPosts(true);
+                        } else {
+                            toast(res.error || 'Gagal menghapus post', 'error');
+                        }
+                    } catch (e) {
+                        toast(e.message, 'error');
+                    }
+                };
+
+                window.appTriggerPostImageUpload = function (postId) {
+                    pendingPostImageId = postId;
+                    $('#postImageInput').click();
                 };
 
                 // ── Global Handlers for Players/Matches ──
@@ -1612,7 +1846,7 @@
                         // Priority: PGN > URL > blank — resolved server-side in one request
                         const btn = $('#btnSubmitMatch');
                         btn.disabled = true;
-                        btn.textContent = pgn ? '⏳ Menyimpan PGN & Mencatat...' : '⏳ Mencatat Pertandingan...';
+                        btn.innerHTML = `<span class="spinner"></span> ${pgn ? 'Menyimpan PGN & Mencatat...' : 'Mencatat Pertandingan...'}`;
 
                         try {
                             const body = { white, black, result };
@@ -1659,7 +1893,7 @@
                             toast(err.message || 'Gagal mencatat pertandingan', 'error');
                         } finally {
                             btn.disabled = false;
-                            btn.textContent = '⚡ Catat Pertandingan & Hitung Ulang Rating';
+                            btn.innerHTML = `${ICONS.zap} Catat Pertandingan &amp; Hitung Ulang Rating`;
                         }
                     });
 
@@ -1768,6 +2002,186 @@
                     $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
                     $('#btnRefreshAnalyses')?.addEventListener('click', () => fetchAnalyses(false));
                     $('#btnRefreshMatches').addEventListener('click', () => fetchMatches(false));
+                    $('#btnRefreshGallery')?.addEventListener('click', async () => {
+                        try {
+                            const res = await apiCall('/api/admin/gallery/refresh', { method: 'POST' });
+                            if (res.success) {
+                                toast(res.message || 'Galeri VRChat diperbarui', 'success');
+                                await fetchGalleryPhotos(true);
+                            } else {
+                                toast(res.error || 'Gagal memperbarui galeri VRChat', 'error');
+                            }
+                        } catch (e) {
+                            toast(e.message, 'error');
+                        }
+                    });
+
+                    // Upload a photo straight into whichever gallery the admin clicked
+                    // "Upload Gambar" on (see window.appTriggerGalleryUpload).
+                    $('#galleryUploadInput')?.addEventListener('change', async (e) => {
+                        const file = e.target.files[0];
+                        const galleryId = pendingUploadGalleryId;
+                        e.target.value = '';
+                        pendingUploadGalleryId = null;
+                        if (!file || !galleryId) return;
+
+                        toast('Mengunggah gambar ke VRChat...', 'info');
+                        const formData = new FormData();
+                        formData.append('file', file);
+
+                        try {
+                            const res = await apiCall(`/api/admin/gallery/${encodeURIComponent(galleryId)}/upload`, {
+                                method: 'POST',
+                                body: formData,
+                            });
+                            if (res.success) {
+                                toast(res.message || 'Gambar berhasil diunggah.', 'success');
+                                await fetchGalleryPhotos(true);
+                            } else {
+                                toast(res.error || 'Gagal mengunggah gambar', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    // Create Gallery Modal
+                    $('#btnShowCreateGalleryModal')?.addEventListener('click', () => {
+                        $('#createGalleryName').value = '';
+                        $('#createGalleryDescription').value = '';
+                        $('#createGalleryModal').style.display = 'flex';
+                    });
+                    $('#btnCloseCreateGalleryModal')?.addEventListener('click', () => { $('#createGalleryModal').style.display = 'none'; });
+                    $('#btnCancelCreateGallery')?.addEventListener('click', () => { $('#createGalleryModal').style.display = 'none'; });
+
+                    $('#createGalleryForm')?.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const name = $('#createGalleryName').value.trim();
+                        const description = $('#createGalleryDescription').value.trim();
+                        try {
+                            const res = await apiCall('/api/admin/gallery/create-gallery', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name, description }),
+                            });
+                            if (res.success) {
+                                toast(`Galeri '${name}' berhasil dibuat.`, 'success');
+                                $('#createGalleryModal').style.display = 'none';
+                                await fetchGalleryPhotos(true);
+                            } else {
+                                toast(res.error || 'Gagal membuat galeri', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    // Newsletter: refresh
+                    $('#btnRefreshNewsletter')?.addEventListener('click', async () => {
+                        try {
+                            const res = await apiCall('/api/admin/newsletter/refresh', { method: 'POST' });
+                            if (res.success) {
+                                toast(res.message || 'Newsletter diperbarui', 'success');
+                                await fetchNewsletterPosts(true);
+                            } else {
+                                toast(res.error || 'Gagal memperbarui newsletter', 'error');
+                            }
+                        } catch (e) {
+                            toast(e.message, 'error');
+                        }
+                    });
+
+                    // Newsletter: attach/replace a post's image
+                    $('#postImageInput')?.addEventListener('change', async (e) => {
+                        const file = e.target.files[0];
+                        const postId = pendingPostImageId;
+                        e.target.value = '';
+                        pendingPostImageId = null;
+                        if (!file || !postId) return;
+
+                        toast('Mengunggah gambar ke VRChat...', 'info');
+                        const formData = new FormData();
+                        formData.append('file', file);
+
+                        try {
+                            const res = await apiCall(`/api/admin/newsletter/posts/${encodeURIComponent(postId)}/image`, {
+                                method: 'POST',
+                                body: formData,
+                            });
+                            if (res.success) {
+                                toast(res.message || 'Gambar berhasil diunggah.', 'success');
+                                await fetchNewsletterPosts(true);
+                            } else {
+                                toast(res.error || 'Gagal mengunggah gambar', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    // Newsletter: Create Post Modal
+                    $('#btnShowCreatePostModal')?.addEventListener('click', () => {
+                        $('#createPostTitle').value = '';
+                        $('#createPostText').value = '';
+                        $('#createPostVisibility').value = 'group';
+                        $('#createPostNotify').checked = false;
+                        $('#createPostModal').style.display = 'flex';
+                    });
+                    $('#btnCloseCreatePostModal')?.addEventListener('click', () => { $('#createPostModal').style.display = 'none'; });
+                    $('#btnCancelCreatePost')?.addEventListener('click', () => { $('#createPostModal').style.display = 'none'; });
+
+                    $('#createPostForm')?.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const title = $('#createPostTitle').value.trim();
+                        const text = $('#createPostText').value.trim();
+                        const visibility = $('#createPostVisibility').value;
+                        const sendNotification = $('#createPostNotify').checked;
+                        try {
+                            const res = await apiCall('/api/admin/newsletter/posts', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ title, text, visibility, send_notification: sendNotification }),
+                            });
+                            if (res.success) {
+                                toast('Post berhasil dibuat.', 'success');
+                                $('#createPostModal').style.display = 'none';
+                                await fetchNewsletterPosts(true);
+                            } else {
+                                toast(res.error || 'Gagal membuat post', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
+
+                    // Newsletter: Edit Post Modal
+                    $('#btnCloseEditPostModal')?.addEventListener('click', () => { $('#editPostModal').style.display = 'none'; });
+                    $('#btnCancelEditPost')?.addEventListener('click', () => { $('#editPostModal').style.display = 'none'; });
+
+                    $('#editPostForm')?.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const id = $('#editPostId').value;
+                        const title = $('#editPostTitle').value.trim();
+                        const text = $('#editPostText').value.trim();
+                        const visibility = $('#editPostVisibility').value;
+                        const sendNotification = $('#editPostNotify').checked;
+                        try {
+                            const res = await apiCall(`/api/admin/newsletter/posts/${encodeURIComponent(id)}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ title, text, visibility, send_notification: sendNotification }),
+                            });
+                            if (res.success) {
+                                toast('Post berhasil diperbarui.', 'success');
+                                $('#editPostModal').style.display = 'none';
+                                await fetchNewsletterPosts(true);
+                            } else {
+                                toast(res.error || 'Gagal memperbarui post', 'error');
+                            }
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        }
+                    });
 
                     // ── Analysis Tab Logic ──────────────────────────────────────
                     let analysisBoard = null;
@@ -1874,19 +2288,19 @@
                         // Kept short (full explanation lives in the tooltip) so this never forces
                         // horizontal overflow in the toolbar on narrow/foldable-width screens.
                         if (enginePreference === 'both') {
-                            btn.textContent = '⚡ Both';
+                            btn.innerHTML = `${ICONS.zap} Both`;
                             btn.style.color = '#7fa650';
                             btn.style.borderColor = 'rgba(127,166,80,0.5)';
                             btn.title = clientEngineAvailable === false
                                 ? 'Mesin browser tidak tersedia — hanya server yang aktif. Klik untuk beralih mode.'
                                 : 'Browser mesin utama (tidak pernah menunggu server); server menambah kedalaman di latar belakang tanpa memperlambat. Klik untuk beralih mode.';
                         } else if (enginePreference === 'client') {
-                            btn.textContent = '🖥️ Browser';
+                            btn.innerHTML = `${ICONS.monitor} Browser`;
                             btn.style.color = '#7fa650';
                             btn.style.borderColor = 'rgba(127,166,80,0.5)';
                             btn.title = 'Hanya mesin browser (stockfish-web). Klik untuk beralih mode.';
                         } else {
-                            btn.textContent = '☁️ Server';
+                            btn.innerHTML = `${ICONS.cloud} Server`;
                             btn.style.color = '#5b9bd5';
                             btn.style.borderColor = 'rgba(91,155,213,0.5)';
                             btn.title = 'Hanya Stockfish server. Klik untuk beralih mode.';
@@ -2069,7 +2483,7 @@
                             // If we have an existing ID but also have fresh analysis positions,
                             // patch the DB entry so future visitors don't need to re-analyze
                             if (currentAnalysisId && mainPositions.length > 1) {
-                                btn.innerHTML = '⏳ Saving...';
+                                btn.innerHTML = '<span class="spinner"></span> Saving...';
                                 btn.disabled = true;
                                 try {
                                     await fetch(`/api/analyses/${encodeURIComponent(currentAnalysisId)}`, {
@@ -2094,7 +2508,7 @@
                             }
 
                             try {
-                                btn.innerHTML = '⏳ Saving...';
+                                btn.innerHTML = '<span class="spinner"></span> Saving...';
                                 btn.disabled = true;
 
                                 const pgn = getCurrentPgnText();
@@ -2126,7 +2540,7 @@
                                 btn.disabled = false;
                             } catch (e) {
                                 toast('Error saving analysis', 'error');
-                                $('#btnSaveAnalysis').innerHTML = '🔗 Share Link';
+                                $('#btnSaveAnalysis').innerHTML = `${ICONS.link} Share Link`;
                                 $('#btnSaveAnalysis').disabled = false;
                             }
                         });
@@ -2156,12 +2570,12 @@
                                 if (isLiveEngineEnabled) {
                                     btnToggleEngine.style.color = '#7fa650';
                                     btnToggleEngine.style.borderColor = 'rgba(127,166,80,0.5)';
-                                    btnToggleEngine.innerHTML = '⚡ Live: ON';
+                                    btnToggleEngine.innerHTML = `${ICONS.zap} Live: ON`;
                                     triggerReanalysis();
                                 } else {
                                     btnToggleEngine.style.color = '#aaa';
                                     btnToggleEngine.style.borderColor = '#444';
-                                    btnToggleEngine.innerHTML = '⏸ Live: OFF';
+                                    btnToggleEngine.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg> Live: OFF';
                                     if (liveAnalysisAbort) liveAnalysisAbort.abort();
                                     updateEngineStreamBadge(false);
                                 }
@@ -2218,9 +2632,9 @@
                         badge.style.display = 'inline-flex';
                         let npsStr = nps > 0 ? ` · ${(nps / 1000000).toFixed(1)}M nps` : '';
                         // source is 'client', 'server', or 'client+server' (both engines contributing)
-                        const icons = (source || '').split('+').map((s) => s === 'client' ? '🖥️' : s === 'server' ? '☁️' : '').join('');
+                        const icons = (source || '').split('+').map((s) => s === 'client' ? ICONS.monitor : s === 'server' ? ICONS.cloud : '').join('');
                         let sourceStr = icons ? `${icons} · ` : '';
-                        textEl.textContent = `${sourceStr}Depth ${depth}/${targetDepth}${npsStr}`;
+                        textEl.innerHTML = `${sourceStr}Depth ${depth}/${targetDepth}${npsStr}`;
                     }
 
                     // Streams one server-side analysis over SSE, feeding onUpdate the same
@@ -2630,7 +3044,7 @@
                             const prevPrevPos = i >= 2 ? positions[i - 2] : null;
                             const moveNum = Math.ceil(i / 2);
                             const ann = getMoveAnnotationIcon(prevPos.score_cp, currPos.score_cp, turn, moveNum, prevPos, currPos, prevPrevPos, leniency);
-                            if (ann && ann.src === './assets/images/brilliant.png') count++;
+                            if (ann && ann.src === window.MOVE_ICON_URLS.brilliant) count++;
                         }
                         return count;
                     }
@@ -2695,7 +3109,7 @@
                         if (!isCurrentGame960 && currPos && currPos.fen) {
                             const fenParts = currPos.fen.split(' ');
                             if (fenParts.length >= 4 && openingsDatabase[fenParts.slice(0, 4).join(' ')]) {
-                                return { src: './assets/images/theoritical_move.png', title: 'Book: A known opening move' };
+                                return { src: window.MOVE_ICON_URLS.theoritical_move, title: 'Book: A known opening move' };
                             }
                         }
 
@@ -2715,7 +3129,7 @@
                                     const matBefore = getMaterial(prevPos.fen, turn);
                                     const matAfter = getMaterial(tempChess.fen(), turn);
                                     if (matAfter <= matBefore - 2) {
-                                        return { src: './assets/images/brilliant.png', title: "Brilliant: A sound sacrifice" };
+                                        return { src: window.MOVE_ICON_URLS.brilliant, title: "Brilliant: A sound sacrifice" };
                                     }
                                 }
                             } catch (e) { }
@@ -2736,7 +3150,7 @@
                                     let pct1 = playerWinPct(s1, turn);
                                     let pct2 = playerWinPct(s2, turn);
                                     if (pct1 - pct2 >= requiredGap) {
-                                        return { src: './assets/images/the_only_move.png', title: "Great: The only good choice" };
+                                        return { src: window.MOVE_ICON_URLS.the_only_move, title: "Great: The only good choice" };
                                     }
                                 }
                             }
@@ -2745,7 +3159,7 @@
                             const nowEqualOrBetter = currPct >= 45;
                             const nowWinning = currPct > 70;
                             if ((wasLosing && nowEqualOrBetter) || (wasEqual && nowWinning)) {
-                                return { src: './assets/images/the_only_move.png', title: "Great: Changes the course of the game" };
+                                return { src: window.MOVE_ICON_URLS.the_only_move, title: "Great: Changes the course of the game" };
                             }
                         }
 
@@ -2760,7 +3174,7 @@
                             const requiredGift = Math.max(8, Math.min(30, 15 * leniency));
                             const requiredMissLoss = Math.max(6, Math.min(18, 10 * leniency));
                             if (opponentGift >= requiredGift && prevPct >= 60 && loss >= requiredMissLoss) {
-                                return { src: './assets/images/missed_tactic.png', title: "Miss: Missed a winning chance" };
+                                return { src: window.MOVE_ICON_URLS.missed_tactic, title: "Miss: Missed a winning chance" };
                             }
                         }
 
@@ -2770,21 +3184,21 @@
                         // leniency, so the whole ladder is easier to climb for a lower-rated player
                         // and harder for a higher-rated one, same objective loss either way.
                         if (loss >= 20 * leniency) {
-                            return { src: './assets/images/blunder.png', title: "Blunder: Extremely costly mistake" };
+                            return { src: window.MOVE_ICON_URLS.blunder, title: "Blunder: Extremely costly mistake" };
                         }
                         if (loss >= 10 * leniency) {
-                            return { src: './assets/images/strange_move.png', title: "Mistake: Meaningful chunk of game lost" };
+                            return { src: window.MOVE_ICON_URLS.strange_move, title: "Mistake: Meaningful chunk of game lost" };
                         }
                         if (loss >= 5 * leniency) {
-                            return { src: './assets/images/tactical_move.png', title: "Inaccuracy: Slightly worsens position" };
+                            return { src: window.MOVE_ICON_URLS.tactical_move, title: "Inaccuracy: Slightly worsens position" };
                         }
                         if (loss >= 2 * leniency) {
-                            return { src: './assets/images/good_move.png', title: "Good: A solid, sensible move" };
+                            return { src: window.MOVE_ICON_URLS.good_move, title: "Good: A solid, sensible move" };
                         }
                         if (loss >= 0.5 * leniency) {
-                            return { src: './assets/images/good_move.png', title: "Excellent: Nearly the top choice" };
+                            return { src: window.MOVE_ICON_URLS.good_move, title: "Excellent: Nearly the top choice" };
                         }
-                        return { src: './assets/images/best_move.png', title: "Best: The engine's top choice" };
+                        return { src: window.MOVE_ICON_URLS.best_move, title: "Best: The engine's top choice" };
                     }
 
                     function drawMoveAnnotationOnBoard() {
@@ -3155,9 +3569,9 @@
                         await probeClientEngine();
 
                         if ($('#analysisEngineLabel')) {
-                            const label = enginePreference === 'both' ? '(🖥️ Browser + ☁️ Server)'
-                                : enginePreference === 'client' ? '(🖥️ Browser)' : '(☁️ Server)';
-                            $('#analysisEngineLabel').textContent = label;
+                            const label = enginePreference === 'both' ? `(${ICONS.monitor} Browser + ${ICONS.cloud} Server)`
+                                : enginePreference === 'client' ? `(${ICONS.monitor} Browser)` : `(${ICONS.cloud} Server)`;
+                            $('#analysisEngineLabel').innerHTML = label;
                         }
 
                         await Promise.all([clientBatchWorker(), serverBatchWorker()]);
@@ -3353,15 +3767,15 @@
                         }
 
                         const order = [
-                            './assets/images/brilliant.png',
-                            './assets/images/the_only_move.png',
-                            './assets/images/best_move.png',
-                            './assets/images/good_move.png',
-                            './assets/images/theoritical_move.png',
-                            './assets/images/tactical_move.png',
-                            './assets/images/strange_move.png',
-                            './assets/images/missed_tactic.png',
-                            './assets/images/blunder.png'
+                            window.MOVE_ICON_URLS.brilliant,
+                            window.MOVE_ICON_URLS.the_only_move,
+                            window.MOVE_ICON_URLS.best_move,
+                            window.MOVE_ICON_URLS.good_move,
+                            window.MOVE_ICON_URLS.theoritical_move,
+                            window.MOVE_ICON_URLS.tactical_move,
+                            window.MOVE_ICON_URLS.strange_move,
+                            window.MOVE_ICON_URLS.missed_tactic,
+                            window.MOVE_ICON_URLS.blunder
                         ];
 
                         function buildHtml(stats) {
@@ -3778,8 +4192,25 @@
                     try {
                         const res = await fetch(window.OPENINGS_DB_URL);
                         openingsDatabase = await res.json();
+                        buildEcoNameIndex();
                     } catch (e) {
                         console.error('Failed to load openings database:', e);
+                    }
+                }
+
+                // Many FEN entries share one ECO code (every branch of the Scandinavian
+                // is still B01) — prefer whichever name has no ": Variation" suffix as
+                // the canonical one for that code, since that's consistently the base
+                // line's name in this dataset. Falls back to the first name seen for
+                // codes where every entry happens to have a colon.
+                function buildEcoNameIndex() {
+                    for (const key in openingsDatabase) {
+                        const entry = openingsDatabase[key];
+                        if (!entry || !entry.eco || !entry.name) continue;
+                        const isBaseLine = !entry.name.includes(':');
+                        if (!ecoNameIndex[entry.eco] || isBaseLine) {
+                            ecoNameIndex[entry.eco] = entry.name;
+                        }
                     }
                 }
 

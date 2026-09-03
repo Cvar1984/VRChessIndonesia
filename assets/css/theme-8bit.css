@@ -1,0 +1,110 @@
+/* ============================================================
+   VRChess Indonesia — Theme: 8-Bit
+
+   Same token contract as theme-dark.css (every name here exists
+   there too) — style.css never knows which theme is active, it
+   only reads var(--...). Swapping back to the modern theme is a
+   one-line change in the <link> tag, nothing else.
+
+   Palette is pulled from the community's own logo/banner (dark
+   forest green + chess-piece gold + Indonesian red), not a generic
+   NES red/blue — see Pictures/Logo.png.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+/* Self-hosted rather than CDN-linked — see assets/fonts/minecraft/. The
+   in-game Minecraft typeface itself isn't independently licensed (it's a
+   Mojang game asset); these particular font files come from a widely-used
+   community package (bs-community/typeface-minecraft, MIT-licensed
+   wrapper) that's honest about not being the rights holder. Low-risk for a
+   fan community site, but worth knowing if this ever needs reconsidering. */
+@font-face {
+    font-family: 'Minecraft';
+    src: url('../fonts/minecraft/minecraft.woff2') format('woff2'),
+         url('../fonts/minecraft/minecraft.woff') format('woff'),
+         url('../fonts/minecraft/minecraft.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    /* Color palette */
+    --bg-primary: #0a120d;
+    --bg-secondary: #0d1a13;
+    --bg-card: #12241a;
+    --bg-card-hover: #1a3226;
+    --bg-glass: rgba(232, 184, 75, 0.05);
+    --bg-input: rgba(255, 255, 255, 0.04);
+
+    --accent-primary: #e8b84b;
+    --accent-primary-hover: #ffd766;
+    --accent-gold: #e8b84b;
+    --accent-silver: #9ca3af;
+    --accent-bronze: #b5794a;
+    --accent-green: #6fae4f;
+    --accent-red: #c8383a;
+    --accent-orange: #d9a441;
+    --accent-cyan: #9ca3af;
+
+    --text-primary: #ede4c8;
+    --text-secondary: #a89f86;
+    --text-muted: #6b6552;
+    --text-accent: var(--accent-primary);
+
+    --border-subtle: rgba(232, 184, 75, 0.18);
+    --border-strong: rgba(232, 184, 75, 0.45);
+    --border-focus: rgba(232, 184, 75, 0.6);
+
+    /* 8-bit uses hard, unblurred "drop" shadows instead of soft/blurred ones */
+    --shadow-card: 3px 3px 0 rgba(0, 0, 0, 0.4);
+    --shadow-md: 4px 4px 0 rgba(0, 0, 0, 0.45);
+    --shadow-lg: 6px 6px 0 rgba(0, 0, 0, 0.5);
+
+    /* Typography — VT323 for body/data (legible at length), Press Start 2P
+       for short display text only (headings, buttons, labels, nav). Both
+       render noticeably larger than their px value suggests versus a normal
+       typeface — html's root font-size is scaled down below to compensate. */
+    --font-sans: 'VT323', monospace;
+    --font-mono: 'VT323', monospace;
+    --font-display: 'Minecraft', 'VT323', monospace;
+
+    /* No rounded corners anywhere in an 8-bit UI */
+    --radius-sm: 0;
+    --radius-md: 0;
+    --radius-lg: 0;
+    --radius-xl: 0;
+    --radius-badge: 0;
+
+    --btn-primary-text: var(--bg-primary);
+    --checker-tile: rgba(232, 184, 75, 0.05);
+    --show-hero-banner: block;
+
+    /* Stepped/instant transitions instead of eased ones */
+    --transition-fast: 80ms steps(2);
+    --transition-normal: 120ms steps(3);
+    --transition-slow: 200ms steps(4);
+
+    /* 8-bit-specific tokens, not part of the shared cross-theme contract —
+       only style.css rules that opt into the pixel-panel/pixel-btn treatment
+       reference these. */
+    --pixel-notch: 4px;
+    --pixel-bevel-light: #a3782a;
+    --pixel-bevel-dark: #6b4f1c;
+
+    /* Secondary/utility controls (small buttons, filter pills, search bar)
+       render bulkier than intended at this theme's larger root scale —
+       shrink just those, not the whole page. */
+    --compact-scale: 0.78;
+}
+
+/* VT323 and Press Start 2P both read noticeably larger than the same px
+   value in a normal typeface (confirmed against a live preview — the first
+   pass at this theme had to be scaled down after the pixel font made every
+   button and paragraph look oversized). Scaling the root down means every
+   existing rem-based size in style.css shrinks proportionally, without
+   editing each of that file's ~40 font-size declarations individually. */
+html {
+    font-size: 14.5px;
+}

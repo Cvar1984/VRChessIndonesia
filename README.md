@@ -1,12 +1,8 @@
 # ♚ VRChess Indonesia — Documentation
 
-**VRChess Indonesia** is a chess rating and match-tracking platform for a VRChat chess community. It combines a custom Elo-style rating system, PHP + MongoDB Atlas backend, a Stockfish 18 analysis engine (server-side and in-browser WASM), and optional integration with VRChat's unofficial API to show players' real VRChat profile pictures on the leaderboard.
+**VRChess Indonesia** is a chess rating and match-tracking platform for a VRChat chess community. It combines a custom Elo-style rating system, a Symfony 6.4 + MongoDB Atlas backend, a Stockfish 18 analysis engine (server-side and in-browser WASM), and deep integration with VRChat's unofficial API — real profile pictures on the leaderboard, a photo gallery pulled live from the group's VRChat galleries, and a newsletter pulled live from the group's VRChat posts, all manageable from an in-app admin panel.
 
-This document covers every HTTP endpoint the backend exposes, the rating and move-accuracy formulas behind the numbers, and how to configure the app.
-
-> **Branch note:** this `symfony-migration` branch contains a completed ground-up rewrite onto Symfony 6.4 + Doctrine MongoDB ODM + Twig (`src/Document/`, `src/Repository/`, `src/Service/`, `src/Controller/`, `config/`, `tests/`, `templates/`). The legacy flat-file app this document was originally written for (`index.php`, `index.html`, `stockfish.php`, `src/Logic/`, `src/Connection/`, `test.php`) has been removed **on this branch only** — `main` still has it untouched, and `main` is what's actually deployed at `chess.cvar1984.net` until this branch is merged and the server's document root is repointed at `public/` (a deployment step, not a code change — see the plan). The endpoint reference below still describes the legacy `?query=string` API shape; the new app exposes equivalent clean REST routes under `/api/...` (see `src/Controller/`) with the same response bodies, verified endpoint-by-endpoint against live production data throughout the migration. See `/home/cvar1984/.claude/plans/wondrous-prancing-lobster.md` for the full migration history.
-
----
+This document covers every HTTP endpoint the backend exposes, the rating and move-accuracy formulas behind the numbers, and how to configure and run the app.
 
 ## 📋 Table of Contents
 
@@ -22,10 +18,13 @@ This document covers every HTTP endpoint the backend exposes, the rating and mov
 10. [Match Endpoints](#-match-endpoints)
 11. [VRChat Profile Linking (Admin)](#-vrchat-profile-linking-admin)
 12. [Avatar Proxy](#-avatar-proxy)
-13. [Stockfish Engine Analysis API](#-stockfish-engine-analysis-api-stockfishphp)
-14. [Rating System](#-rating-system)
-15. [Move Accuracy & Classification Model](#-move-accuracy--classification-model)
-16. [Error Handling & Status Codes](#-error-handling--status-codes)
+13. [Gallery — VRChat Group Photos](#-gallery--vrchat-group-photos)
+14. [Newsletter — VRChat Group Posts](#-newsletter--vrchat-group-posts)
+15. [Stockfish Engine Analysis API](#-stockfish-engine-analysis-api)
+16. [Rating System](#-rating-system)
+17. [Move Accuracy & Classification Model](#-move-accuracy--classification-model)
+18. [Error Handling & Status Codes](#-error-handling--status-codes)
+19. [Tests](#-tests)
 
 ---
 
@@ -33,16 +32,19 @@ This document covers every HTTP endpoint the backend exposes, the rating and mov
 
 ```mermaid
 flowchart LR
-    subgraph Client["Browser (index.html SPA)"]
-        UI["Leaderboard / Admin Panel / Analysis Tab"]
+    subgraph Client["Browser"]
+        UI["Leaderboard SPA (/)<br/>Admin Panel · Analysis Tab"]
+        GAL["Gallery page (/gallery)"]
+        NL["Newsletter page (/newsletter)"]
         WASM["In-browser Stockfish WASM<br/>optional, falls back to server"]
     end
 
-    subgraph Server["PHP Backend"]
-        IDX["index.php<br/>REST API + page shell"]
-        SF["stockfish.php<br/>Engine analysis service"]
-        MM["MatchManager<br/>rating & match logic"]
-        VRC["VRChatClient<br/>unofficial VRChat API"]
+    subgraph Server["Symfony 6.4"]
+        CTRL["Controllers (src/Controller/)<br/>Player · ChessMatch · Analysis · ApiToken ·<br/>AdminAuth/Management · VRChat · Gallery · Newsletter ·<br/>AvatarProxy · Engine · Leaderboard"]
+        SEC["Security (src/Security/)<br/>AdminLoginAuthenticator · ApiTokenAuthenticator ·<br/>AdminHeaderAuthenticator"]
+        MM["MatchManager + RatingCalculator<br/>(src/Service/)"]
+        SF["StockfishEngine<br/>(Symfony Process → UCI)"]
+        VRC["VRChatClient<br/>(unofficial VRChat API, self-throttled)"]
     end
 
     subgraph Data["MongoDB Atlas"]
@@ -51,26 +53,31 @@ flowchart LR
         AN[("analyses")]
         TK[("tokens")]
         AD[("admins")]
-        ST[("settings, incl. cached VRChat session")]
+        ST[("settings — VRChat session,<br/>rate-limit clock, gallery hide-list")]
     end
 
-    UI -->|fetch| IDX
-    UI -->|fetch| SF
-    IDX --> MM --> P
+    UI -->|fetch /api/...| CTRL
+    GAL -->|GET /gallery| CTRL
+    NL -->|GET /newsletter| CTRL
+    CTRL --> SEC
+    CTRL --> MM --> P
     MM --> MA
-    IDX --> AN
-    IDX --> TK
-    IDX --> AD
-    IDX -->|"search / link / fetch avatar"| VRC -->|HTTPS| VRChatCloud["api.vrchat.cloud"]
+    CTRL --> AN
+    CTRL --> TK
+    CTRL --> AD
+    CTRL -->|"search/link avatars,<br/>galleries, posts"| VRC -->|HTTPS, throttled| VRChatCloud["api.vrchat.cloud"]
     VRC --> ST
-    SF -->|"UCI protocol"| Stockfish["/usr/bin/stockfish binary"]
+    CTRL --> SF -->|"UCI protocol"| Stockfish["stockfish binary"]
 ```
 
-- **`index.php`** — the single REST API + page entry point. Every request instantiates a fresh `MongoDBDatabaseManager` and `MatchManager`, routes on `$_GET`/`$_SERVER['REQUEST_METHOD']`, and falls through to serving `index.html` (the SPA shell) if no API route matches.
-- **`stockfish.php`** — a separate, independent service that shells out to a local Stockfish binary via UCI. Used both for the "Submit Match" PGN analysis and the interactive Analysis tab (server-side fallback when the in-browser WASM engine isn't available).
-- **`MatchManager`** (`src/Logic/MatchManager.php`) — owns players/matches, the rating calculation, and match validation/invalidation (which triggers a full chronological rating replay).
-- **`VRChatClient`** (`src/Connection/VRChatClient.php`) — a minimal client for VRChat's *unofficial* API (not published/supported by VRChat). Logs in with a dedicated VRChat account (Authenticator App/TOTP 2FA), caches the session cookie in the `settings` collection, and exposes user search + lookup.
-- **Storage** — MongoDB Atlas via `MongoDBDatabaseManager`. `CSVDatabaseManager`/`SQLDatabaseManager` exist as alternative implementations of the same `DatabaseManager` interface but are not wired into `index.php`.
+- **Controllers** (`src/Controller/`) — one per resource, PHP 8 route attributes, thin wrappers over the Service/Repository layer. `AbstractApiController` provides `requireAdmin()`/`requireApiAccess()` (in-controller auth checks, not routing-layer `#[IsGranted]`) plus shared helpers (`normalizeToPng()`, `explainVrchatError()`) used by the Gallery and Newsletter controllers.
+- **Documents/Repositories** (`src/Document/`, `src/Repository/`) — Doctrine MongoDB ODM models mapped onto the app's original collections/fields (`players`, `matches`, `analyses`, `tokens`, `admins`, `settings`). No data migration ever happened; the schema is unchanged from the app's first version.
+- **`MatchManager`** (`src/Service/MatchManager.php`) — owns match validation/invalidation, which triggers a full chronological rating replay across every currently-valid match.
+- **`RatingCalculator`** (`src/Service/RatingCalculator.php`) — the bracketed win/draw/loss point table (see [Rating System](#-rating-system)).
+- **`StockfishEngine`** (`src/Service/Engine/`) — wraps a local Stockfish binary over UCI via Symfony's `Process` component (a long-lived subprocess per analysis call, not shared across requests).
+- **`VRChatClient`** (`src/Service/VRChat/VRChatClient.php`) — a client for VRChat's *unofficial* API (not published/supported by VRChat). Logs in with a dedicated VRChat account (Authenticator App/TOTP 2FA), caches the session cookie in the `settings` collection, self-throttles every outbound request to VRChat (see `VRCHAT_RATE_LIMIT_SECONDS` below — the "last request at" clock also lives in `settings`, since a fresh client is constructed per request), and covers user search/lookup, group galleries, and group posts.
+- **Security** (`src/Security/`) — one stateful firewall, three chained authenticators: `AdminLoginAuthenticator` (session-establishing login), `AdminHeaderAuthenticator` (per-request `X-Admin-Username`/`X-Admin-Password` header fallback), `ApiTokenAuthenticator` (re-validated fresh every request). `ROLE_ADMIN` implies `ROLE_API_TOKEN` via `role_hierarchy`.
+- **Frontend** — `templates/leaderboard.html.twig` renders the main SPA shell; `assets/app.js` (plain, non-Twig-processed vanilla JS, ~4000 lines) drives all of its interactivity, including the Analysis tab's chessboard and Stockfish integration. `assets/css/theme-8bit.css` is the active theme (an NES-inspired pixel-art look); `theme-dark.css` is kept as an alternate. `templates/gallery.html.twig` and `templates/newsletter.html.twig` are separate routed pages (not SPA tabs), linked via `templates/_nav.html.twig`.
 
 ---
 
@@ -82,12 +89,27 @@ Copy `example.env` to `.env` and fill in:
 | :--- | :--- | :--- |
 | `MONGODB_URI` | Yes | MongoDB Atlas connection string. |
 | `MONGODB_USERNAME` / `MONGODB_PASSWORD` | Yes | Referenced inside `MONGODB_URI`. |
+| `MONGODB_DB` | Yes | Database name (`vrchessindo` in production; tests hard-require `vrchessindo_test` as a safety guard — see [Tests](#-tests)). |
+| `APP_SECRET` | Yes | Symfony's session/CSRF secret. Generate with `php -r "echo bin2hex(random_bytes(16));"`. |
 | `ADMIN_PASSWORD` | Legacy fallback | Only used to bootstrap the first admin (`admin`) if the `admins` collection is empty. Once any admin exists, this is ignored — manage admins via the Admin Panel/API instead. |
-| `VRCHAT_USERNAME` / `VRCHAT_PASSWORD` | Optional | A VRChat account dedicated to this app. Leave blank to disable the whole VRChat avatar feature — the leaderboard falls back to generated initials avatars. |
+| `STOCKFISH_BINARY` | Yes | Path to the Stockfish executable (default `/usr/bin/stockfish`). |
+| `VRCHAT_USERNAME` / `VRCHAT_PASSWORD` | Optional | A VRChat account dedicated to this app. Leave blank to disable the whole VRChat feature set — the leaderboard falls back to generated initials avatars, and `/gallery`/`/newsletter` render empty. |
 | `VRCHAT_TOTP_SECRET` | Optional | The Base32 **manual-entry secret** from VRChat's "Two-Factor Authentication → Enter the key manually" setup screen — *not* a 6-digit code (those rotate every 30s and can't be stored). Only Authenticator App 2FA is supported; email-code 2FA can't be completed unattended. |
 | `VRCHAT_CONTACT` | Optional | Free-text contact info appended to the `User-Agent` header VRChat's API requires (e.g. an email). |
+| `VRCHAT_GROUP_ID` | Optional | Required for `/gallery` and `/newsletter` to show anything — the VRChat group ID (`grp_...`) those pages pull from. |
+| `VRCHAT_GROUP_GALLERY_ID` | Optional | Leave blank to auto-discover and combine every gallery the group has (each shown under its own heading on `/gallery`); set to one gallery's ID (`ggal_...`) to show only that one. |
+| `VRCHAT_RATE_LIMIT_SECONDS` | Optional | Minimum seconds between the app's own outbound requests to VRChat's API — a self-imposed courtesy throttle, since VRChat's unofficial API publishes no rate-limit numbers but is known to temporarily block accounts that hammer it. Default `1`; bump to `5` if you see VRChat-side errors, `0` disables it. |
 
-Dependencies (`composer.json`): `mongodb/mongodb`, `vlucas/phpdotenv`. Requires the PHP `mongodb` and `curl` extensions, and a `stockfish` binary on `PATH` (default `/usr/bin/stockfish`) for `stockfish.php`.
+Dependencies (`composer.json`): `symfony/framework-bundle`, `symfony/security-bundle`, `symfony/http-client`, `symfony/process`, `symfony/twig-bundle`, `symfony/asset-mapper` + `symfony/asset`, `doctrine/mongodb-odm-bundle`, `mongodb/mongodb`. Requires PHP ≥ 8.1 with the `mongodb` and `gd` extensions (GD normalizes admin-uploaded gallery/post images to PNG before handing them to VRChat), plus a `stockfish` binary on disk.
+
+```bash
+composer install
+cp example.env .env   # then fill in the real values
+php bin/console doctrine:mongodb:schema:create   # if collections/indexes don't exist yet
+symfony server:start  # or: php -S 127.0.0.1:8000 -t public
+```
+
+**Deployment:** the [Dockerfile](Dockerfile) builds a FrankenPHP image (Caddy + PHP in one process); [railway.json](railway.json) pins Railway to build from it directly (Railway doesn't auto-detect a Dockerfile otherwise). Real secrets are injected as Railway environment variables at deploy time — `example.env` is copied to `.env` at build time only so Symfony's Dotenv component has a base file to boot from; it holds no real values. A traditional Apache host also works: the root-level `.htaccess` transparently forwards every request into `public/` (so a vhost pointed at the repo root instead of `public/` still works, URL stays clean) and sets the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers the in-browser Stockfish WASM engine needs for `SharedArrayBuffer`; without them the app just falls back to server-side analysis automatically.
 
 ---
 
@@ -96,7 +118,7 @@ Dependencies (`composer.json`): `mongodb/mongodb`, `vlucas/phpdotenv`. Requires 
 Two independent auth models exist, layered on the same MongoDB backend:
 
 ### 1. Admin session (cookie-based)
-Logging in via `?login=1` starts a PHP session (`$_SESSION['is_admin']`). Endpoints marked **Admin Only** below require this session *or* a valid admin username/password sent per-request via headers/params (`X-Admin-Username`/`X-Admin-Password`, or `admin_username`/`admin_password`).
+`POST /api/admin/login` starts a Symfony session (handled by `AdminLoginAuthenticator`). Endpoints marked **Admin Only** below require this session *or* a valid admin username/password sent per-request via headers (`X-Admin-Username`/`X-Admin-Password`, handled by `AdminHeaderAuthenticator`).
 
 ### 2. API Token (for external clients / bots)
 Endpoints marked **API Token Required** accept a token via any of:
@@ -105,7 +127,7 @@ Endpoints marked **API Token Required** accept a token via any of:
 - **Header**: `Authorization: Bearer <token>`
 - **Query param**: `?token=<token>` or `?api_token=<token>`
 
-An authenticated admin session also satisfies API Token requirements (admins can do everything a token can). Tokens are managed via the [Token endpoints](#-api-token-management-admin) and are looked up with a 5-minute positive / 30-second negative cache.
+An authenticated admin session also satisfies API Token requirements (`ROLE_ADMIN` implies `ROLE_API_TOKEN`). Tokens are managed via the [Token endpoints](#-api-token-management-admin).
 
 ### Endpoint visibility summary
 
@@ -119,7 +141,7 @@ An authenticated admin session also satisfies API Token requirements (admins can
 
 ## 📡 Base Response Format
 
-Every `index.php` and `stockfish.php` JSON response follows:
+Every JSON endpoint follows:
 
 ```json
 { "success": true, "...": "endpoint-specific fields" }
@@ -128,7 +150,7 @@ Every `index.php` and `stockfish.php` JSON response follows:
 { "success": false, "error": "Human-readable error message (often in Indonesian)" }
 ```
 
-`stockfish.php`'s error responses omit `success` and just return `{ "error": "..." }`. CORS is wide open (`Access-Control-Allow-Origin: *`) on both services.
+CORS is wide open (`Access-Control-Allow-Origin: *`) on every route, applied globally by `src/EventListener/CorsListener.php` (including a `204` short-circuit for `OPTIONS` preflight requests).
 
 ---
 
@@ -136,15 +158,15 @@ Every `index.php` and `stockfish.php` JSON response follows:
 
 | # | Action | Method | URL |
 | :-: | :--- | :--- | :--- |
-| 1 | Auth status | `GET` | `/index.php?auth-status=1` |
-| 2 | Login | `GET`/`POST` | `/index.php?login=1` or `POST ?action=login` |
-| 3 | Logout | `GET` | `/index.php?logout=1` |
+| 1 | Auth status | `GET` | `/api/auth/status` |
+| 2 | Login | `POST` | `/api/admin/login` |
+| 3 | Logout | `POST` | `/api/admin/logout` |
 
 **1. Auth status** — `Public`. Returns `{ success, authenticated, username }`.
 
-**2. Login** — `Public`. Body/query: `username` (default `"admin"`), `password`. On success sets the admin session and returns `{ success:true, authenticated:true, username }`; on failure, `401` with `error`.
+**2. Login** — `Public`. Body: `{ "username": "admin", "password": "..." }`. On success sets the admin session; on failure, `401`.
 
-**3. Logout** — destroys the session. Returns `{ success:true, authenticated:false }`.
+**3. Logout** — `Public`. Invalidates the session. Returns `{ success:true, message, authenticated:false }`.
 
 ---
 
@@ -152,10 +174,10 @@ Every `index.php` and `stockfish.php` JSON response follows:
 
 | # | Action | Method | URL |
 | :-: | :--- | :--- | :--- |
-| 1 | List tokens | `GET` | `/index.php?tokens=1` |
-| 2 | Create token | `GET`/`POST` | `/index.php?create-token=1` or `POST ?action=create-token` |
-| 3 | Revoke/delete token | `DELETE` | `/index.php?revoke-token=1&id=<id>` or `DELETE ?token_id=<id>` |
-| 4 | Update token | `PATCH` | `/index.php?update-token=1&id=<id>` or `PATCH ?token_id=<id>` |
+| 1 | List tokens | `GET` | `/api/admin/tokens` |
+| 2 | Create token | `POST` | `/api/admin/tokens` |
+| 3 | Update token | `PATCH` | `/api/admin/tokens/{id}` |
+| 4 | Revoke/delete token | `DELETE` | `/api/admin/tokens/{id}` |
 
 All **Admin Only**. Token object shape:
 
@@ -170,11 +192,11 @@ All **Admin Only**. Token object shape:
 }
 ```
 
-**2. Create token** — body `{ "name": "Discord Bot" }`. Returns `{ success, message, token: {...} }`.
-**3. Revoke** — body/query `{ "id": "<token id or raw token string>" }`.
-**4. Update** — body `{ "id", "name", "is_active" }`.
+**2. Create** — body `{ "name": "Discord Bot" }`. Returns `{ success, message, token: {...} }`.
+**3. Update** — body `{ "name", "is_active" }`.
+**4. Revoke** — deletes the token permanently.
 
-> A "Default Web App Token" is auto-created on first request (`ensureDefaultToken()`) and used internally by the frontend SPA.
+> A "Default Web App Token" is auto-created on first request and used internally by the frontend SPA.
 
 ---
 
@@ -182,36 +204,38 @@ All **Admin Only**. Token object shape:
 
 | # | Action | Method | URL |
 | :-: | :--- | :--- | :--- |
-| 1 | List admins | `GET` | `/index.php?admins=1` |
-| 2 | Create admin | `POST` | `/index.php?action=create-admin` |
-| 3 | Update admin password | `PATCH` | `/index.php?action=update-admin` |
-| 4 | Delete admin | `DELETE` | `/index.php?action=delete-admin` |
+| 1 | List admins | `GET` | `/api/admin/admins` |
+| 2 | Create admin | `POST` | `/api/admin/admins` |
+| 3 | Update admin password | `PATCH` | `/api/admin/admins/{username}` |
+| 4 | Delete admin | `DELETE` | `/api/admin/admins/{username}` |
 
 All **Admin Only**. Admin object: `{ "username": "admin", "created_at": "..." }` (passwords never returned — bcrypt-hashed at rest).
 
 **2. Create** — body `{ "username", "password" }` (password min 4 chars).
-**3. Update** — body `{ "username", "password" }` (new password).
-**4. Delete** — body/query `{ "username" }`. Cannot delete yourself or the last remaining admin.
+**3. Update** — body `{ "password" }` (new password).
+**4. Delete** — cannot delete yourself or the last remaining admin.
 
 ---
 
 ## 📚 Saved Analysis Endpoints
 
-Analyses are Stockfish-evaluated PGN games, saved so a shareable link (`?analysis=<id>`) can reload them without re-running the engine. `analysis_url` on a match can point at one of these internal IDs, or at an arbitrary external URL (lichess.org, chessigma.com, chess.com, etc.).
+Analyses are Stockfish-evaluated PGN games, saved so a shareable link (`?analysis=<id>`) can reload them without re-running the engine. A match's `analysis_url` can point at one of these internal IDs, or at an arbitrary external URL (lichess.org, chessigma.com, chess.com, etc.).
 
 | # | Action | Method | URL | Auth |
 | :-: | :--- | :--- | :--- | :--- |
-| 1 | Save analysis | `POST` | `/index.php?action=save-analysis` | Public |
-| 2 | Update analysis | `PATCH` | `/index.php?action=update-analysis&id=<id>` | Public |
-| 3 | Get one analysis | `GET` | `/index.php?action=get-analysis&id=<id>` | Public |
-| 4 | List all analyses | `GET` | `/index.php?action=get-analyses` | Public |
-| 5 | Delete analysis | `DELETE` | `/index.php?action=delete-analysis&id=<id>` | API Token Required |
+| 1 | Save analysis | `POST` | `/api/analyses` | Public |
+| 2 | List all analyses | `GET` | `/api/analyses` | Public |
+| 3 | Get one analysis | `GET` | `/api/analyses/{id}` | Public |
+| 4 | Update analysis | `PATCH` | `/api/analyses/{id}` | Public |
+| 5 | Delete analysis | `DELETE` | `/api/analyses/{id}` | API Token Required |
 
-**1. Save** — body `{ "pgn": "<PGN text>", "analysis": [ ...positions ] }` (`analysis` optional — can be attached later via #2, e.g. once background Stockfish evaluation finishes). Returns `{ success, id }` — a 16-char hex ID.
+**1. Save** — body `{ "pgn": "<PGN text>", "analysis": [ ...positions ] }` (`analysis` optional — can be attached later via #4, e.g. once background Stockfish evaluation finishes). Returns `{ success, id }` — a 16-char hex ID.
 
-**3. Get one** — returns `{ success, data: { id, pgn, created_at, analysis? } }`, where `analysis` (if present) is the full array of evaluated positions (see [move accuracy model](#-move-accuracy--classification-model) for each position's shape: `fen`, `move_san`, `score_cp`, `score_type`, `bestmove`, `pv`, `multipv`, `depth`).
+**3. Get one** — `404` if not found. Otherwise `{ success, data: { id, pgn, created_at, analysis? } }`, where `analysis` (if present) is the full array of evaluated positions (see [move accuracy model](#-move-accuracy--classification-model) for each position's shape: `fen`, `move_san`, `score_cp`, `score_type`, `bestmove`, `pv`, `multipv`, `depth`).
 
-**4. List all** — lightweight; omits the heavy `analysis` array. Returns `{ success, analyses: [{ id, created_at, pgn_preview, headers }] }`, where `headers` is the parsed PGN tag pairs (`White`, `Black`, `WhiteElo`, `Result`, `Event`, ...).
+**2. List all** — lightweight; omits the heavy `analysis` array. Returns `{ success, analyses: [{ id, created_at, pgn_preview, headers }] }`, where `headers` is the parsed PGN tag pairs (`White`, `Black`, `WhiteElo`, `Result`, `Event`, ...).
+
+**4. Update** — body `{ "analysis": [...] }`. ⚠️ One real quirk: if `id` doesn't exist, this returns `{success:false}` with HTTP **200**, not 404 — a deliberately preserved behavior of the original endpoint.
 
 ---
 
@@ -219,11 +243,11 @@ Analyses are Stockfish-evaluated PGN games, saved so a shareable link (`?analysi
 
 | # | Action | Method | URL | Auth |
 | :-: | :--- | :--- | :--- | :--- |
-| 1 | List players | `GET` | `/index.php?players=1` | Public |
-| 2 | Rankings (sorted) | `GET` | `/index.php?rankings=1` | Public |
-| 3 | Single player stats | `GET` | `/index.php?player-stats=1&username=<name>` | Public |
-| 4 | Edit player | `PATCH` | `/index.php?player=<name>` | API Token Required |
-| 5 | Delete player | `DELETE` | `/index.php?player=<name>` | API Token Required |
+| 1 | List players | `GET` | `/api/players` | Public |
+| 2 | Rankings (sorted) | `GET` | `/api/rankings` | Public |
+| 3 | Single player stats | `GET` | `/api/players/{username}/stats` | Public |
+| 4 | Edit player | `PATCH` | `/api/players/{username}` | API Token Required |
+| 5 | Delete player | `DELETE` | `/api/players/{username}` | API Token Required |
 
 Player object (from #1/#2 — sorted by `rating` descending, VRChat fields merged in even for unlinked players as `null`):
 
@@ -242,7 +266,7 @@ Player object (from #1/#2 — sorted by `rating` descending, VRChat fields merge
 }
 ```
 
-**3. Single player stats** — `404` with `error` if the username isn't found. Otherwise:
+**3. Single player stats** — `404` if the username isn't found. Otherwise:
 
 ```json
 {
@@ -270,14 +294,14 @@ Player object (from #1/#2 — sorted by `rating` descending, VRChat fields merge
 
 | # | Action | Method | URL | Auth |
 | :-: | :--- | :--- | :--- | :--- |
-| 1 | List all matches | `GET` | `/index.php?matches=1` | Public |
-| 2 | List valid matches | `GET` | `/index.php?valid-matches=1` | Public |
-| 3 | List invalidated matches | `GET` | `/index.php?invalid-matches=1` | Public |
-| 4 | Record a match | `POST` | `/index.php?play=1` | API Token Required |
-| 5 | Invalidate a match | `PUT` | `/index.php?match=<id>&invalidate=1` | API Token Required |
-| 6 | Revalidate a match | `PUT` | `/index.php?match=<id>&revalidate=1` | API Token Required |
-| 7 | Edit a match | `PATCH` | `/index.php?match=<id>` | API Token Required |
-| 8 | Delete a match | `DELETE` | `/index.php?match=<id>` | API Token Required |
+| 1 | List all matches | `GET` | `/api/matches` | Public |
+| 2 | List valid matches | `GET` | `/api/matches/valid` | Public |
+| 3 | List invalidated matches | `GET` | `/api/matches/invalid` | Public |
+| 4 | Record a match | `POST` | `/api/matches` | API Token Required |
+| 5 | Invalidate a match | `PUT` | `/api/matches/{id}/invalidate` | API Token Required |
+| 6 | Revalidate a match | `PUT` | `/api/matches/{id}/revalidate` | API Token Required |
+| 7 | Edit a match | `PATCH` | `/api/matches/{id}` | API Token Required |
+| 8 | Delete a match | `DELETE` | `/api/matches/{id}` | API Token Required |
 
 Match object:
 
@@ -320,10 +344,10 @@ Powers cached VRChat profile pictures on the leaderboard. See [Setup](#-setup--e
 
 | # | Action | Method | URL |
 | :-: | :--- | :--- | :--- |
-| 1 | Search VRChat users | `GET` | `/index.php?vrchat-search=1&q=<query>` |
-| 2 | Link a player | `POST` | `/index.php?action=link-vrchat` |
-| 3 | Unlink a player | `POST` | `/index.php?action=unlink-vrchat` |
-| 4 | Refresh cached avatars | `POST` | `/index.php?action=refresh-vrchat-avatars` |
+| 1 | Search VRChat users | `GET` | `/api/admin/vrchat/search?q=<query>` |
+| 2 | Link a player | `POST` | `/api/admin/vrchat/link` |
+| 3 | Unlink a player | `POST` | `/api/admin/vrchat/unlink` |
+| 4 | Refresh cached avatars | `POST` | `/api/admin/vrchat/refresh-avatars` |
 
 All **Admin Only**.
 
@@ -341,19 +365,79 @@ All **Admin Only**.
 
 | Method | URL | Auth |
 | :--- | :--- | :--- |
-| `GET` | `/index.php?avatar=<username>` | Public |
+| `GET` | `/api/avatar/{username}` | Public |
 
-VRChat's CDN rejects direct browser `<img>` requests outright (its WAF requires a custom `User-Agent` naming the calling app — something only a server-side request can send, and something a browser will never let you override). This endpoint fetches a linked player's cached avatar URL server-side (with the required `User-Agent`, following VRChat's redirect to its signed CDN URL), caches the raw bytes to disk for 24h (`cache/avatars/`, gitignored), and streams them back with a long browser `Cache-Control`. Returns `404` (plain text) if the player has no cached avatar, `502` if VRChat is unreachable and no stale cache exists to fall back on.
+VRChat's CDN rejects direct browser `<img>` requests outright (its WAF requires a custom `User-Agent` naming the calling app — something only a server-side request can send). This endpoint fetches a linked player's cached avatar URL server-side and streams the bytes back, caching them in the `cache.avatars` PSR-6 pool for 24h with a "serve the stale copy rather than nothing" fallback if a refetch fails. Returns `404` (plain text) if the player has no cached avatar, `502` if VRChat is unreachable and no stale cache exists to fall back on.
 
 ---
 
-## 🧠 Stockfish Engine Analysis API (`stockfish.php`)
+## 🖼 Gallery — VRChat Group Photos
 
-An independent service (own CORS headers, own error format: `{ "error": "..." }`, no `success` key) that wraps a local Stockfish binary. Accepts parameters from either the query string or a JSON body (merged, body wins). Supports Chess960/Fischer Random via `chess960: true`.
+`/gallery` pulls every approved photo straight from the VRChat group's own gallery/galleries (`VRCHAT_GROUP_ID` + optionally `VRCHAT_GROUP_GALLERY_ID` — see [Setup](#-setup--environment-variables)) and groups them by gallery, each under its own heading. If the group has multiple galleries and `VRCHAT_GROUP_GALLERY_ID` is left blank, all of them are auto-discovered and combined. There's no local fallback content — an unconfigured or unreachable VRChat account just means an empty page.
+
+| # | Action | Method | URL | Auth |
+| :-: | :--- | :--- | :--- | :--- |
+| 1 | Public gallery page | `GET` | `/gallery` | Public |
+| 2 | Proxied photo bytes | `GET` | `/api/gallery/vrchat-image/{imageId}` | Public |
+| 3 | List all photos (admin) | `GET` | `/api/admin/gallery/photos` | Admin Only |
+| 4 | Hide a photo | `POST` | `/api/admin/gallery/hide` | Admin Only |
+| 5 | Unhide a photo | `POST` | `/api/admin/gallery/unhide` | Admin Only |
+| 6 | Create a new VRChat gallery | `POST` | `/api/admin/gallery/create-gallery` | Admin Only |
+| 7 | Upload a photo into a gallery | `POST` | `/api/admin/gallery/{galleryId}/upload` | Admin Only |
+| 8 | Force-refresh the cache | `POST` | `/api/admin/gallery/refresh` | Admin Only |
+
+**2. Proxied bytes** — same VRChat-CDN-needs-a-real-User-Agent reasoning as the avatar proxy. The `imageId` is looked up against the server's own already-fetched, cached photo list rather than trusting a client-supplied URL, so this can't be used to fetch arbitrary URLs. Cached for 24h.
+
+**3. Admin list** — returns every gallery (including empty ones, e.g. freshly created) with every photo (including hidden ones, flagged as such): `{ success, groupConfigured, galleries: [{ id, name, photos: [{ id, src, createdAt, hidden }] }] }`.
+
+**4/5. Hide / Unhide** — body `{ "image_id": "ggim_..." }`. Curation layer on top of VRChat's own "approved" flag: hiding a photo removes it from the public `/gallery` grid without touching anything on VRChat's side (no un-approving, no deleting). Stored in the `settings` collection, keyed to the configured group/gallery.
+
+**6. Create gallery** — body `{ "name", "description": "" }`. Mirrors VRChat's own "+ Create Gallery" group-settings action.
+
+**7. Upload** — multipart/form-data, field `file`. Normalizes the image to PNG (via GD) before handing it to VRChat, since VRChat's upload endpoint documents a PNG payload specifically. **Requires VRC+ on the connected VRChat account** — VRChat's Gallery/photo-upload feature is a VRC+ perk, independent of group roles/permissions entirely. Without it, this (and #7 below) return `502` with an error explaining the likely cause.
+
+**8. Refresh** — bypasses the hour-long cache TTL immediately (e.g. right after approving something new in VRChat).
+
+---
+
+## 📰 Newsletter — VRChat Group Posts
+
+`/newsletter` pulls the VRChat group's own "Posts" announcements (`GET /groups/{id}/posts`) and shows every `visibility: public` post — the group's existing content doubles as this site's newsletter, no separate content system. `visibility: group`-only posts stay invisible on the public page but are still visible/editable in the admin panel.
+
+| # | Action | Method | URL | Auth |
+| :-: | :--- | :--- | :--- | :--- |
+| 1 | Public newsletter page | `GET` | `/newsletter` | Public |
+| 2 | Proxied post-image bytes (public posts only) | `GET` | `/api/newsletter/image/{postId}` | Public |
+| 3 | List all posts (admin) | `GET` | `/api/admin/newsletter/posts` | Admin Only |
+| 4 | Create a post | `POST` | `/api/admin/newsletter/posts` | Admin Only |
+| 5 | Edit a post | `PATCH` | `/api/admin/newsletter/posts/{postId}` | Admin Only |
+| 6 | Attach/replace a post's image | `POST` | `/api/admin/newsletter/posts/{postId}/image` | Admin Only |
+| 7 | Proxied post-image bytes (any post, admin preview) | `GET` | `/api/admin/newsletter/posts/{postId}/image` | Admin Only |
+| 8 | Delete a post | `DELETE` | `/api/admin/newsletter/posts/{postId}` | Admin Only |
+| 9 | Force-refresh the cache | `POST` | `/api/admin/newsletter/refresh` | Admin Only |
+
+**3. Admin list** — `{ success, groupConfigured, posts: [{ id, title, text, imageId, imageUrl, src, visibility, createdAt, updatedAt }] }` — `src` is the admin-preview proxy URL (works for group-only posts too, unlike #2).
+
+**4. Create** — JSON body `{ "title", "text", "visibility": "group"|"public", "send_notification": false }`. `send_notification: true` pushes a real notification to every group member on VRChat — it's a genuine, visible side effect, not a preview.
+
+**5. Edit** — same body shape as create. VRChat's underlying `PUT` fully replaces the post's editable fields, so the existing image is preserved automatically (looked up server-side) when you don't touch it via #6.
+
+**6. Attach/replace image** — multipart/form-data, field `file`. Separate from #5 (rather than one combined endpoint) because PHP only parses multipart bodies on `POST`, never `PATCH`/`PUT`. Same VRC+ requirement and GD-normalize-to-PNG behavior as the gallery upload.
+
+**8. Delete** — permanently removes the post from the VRChat group. Not undoable.
+
+---
+
+## 🧠 Stockfish Engine Analysis API
+
+Wraps a local Stockfish binary via `StockfishEngine` (Symfony `Process`, UCI protocol). Supports Chess960/Fischer Random via `chess960: true`. All **Public** (read-only, no auth).
 
 ### 1. Single FEN analysis
-- **Method**: `GET` or `POST`
-- **Params**: `fen` *(required)*, `depth` *(1–99, default 18)*, `movetime` *(ms, 100–10000 — overrides `depth` if given)*, `multipv` *(1–5, default 1)*, `chess960` *(bool)*, `stream` *(bool — see below)*.
+| Method | URL |
+| :--- | :--- |
+| `GET`/`POST` | `/api/engine/analyze` |
+
+**Params** (query string or JSON body): `fen` *(required)*, `depth` *(1–99, default 18)*, `movetime` *(ms, 100–10000 — overrides `depth` if given)*, `multipv` *(1–5, default 1)*, `chess960` *(bool)*.
 
 ```json
 {
@@ -366,11 +450,12 @@ An independent service (own CORS headers, own error format: `{ "error": "..." }`
 }
 ```
 
-**Streaming mode** (`stream=1` or `stream=true`): responds with `Content-Type: text/event-stream` (SSE), throttled to ~30 updates/sec, one `data: {...}` event per depth increment (`{"type":"info", depth, score, bestmove, pv, multipv, ...}`), followed by a final `{"type":"done", ...}` event. Used by the Analysis tab's live evaluation display.
-
 ### 2. Batch FEN analysis (full game)
-- **Method**: `POST`
-- **Body**: `{ "fens": ["<FEN>", ...], "depth": 22, "multipv": 1, "chess960": false }` — `depth` defaults to **22** if omitted (range 1–99; used values in practice: 18 fast / 22 standard / 24 deep / 26 max).
+| Method | URL |
+| :--- | :--- |
+| `GET`/`POST` | `/api/engine/analyze/batch` |
+
+**Body**: `{ "fens": ["<FEN>", ...], "depth": 22, "multipv": 1, "chess960": false }` — `depth` defaults to **22** if omitted (range 1–99; used values in practice: 18 fast / 22 standard / 24 deep / 26 max).
 
 ```json
 {
@@ -395,11 +480,18 @@ An independent service (own CORS headers, own error format: `{ "error": "..." }`
 
 `score_cp` is always normalized to White's perspective (negated if it's Black to move in that FEN). For forced mates, `score` is `"M<n>"` and `score_cp` is `±9999` — the sign-flattening this causes is exactly what the [accuracy model](#-move-accuracy--classification-model) below has to specifically work around.
 
+### 3. Streaming analysis (SSE)
+| Method | URL |
+| :--- | :--- |
+| `GET`/`POST` | `/api/engine/analyze/stream` |
+
+Same params as #1. Responds with `Content-Type: text/event-stream`, one `data: {...}` event per depth increment (`{"type":"info", depth, score, bestmove, pv, multipv, ...}`), followed by a final `{"type":"done", ...}` event. Input is validated *before* the stream's headers are committed, so a bad FEN gets a clean JSON error instead of malformed bytes spliced into an SSE stream — only errors during the live analysis itself fall back to an SSE-formatted `{"type":"error"}` event. Used by the Analysis tab's live evaluation display.
+
 ---
 
 ## ⭐ Rating System
 
-`src/Logic/Rating.php` implements a custom **bracketed-delta** system — conceptually Elo (expected score from the standard logistic formula), but instead of a fixed K-factor it uses a fixed **win/draw/loss point table** selected by how big the rating gap is. This makes upsets swing ratings harder and makes beating a much weaker opponent worth very little.
+`src/Service/RatingCalculator.php` implements a custom **bracketed-delta** system — conceptually Elo (expected score from the standard logistic formula), but instead of a fixed K-factor it uses a fixed **win/draw/loss point table** selected by how big the rating gap is. This makes upsets swing ratings harder and makes beating a much weaker opponent worth very little.
 
 **Expected score** (standard Elo formula, `400` rating-points ≈ 10× win-probability difference):
 
@@ -421,7 +513,7 @@ Both players are scored independently (each against the other's rating), so a dr
 
 ```mermaid
 flowchart TD
-    A["play(white, black, result)"] --> B["expectedScore(rating, opponentRating)"]
+    A["MatchManager::play(white, black, result)"] --> B["RatingCalculator::expectedScore(rating, opponentRating)"]
     B --> C{"Which bracket?"}
     C -->|"E ≤ 0.20"| D1["+60 / +20 / 0"]
     C -->|"E ≤ 0.40"| D2["+45 / +10 / −2"]
@@ -433,13 +525,13 @@ flowchart TD
     F --> G["save player + match record"]
 ```
 
-**Match invalidation** doesn't just undo one delta — `invalidateMatch()`/`revalidateMatch()`/`editMatch()` reset every player to rating 400 and **replay all currently-valid matches from scratch in chronological order**, so ratings always reflect exactly the current set of valid matches with no drift from accumulated undo operations.
+**Match invalidation** doesn't just undo one delta — invalidating/revalidating/editing a match resets every player to rating 400 and **replays all currently-valid matches from scratch in chronological order**, so ratings always reflect exactly the current set of valid matches with no drift from accumulated undo operations.
 
 ---
 
 ## 📊 Move Accuracy & Classification Model
 
-Used by the Analysis tab (per-game accuracy %, estimated performance rating, move-quality badges) and by leaderboard profile stats. Conceptually similar to Lichess's published accuracy model (win% comparison) — **not** a reproduction of Chess.com's CAPS2, whose exact formula has never been published.
+Used by the Analysis tab (per-game accuracy %, estimated performance rating, move-quality badges) and by leaderboard profile stats — implemented client-side in `assets/app.js`. Conceptually similar to Lichess's published accuracy model (win% comparison) — **not** a reproduction of Chess.com's CAPS2, whose exact formula has never been published.
 
 ### 1. Win percentage
 Centipawn eval → probability of winning, via a logistic curve (steepens the difference between +1 and +2, flattens it between +10 and +11):
@@ -486,7 +578,7 @@ Per-move accuracies are combined with a **volatility-weighted windowed average**
 4. `Game Accuracy = (weightedMean + harmonicMean) / 2`.
 
 ### 4. Estimated performance rating
-A piecewise-linear accuracy → rating curve (own best-effort reconstruction, since Chess.com doesn't publish theirs either — see `ACCURACY_RATING_CURVE` in `index.html`):
+A piecewise-linear accuracy → rating curve (own best-effort reconstruction, since Chess.com doesn't publish theirs either — see `ACCURACY_RATING_CURVE` in `assets/app.js`):
 
 | Accuracy | 100 | 98 | 95 | 90 | 85 | 80 | 70 | 60 | 50 | 40 | 0 |
 | :--- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
@@ -495,18 +587,18 @@ A piecewise-linear accuracy → rating curve (own best-effort reconstruction, si
 Linearly interpolated between points. This is a single-game estimate, not a rating measurement — high variance is expected, especially for short/decisive games.
 
 ### 5. Move classification badges
-Shown as an icon on the move that was just played (Analysis tab board overlay), based on win% lost (`loss`) and context — independent of the accuracy formula above:
+Shown as an icon on the move that was just played (Analysis tab board overlay), based on win% lost (`loss`) and context — independent of the accuracy formula above. Icon files live in `assets/images/*.png`, resolved to their real AssetMapper URLs via `window.MOVE_ICON_URLS` (injected by `leaderboard.html.twig` before `app.js` loads, since a plain static JS file can't call Twig's `asset()` itself):
 
-| Badge | Condition |
-| :--- | :--- |
-| 📖 Book | Move ≤ 5, win% between 40–60, `loss < 5` |
-| ✨ Brilliant | `loss < 2`, win% ≥ 45, and the position's PV response drops material by ≥ 2 points (a sound sacrifice) |
-| 🌟 Great | `loss < 2` and this move beats the 2nd-best engine line by ≥ 18 win% (the only move that holds) |
-| 🔥 Blunder | `loss ≥ 20` |
-| ❌ Mistake | `loss ≥ 10` |
-| ⚠️ Inaccuracy | `loss ≥ 5` |
-| ✅ Good | `loss ≥ 1` |
-| ⭐ Best | `loss < 1` |
+| Badge | Icon file | Condition |
+| :--- | :--- | :--- |
+| 📖 Book | `theoritical_move.png` | Move ≤ 5, win% between 40–60, `loss < 5` |
+| ✨ Brilliant | `brilliant.png` | `loss < 2`, win% ≥ 45, and the position's PV response drops material by ≥ 2 points (a sound sacrifice) |
+| 🌟 Great | `the_only_move.png` | `loss < 2` and this move beats the 2nd-best engine line by ≥ 18 win% (the only move that holds) |
+| 🔥 Blunder | `blunder.png` | `loss ≥ 20` |
+| ❌ Mistake | `strange_move.png` | `loss ≥ 10` |
+| ⚠️ Inaccuracy | `tactical_move.png` | `loss ≥ 5` |
+| ✅ Good | `good_move.png` | `loss ≥ 1` |
+| ⭐ Best | `best_move.png` | `loss < 1` |
 
 ---
 
@@ -517,10 +609,20 @@ Shown as an icon on the move that was just played (Analysis tab board overlay), 
 | `200` | OK | Request succeeded. |
 | `400` | Bad Request | Invalid/missing input parameters. |
 | `401` | Unauthorized | Missing or invalid API Token / Admin Authentication. |
-| `404` | Not Found | Player, Match, Token, Admin, Analysis, or Avatar not found. |
-| `500` | Internal Server Error | Unhandled server-side exception (`index.php`/`stockfish.php`). |
-| `502` | Bad Gateway | VRChat API unreachable, rejected the request, or isn't configured. |
-| `204` | No Content | CORS preflight (`stockfish.php` only — `index.php` returns `200` for `OPTIONS`). |
+| `404` | Not Found | Player, Match, Token, Admin, Analysis, Post, Photo, or Avatar not found. |
+| `500` | Internal Server Error | Unhandled server-side exception. |
+| `502` | Bad Gateway | VRChat API unreachable, rejected the request, isn't configured, or (gallery/newsletter uploads specifically) the connected account lacks VRC+. |
+| `204` | No Content | CORS preflight (`OPTIONS`, any route). |
+
+---
+
+## ✅ Tests
+
+```bash
+vendor/bin/phpunit
+```
+
+Runs against a **dedicated test database** (`MONGODB_DB=vrchessindo_test` in `.env.test`) on the same Atlas cluster — every test's `setUp()` hard-asserts that exact database name before wiping collections, as a safety guard against ever touching the real `vrchessindo` database. VRChat-touching tests rebind `HttpClientInterface` to a shared `MockHttpClient` (`config/services.yaml`'s `when@test:` block) and set `VRCHAT_RATE_LIMIT_SECONDS=0`, so the suite never reaches the real `api.vrchat.cloud` and never pays real throttle-sleep time. Coverage spans the rating/match-invalidation replay logic, every controller's HTTP surface (full-stack `WebTestCase`/`KernelBrowser` requests, not mocked at the controller level), TOTP against the official RFC 6238 test vectors, and the Stockfish subprocess wrapper against the real local binary.
 
 ---
 *VRChess Indonesia © 2026 — Built for the Indonesian VRChat Chess Community*

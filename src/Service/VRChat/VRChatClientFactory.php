@@ -27,6 +27,7 @@ class VRChatClientFactory
         #[Autowire(env: 'VRCHAT_PASSWORD')] private readonly string $password,
         #[Autowire(env: 'VRCHAT_TOTP_SECRET')] private readonly string $totpSecret,
         #[Autowire(env: 'VRCHAT_CONTACT')] private readonly string $contact,
+        #[Autowire(env: 'float:VRCHAT_RATE_LIMIT_SECONDS')] private readonly float $rateLimitSeconds,
     ) {
     }
 
@@ -45,6 +46,7 @@ class VRChatClientFactory
             $this->password,
             $this->totpSecret !== '' ? $this->totpSecret : null,
             $userAgent,
+            $this->rateLimitSeconds,
         );
     }
 }

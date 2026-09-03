@@ -1,57 +1,11 @@
 /* ============================================================
    VRChess Indonesia — Frontend Design System
-   Dark chess-themed UI with glassmorphism & micro-animations
+
+   Theme-agnostic: every color/font/radius/shadow below is a
+   var(--...) defined by whichever theme file is linked before this
+   one (see assets/css/theme-dark.css). Swapping themes never
+   requires touching this file.
    ============================================================ */
-
-/* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
-/* ── CSS Variables ── */
-:root {
-    /* Color palette */
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #12121a;
-    --bg-card: rgba(22, 22, 35, 0.75);
-    --bg-card-hover: rgba(30, 30, 48, 0.85);
-    --bg-glass: rgba(255, 255, 255, 0.03);
-    --bg-input: rgba(255, 255, 255, 0.05);
-
-    --accent-primary: #7c5cff;
-    --accent-secondary: #5ce1e6;
-    --accent-gold: #fbbf24;
-    --accent-silver: #94a3b8;
-    --accent-bronze: #cd7f32;
-    --accent-green: #22c55e;
-    --accent-red: #ef4444;
-    --accent-orange: #f59e0b;
-
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #4b5563;
-    --text-accent: #a78bfa;
-
-    --border-subtle: rgba(255, 255, 255, 0.06);
-    --border-glow: rgba(124, 92, 255, 0.3);
-
-    --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
-    --shadow-glow: 0 0 30px rgba(124, 92, 255, 0.15);
-    --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
-
-    /* Typography */
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
-    /* Spacing */
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 24px;
-
-    /* Transitions */
-    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
-}
 
 /* ── Reset & Base ── */
 *, *::before, *::after {
@@ -61,7 +15,11 @@
 }
 
 html {
-    font-size: 16px;
+    /* Root font-size is intentionally NOT set here — it's a theme concern.
+       theme-8bit.css scales it down to compensate for its pixel fonts
+       reading larger than their px value suggests; other themes fall back
+       to the browser default (16px), matching this file's rem values as
+       originally designed. */
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -72,22 +30,31 @@ body {
     background: var(--bg-primary);
     color: var(--text-primary);
     min-height: 100vh;
-    line-height: 1.6;
+    line-height: 1.55;
     overflow-x: hidden;
 }
 
-/* Background pattern */
-body::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 92, 255, 0.12), transparent),
-        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(92, 225, 230, 0.06), transparent),
-        radial-gradient(circle at 20% 60%, rgba(124, 92, 255, 0.04), transparent);
-    pointer-events: none;
-    z-index: 0;
+svg.icon {
+    width: 1em;
+    height: 1em;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    /* square caps/joins read chunkier and more "pixel" than the rounded
+       default — a cheap, app-wide way to make the existing icon set fit
+       the 8-bit theme without redrawing every icon as a sprite */
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+    flex-shrink: 0;
+    vertical-align: -0.125em;
+}
+
+/* ── Pixel-notch mixin (used inline by .card / .modal-content / .tab-nav) ──
+   --pixel-notch is only defined by the 8-bit theme; other themes leave it
+   unset, so `var(--pixel-notch, 0px)` resolves to 0px and the clip-path
+   traces a plain rectangle — identical to having no clip-path at all. */
+:root {
+    --pn: var(--pixel-notch, 0px);
 }
 
 /* ── App Shell ── */
@@ -101,9 +68,43 @@ body::before {
 
 /* ── Header ── */
 .app-header {
-    padding: 28px 0 20px;
+    padding: 32px 0 20px;
     text-align: center;
     position: relative;
+    overflow: hidden;
+}
+
+/* Faint checkerboard texture — only the 8-bit theme sets --checker-tile,
+   so this paints nothing (transparent) for every other theme. */
+.app-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(45deg, var(--checker-tile, transparent) 25%, transparent 25%, transparent 75%, var(--checker-tile, transparent) 75%),
+        linear-gradient(45deg, var(--checker-tile, transparent) 25%, transparent 25%, transparent 75%, var(--checker-tile, transparent) 75%);
+    background-size: 32px 32px;
+    background-position: 0 0, 16px 16px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.app-header > * {
+    position: relative;
+    z-index: 1;
+}
+
+.hero-banner {
+    display: var(--show-hero-banner, none);
+    margin: 0 auto 18px;
+    max-width: 760px;
+    border: var(--pixel-notch, 0px) solid var(--accent-primary);
+}
+
+.hero-banner img {
+    display: block;
+    width: 100%;
+    height: auto;
 }
 
 .app-header__logo {
@@ -114,156 +115,78 @@ body::before {
 }
 
 .app-header__icon {
-    width: 48px;
-    height: 48px;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-    border-radius: var(--radius-md);
+    width: 52px;
+    height: 52px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-strong);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    box-shadow: var(--shadow-glow);
+    color: var(--accent-primary);
+    font-size: 22px;
+    overflow: hidden;
+}
+
+.app-header__icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .app-header__title {
-    font-size: 2rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-primary) 50%, var(--accent-secondary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-family: var(--font-display);
+    font-size: 1.85rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+    color: var(--text-primary);
 }
 
 .app-header__subtitle {
-    font-size: 0.875rem;
+    font-size: 0.85rem;
     color: var(--text-secondary);
     font-weight: 400;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
 }
 
 .app-header__actions {
     position: absolute;
     right: 0;
-    top: 28px;
+    top: 32px;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-/* ── Analysis board flip ── */
-/* toggleOrientation() only rotates the chessground board itself. These rules keep the
-   player name/clock/stats rows and the eval bar in sync with it — otherwise, after a flip,
-   the row still labeled "Black" visually sits over the side now showing White's pieces. */
-.board-column .player-row--top {
-    order: 1;
-}
-
-.board-column .board-row {
-    order: 2;
-}
-
-.board-column .player-row--bottom {
-    order: 3;
-}
-
-.board-column .board-controls-row {
-    order: 4;
-}
-
-.board-column.flipped .player-row--top {
-    order: 3;
-}
-
-.board-column.flipped .player-row--bottom {
-    order: 1;
-}
-
-.board-column.flipped #evalBarBlack {
-    order: 2;
-}
-
-.board-column.flipped #evalBarWhite {
-    order: 1;
-}
-
-/* ── Connection Status Bar ── */
-.connection-bar {
+/* ── Site Nav (Leaderboard / Gallery — separate routed pages) ── */
+.site-nav {
     display: flex;
-    align-items: center;
     justify-content: center;
     gap: 10px;
-    padding: 10px 20px;
-    margin: 0 auto 20px;
-    max-width: 600px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    backdrop-filter: blur(12px);
-    font-size: 0.8rem;
+    margin-bottom: 20px;
 }
 
-.connection-bar__dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--text-muted);
-    transition: background var(--transition-normal);
-    flex-shrink: 0;
-}
-
-.connection-bar__dot.online {
-    background: var(--accent-green);
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
-    animation: pulse-dot 2s ease-in-out infinite;
-}
-
-.connection-bar__dot.offline {
-    background: var(--accent-red);
-}
-
-@keyframes pulse-dot {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-.connection-bar__url {
-    font-family: var(--font-mono);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.connection-bar__btn {
-    background: rgba(124, 92, 255, 0.15);
-    border: 1px solid rgba(124, 92, 255, 0.3);
-    color: var(--accent-primary);
-    padding: 4px 12px;
-    border-radius: var(--radius-sm);
-    font-size: 0.7rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-    font-family: var(--font-sans);
-}
-
-.connection-bar__btn:hover {
-    background: rgba(124, 92, 255, 0.25);
+.site-nav .site-nav__link--active {
+    background: var(--accent-primary);
+    color: var(--btn-primary-text);
+    border-color: var(--accent-primary);
 }
 
 /* ── Tab Navigation ── */
 .tab-nav {
     display: flex;
+    /* No flex-wrap here on purpose — wrapping to a second row fights with
+       overflow-x below (a wrapped multi-row flex container inside a
+       horizontal-scroll container is exactly the kind of layout that
+       breaks first on narrow/foldable screens). One row that scrolls
+       sideways is the more robust mobile pattern for a tab strip. */
     gap: 4px;
-    padding: 5px;
+    padding: 4px;
     margin-bottom: 24px;
     background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
+    border: 2px solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    backdrop-filter: blur(12px);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
@@ -275,21 +198,21 @@ body::before {
 .tab-btn {
     flex: 1;
     min-width: 0;
-    padding: 10px 16px;
+    padding: 8px 10px;
     background: transparent;
     border: none;
     border-radius: var(--radius-md);
     color: var(--text-secondary);
-    font-family: var(--font-sans);
-    font-size: 0.82rem;
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 400;
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 7px;
 }
 
 .tab-btn:hover {
@@ -298,30 +221,35 @@ body::before {
 }
 
 .tab-btn.active {
-    background: linear-gradient(135deg, rgba(124, 92, 255, 0.2), rgba(92, 225, 230, 0.1));
-    color: var(--text-primary);
-    font-weight: 600;
-    box-shadow: 0 2px 12px rgba(124, 92, 255, 0.15);
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    font-weight: 400;
 }
 
 .tab-btn__icon {
-    font-size: 1rem;
+    font-size: 0.85rem;
+    display: inline-flex;
 }
 
 .tab-btn__count {
-    background: rgba(124, 92, 255, 0.25);
-    color: var(--accent-primary);
-    font-size: 0.65rem;
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-size: 0.6rem;
     font-weight: 700;
-    padding: 1px 7px;
+    padding: 1px 5px;
     border-radius: 99px;
     font-family: var(--font-mono);
+}
+
+.tab-btn.active .tab-btn__count {
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--bg-primary);
 }
 
 /* ── Tab Content ── */
 .tab-content {
     display: none;
-    animation: fadeSlideIn 0.35s ease;
+    animation: fadeSlideIn 0.25s ease;
 }
 
 .tab-content.active {
@@ -331,7 +259,7 @@ body::before {
 @keyframes fadeSlideIn {
     from {
         opacity: 0;
-        transform: translateY(12px);
+        transform: translateY(8px);
     }
     to {
         opacity: 1;
@@ -339,20 +267,22 @@ body::before {
     }
 }
 
-/* ── Cards ── */
+/* ── Cards ──
+   clip-path traces a plain rectangle when --pixel-notch is unset (see the
+   :root --pn mixin above), so this is safe for every theme, not just 8-bit. */
 .card {
     background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
+    border: 2px solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    backdrop-filter: blur(16px);
-    padding: 24px;
+    clip-path: polygon(
+        0 var(--pn), var(--pn) var(--pn), var(--pn) 0,
+        calc(100% - var(--pn)) 0, calc(100% - var(--pn)) var(--pn), 100% var(--pn),
+        100% calc(100% - var(--pn)), calc(100% - var(--pn)) calc(100% - var(--pn)), calc(100% - var(--pn)) 100%,
+        var(--pn) 100%, var(--pn) calc(100% - var(--pn)), 0 calc(100% - var(--pn))
+    );
+    padding: 22px;
     margin-bottom: 16px;
-    transition: all var(--transition-normal);
-}
-
-.card:hover {
-    border-color: var(--border-glow);
-    box-shadow: var(--shadow-glow);
+    transition: border-color var(--transition-normal);
 }
 
 .card__header {
@@ -360,72 +290,96 @@ body::before {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .card__title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+    font-weight: 400;
+    letter-spacing: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
+    color: var(--accent-primary);
+}
+
+.card__title svg.icon {
+    color: var(--text-secondary);
 }
 
 .card__badge {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
     padding: 3px 10px;
     border-radius: 99px;
     font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .card__badge--purple {
-    background: rgba(124, 92, 255, 0.15);
+    background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
     color: var(--accent-primary);
 }
 
 .card__badge--green {
-    background: rgba(34, 197, 94, 0.15);
+    background: color-mix(in srgb, var(--accent-green) 14%, transparent);
     color: var(--accent-green);
 }
 
 .card__badge--orange {
-    background: rgba(245, 158, 11, 0.15);
+    background: color-mix(in srgb, var(--accent-orange) 14%, transparent);
     color: var(--accent-orange);
+}
+
+/* Referenced by app.js for inactive-token status ("Tidak Aktif") but never
+   actually defined — badge rendered with no color/background at all. */
+.card__badge--red {
+    background: color-mix(in srgb, var(--accent-red) 14%, transparent);
+    color: var(--accent-red);
 }
 
 /* ── Leaderboard Table ── */
 .leaderboard-table {
     width: 100%;
     border-collapse: separate;
-    border-spacing: 0 4px;
+    border-spacing: 0 3px;
 }
 
 .leaderboard-table th {
     padding: 10px 14px;
     text-align: left;
-    font-size: 0.7rem;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border-subtle);
+    letter-spacing: 0.03em;
+    color: var(--accent-primary);
+    border-bottom: 2px solid var(--border-subtle);
 }
 
 .leaderboard-table td {
-    padding: 12px 14px;
+    padding: 11px 14px;
     font-size: 0.875rem;
     vertical-align: middle;
 }
 
 .leaderboard-table tbody tr {
-    background: var(--bg-glass);
+    background: transparent;
     border-radius: var(--radius-sm);
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast);
+    cursor: pointer;
 }
 
 .leaderboard-table tbody tr:hover {
-    background: rgba(124, 92, 255, 0.08);
+    background: var(--bg-glass);
+}
+
+.leaderboard-table tbody tr:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
 }
 
 .leaderboard-table tbody tr td:first-child {
@@ -438,39 +392,61 @@ body::before {
 
 /* Rank badges */
 .rank-badge {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-badge);
     font-size: 0.75rem;
     font-weight: 700;
     font-family: var(--font-mono);
+    background: var(--bg-input);
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
+    transition: transform var(--transition-fast);
+}
+
+/* The box-shadow chess-piece sprite that used to render here (via
+   .rank-badge__piece) was pulled — it produced a visible artifact at this
+   size (a handful of 1-2px shadow offsets don't hold together as a
+   recognizable glyph, they just read as stray dark smudges). The markup in
+   app.js still emits the span for now; keeping it permanently display:none
+   here is simpler and safer than touching app.js again for a decoration
+   that didn't work out. Badges are back to plain colored circles + number. */
+.rank-badge__piece {
+    display: none;
 }
 
 .rank-badge--gold {
-    background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.05));
     color: var(--accent-gold);
-    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-color: color-mix(in srgb, var(--accent-gold) 35%, transparent);
+    background: color-mix(in srgb, var(--accent-gold) 10%, transparent);
 }
 
 .rank-badge--silver {
-    background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.05));
     color: var(--accent-silver);
-    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-color: color-mix(in srgb, var(--accent-silver) 30%, transparent);
+    background: color-mix(in srgb, var(--accent-silver) 8%, transparent);
 }
 
 .rank-badge--bronze {
-    background: linear-gradient(135deg, rgba(205, 127, 50, 0.2), rgba(205, 127, 50, 0.05));
     color: var(--accent-bronze);
-    border: 1px solid rgba(205, 127, 50, 0.3);
+    border-color: color-mix(in srgb, var(--accent-bronze) 35%, transparent);
+    background: color-mix(in srgb, var(--accent-bronze) 10%, transparent);
 }
 
 .rank-badge--default {
     background: var(--bg-glass);
     color: var(--text-muted);
     border: 1px solid var(--border-subtle);
+}
+
+.leaderboard-table tbody tr:hover .rank-badge--gold,
+.leaderboard-table tbody tr:hover .rank-badge--silver,
+.leaderboard-table tbody tr:hover .rank-badge--bronze {
+    transform: scale(1.06);
 }
 
 /* Player name & rating */
@@ -483,7 +459,7 @@ body::before {
     font-family: var(--font-mono);
     font-weight: 700;
     font-size: 0.95rem;
-    color: var(--accent-primary);
+    color: var(--text-primary);
 }
 
 .stat-value {
@@ -499,7 +475,7 @@ body::before {
 /* Win rate bar */
 .winrate-bar {
     width: 80px;
-    height: 6px;
+    height: 5px;
     background: var(--bg-input);
     border-radius: 99px;
     overflow: hidden;
@@ -510,7 +486,7 @@ body::before {
 
 .winrate-bar__fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--accent-green), var(--accent-secondary));
+    background: var(--accent-green);
     border-radius: 99px;
     transition: width var(--transition-slow);
 }
@@ -524,12 +500,12 @@ body::before {
 }
 
 .filter-btn {
-    padding: 6px 14px;
+    padding: calc(6px * var(--compact-scale, 1)) calc(14px * var(--compact-scale, 1));
     background: var(--bg-input);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    font-size: 0.78rem;
+    font-size: calc(0.78rem * var(--compact-scale, 1));
     font-weight: 500;
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -540,15 +516,15 @@ body::before {
 }
 
 .filter-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--bg-card-hover);
     color: var(--text-primary);
-    border-color: var(--border-glow);
+    border-color: var(--border-strong);
 }
 
 .filter-btn.active {
-    background: rgba(124, 92, 255, 0.2);
-    border-color: var(--accent-primary);
-    color: var(--text-primary);
+    background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    border-color: color-mix(in srgb, var(--accent-primary) 40%, transparent);
+    color: var(--accent-primary);
     font-weight: 600;
 }
 
@@ -568,20 +544,19 @@ body::before {
 }
 
 .match-card:hover {
-    border-color: var(--border-glow);
-    background: rgba(124, 92, 255, 0.05);
+    border-color: var(--border-strong);
 }
 
 .match-card.is-invalid {
-    opacity: 0.65;
-    background: rgba(239, 68, 68, 0.03);
-    border-color: rgba(239, 68, 68, 0.2);
+    opacity: 0.6;
+    background: color-mix(in srgb, var(--accent-red) 3%, transparent);
+    border-color: color-mix(in srgb, var(--accent-red) 20%, transparent);
     border-style: dashed;
 }
 
 .match-card.is-invalid:hover {
-    opacity: 0.9;
-    border-color: rgba(239, 68, 68, 0.4);
+    opacity: 0.85;
+    border-color: color-mix(in srgb, var(--accent-red) 40%, transparent);
 }
 
 .match-card__player {
@@ -599,12 +574,18 @@ body::before {
 }
 
 .match-card__player-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--text-muted);
     font-weight: 600;
 }
+
+.match-card__player--white .match-card__player-label { justify-content: flex-start; }
+.match-card__player--black .match-card__player-label { justify-content: flex-end; }
 
 .match-card__player-name {
     font-size: 0.9rem;
@@ -627,9 +608,9 @@ body::before {
     border-radius: var(--radius-sm);
 }
 
-.match-card__result--white { background: rgba(34, 197, 94, 0.15); color: var(--accent-green); }
-.match-card__result--draw { background: rgba(245, 158, 11, 0.15); color: var(--accent-orange); }
-.match-card__result--black { background: rgba(92, 225, 230, 0.15); color: var(--accent-secondary); }
+.match-card__result--white { background: color-mix(in srgb, var(--accent-green) 14%, transparent); color: var(--accent-green); }
+.match-card__result--draw { background: color-mix(in srgb, var(--accent-orange) 14%, transparent); color: var(--accent-orange); }
+.match-card__result--black { background: color-mix(in srgb, var(--accent-cyan) 14%, transparent); color: var(--accent-cyan); }
 
 .match-card__date {
     font-size: 0.65rem;
@@ -638,6 +619,9 @@ body::before {
 }
 
 .match-card__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 0.7rem;
     color: var(--accent-primary);
     text-decoration: none;
@@ -645,7 +629,7 @@ body::before {
 }
 
 .match-card__link:hover {
-    color: var(--accent-secondary);
+    color: var(--accent-primary-hover);
     text-decoration: underline;
 }
 
@@ -659,7 +643,7 @@ body::before {
 }
 
 .match-card__status-tag--invalid {
-    background: rgba(239, 68, 68, 0.2);
+    background: color-mix(in srgb, var(--accent-red) 16%, transparent);
     color: var(--accent-red);
 }
 
@@ -680,7 +664,7 @@ body::before {
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 6px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
 }
 
 .form-input,
@@ -700,7 +684,7 @@ body::before {
 .form-input:focus,
 .form-select:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 .form-input::placeholder {
@@ -710,14 +694,14 @@ body::before {
 .form-select {
     cursor: pointer;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9ba3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
     padding-right: 36px;
 }
 
 .form-select option {
-    background: #1a1a2e;
+    background: #18181c;
     color: var(--text-primary);
     padding: 8px;
 }
@@ -734,42 +718,49 @@ body::before {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 11px 24px;
-    border: none;
+    padding: 10px 18px;
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
-    font-family: var(--font-sans);
+    clip-path: polygon(
+        0 var(--pn), var(--pn) var(--pn), var(--pn) 0,
+        calc(100% - var(--pn)) 0, calc(100% - var(--pn)) var(--pn), 100% var(--pn),
+        100% calc(100% - var(--pn)), calc(100% - var(--pn)) calc(100% - var(--pn)), calc(100% - var(--pn)) 100%,
+        var(--pn) 100%, var(--pn) calc(100% - var(--pn)), 0 calc(100% - var(--pn))
+    );
+    font-family: var(--font-display);
     font-size: 0.875rem;
-    font-weight: 600;
+    font-weight: 400;
     cursor: pointer;
     transition: all var(--transition-fast);
     position: relative;
-    overflow: hidden;
 }
 
 .btn--primary {
-    background: linear-gradient(135deg, var(--accent-primary), #6246ea);
-    color: white;
-    box-shadow: 0 4px 16px rgba(124, 92, 255, 0.3);
+    background: var(--accent-primary);
+    color: var(--btn-primary-text);
+    box-shadow: inset var(--pn, 0px) var(--pn, 0px) 0 var(--pixel-bevel-light, transparent),
+        inset calc(var(--pn, 0px) * -1) calc(var(--pn, 0px) * -1) 0 var(--pixel-bevel-dark, transparent);
 }
 
 .btn--primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 24px rgba(124, 92, 255, 0.4);
+    background: var(--accent-primary-hover);
 }
 
 .btn--primary:active {
-    transform: translateY(0);
+    box-shadow: inset calc(var(--pn, 0px) * -1) calc(var(--pn, 0px) * -1) 0 var(--pixel-bevel-light, transparent),
+        inset var(--pn, 0px) var(--pn, 0px) 0 var(--pixel-bevel-dark, transparent);
 }
 
 .btn--secondary {
     background: var(--bg-input);
-    border: 1px solid var(--border-subtle);
+    border-color: var(--border-subtle);
     color: var(--text-secondary);
 }
 
 .btn--secondary:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--bg-card-hover);
     color: var(--text-primary);
+    border-color: var(--border-strong);
 }
 
 .btn--full {
@@ -777,62 +768,62 @@ body::before {
 }
 
 .btn--danger {
-    background: linear-gradient(135deg, var(--accent-red), #dc2626);
-    color: white;
-    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+    background: color-mix(in srgb, var(--accent-red) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent-red) 30%, transparent);
+    color: var(--accent-red);
 }
 
 .btn--danger:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+    background: color-mix(in srgb, var(--accent-red) 20%, transparent);
+    border-color: color-mix(in srgb, var(--accent-red) 50%, transparent);
 }
 
 .btn--warning {
-    background: linear-gradient(135deg, var(--accent-orange), #d97706);
-    color: white;
+    background: color-mix(in srgb, var(--accent-orange) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent-orange) 30%, transparent);
+    color: var(--accent-orange);
 }
 
 .btn--warning:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3);
+    background: color-mix(in srgb, var(--accent-orange) 20%, transparent);
 }
 
 .btn--success {
-    background: linear-gradient(135deg, var(--accent-green), #16a34a);
-    color: white;
+    background: color-mix(in srgb, var(--accent-green) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent-green) 30%, transparent);
+    color: var(--accent-green);
 }
 
 .btn--success:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.3);
+    background: color-mix(in srgb, var(--accent-green) 20%, transparent);
 }
 
 .btn--sm {
-    padding: 6px 14px;
-    font-size: 0.78rem;
+    padding: calc(6px * var(--compact-scale, 1)) calc(14px * var(--compact-scale, 1));
+    font-size: calc(0.78rem * var(--compact-scale, 1));
     border-radius: var(--radius-sm);
 }
 
 .btn--xs {
-    padding: 3px 8px;
-    font-size: 0.7rem;
-    border-radius: 4px;
+    padding: calc(3px * var(--compact-scale, 1)) calc(8px * var(--compact-scale, 1));
+    font-size: calc(0.7rem * var(--compact-scale, 1));
+    border-radius: var(--radius-sm);
     gap: 4px;
 }
 
 .btn--icon {
-    padding: 5px 8px;
+    padding: calc(5px * var(--compact-scale, 1)) calc(8px * var(--compact-scale, 1));
     background: var(--bg-input);
     border: 1px solid var(--border-subtle);
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
-    font-size: 0.75rem;
+    font-size: calc(0.75rem * var(--compact-scale, 1));
 }
 
 .btn--icon:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-card-hover);
     color: var(--text-primary);
-    border-color: var(--border-glow);
+    border-color: var(--border-strong);
 }
 
 .btn:disabled {
@@ -845,16 +836,19 @@ body::before {
 .result-panel {
     margin-top: 20px;
     padding: 20px;
-    background: linear-gradient(135deg, rgba(124, 92, 255, 0.08), rgba(92, 225, 230, 0.05));
-    border: 1px solid var(--border-glow);
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    animation: fadeSlideIn 0.4s ease;
+    animation: fadeSlideIn 0.3s ease;
 }
 
 .result-panel__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 0.85rem;
     font-weight: 700;
-    color: var(--accent-primary);
+    color: var(--accent-green);
     margin-bottom: 14px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -895,17 +889,17 @@ body::before {
 }
 
 .result-player__change.positive {
-    background: rgba(34, 197, 94, 0.15);
+    background: color-mix(in srgb, var(--accent-green) 14%, transparent);
     color: var(--accent-green);
 }
 
 .result-player__change.negative {
-    background: rgba(239, 68, 68, 0.15);
+    background: color-mix(in srgb, var(--accent-red) 14%, transparent);
     color: var(--accent-red);
 }
 
 .result-player__change.neutral {
-    background: rgba(245, 158, 11, 0.15);
+    background: color-mix(in srgb, var(--accent-orange) 14%, transparent);
     color: var(--accent-orange);
 }
 
@@ -924,23 +918,22 @@ body::before {
     z-index: 100;
     max-height: 220px;
     overflow-y: auto;
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
+    background: var(--bg-card-hover);
+    border: 1px solid var(--border-strong);
     border-top: none;
-    border-radius: 0 0 12px 12px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(12px);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    box-shadow: var(--shadow-lg);
     scrollbar-width: thin;
     scrollbar-color: var(--border-subtle) transparent;
 }
 
 .autocomplete-dropdown.show {
     display: block;
-    animation: acDropIn 0.18s ease-out;
+    animation: acDropIn 0.15s ease-out;
 }
 
 @keyframes acDropIn {
-    from { opacity: 0; transform: translateY(-6px); }
+    from { opacity: 0; transform: translateY(-4px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -961,8 +954,7 @@ body::before {
 
 .autocomplete-item:hover,
 .autocomplete-item.active {
-    background: rgba(99, 102, 241, 0.15);
-    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
 .autocomplete-item__name {
@@ -981,8 +973,8 @@ body::before {
     font-weight: 600;
     padding: 2px 8px;
     border-radius: 6px;
-    background: rgba(99, 102, 241, 0.12);
-    color: var(--accent-primary);
+    background: var(--bg-input);
+    color: var(--text-secondary);
 }
 
 .autocomplete-hint {
@@ -1013,14 +1005,21 @@ body::before {
 }
 
 .empty-state__icon {
-    font-size: 3rem;
-    margin-bottom: 12px;
-    opacity: 0.4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+    width: 44px;
+    height: 44px;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    opacity: 0.7;
 }
 
 .empty-state__text {
     font-size: 0.9rem;
     font-weight: 500;
+    color: var(--text-secondary);
 }
 
 .empty-state__sub {
@@ -1060,28 +1059,26 @@ body::before {
     border-radius: var(--radius-md);
     font-size: 0.82rem;
     font-weight: 500;
-    backdrop-filter: blur(16px);
-    animation: slideInRight 0.3s ease, fadeOut 0.3s ease 3.5s forwards;
+    animation: slideInRight 0.25s ease, fadeOut 0.3s ease 3.5s forwards;
     max-width: 360px;
     border: 1px solid;
+    background: var(--bg-card-hover);
+    box-shadow: var(--shadow-md);
 }
 
 .toast--success {
-    background: rgba(34, 197, 94, 0.12);
     color: var(--accent-green);
-    border-color: rgba(34, 197, 94, 0.25);
+    border-color: color-mix(in srgb, var(--accent-green) 30%, transparent);
 }
 
 .toast--error {
-    background: rgba(239, 68, 68, 0.12);
     color: var(--accent-red);
-    border-color: rgba(239, 68, 68, 0.25);
+    border-color: color-mix(in srgb, var(--accent-red) 30%, transparent);
 }
 
 .toast--info {
-    background: rgba(124, 92, 255, 0.12);
     color: var(--accent-primary);
-    border-color: rgba(124, 92, 255, 0.25);
+    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
 @keyframes slideInRight {
@@ -1101,30 +1098,35 @@ body::before {
 
 .search-wrapper__icon {
     position: absolute;
-    left: 14px;
+    left: 13px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     pointer-events: none;
+    display: flex;
 }
 
 .search-input {
+    /* Deliberately NOT using --compact-scale here like the other small
+       controls do — a search field is something people read and type
+       into, so it needs to stay comfortably sized even when the buttons
+       around it go compact. */
     width: 100%;
-    padding: 10px 14px 10px 38px;
+    padding: 9px 14px 9px 36px;
     background: var(--bg-input);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
     color: var(--text-primary);
     font-family: var(--font-sans);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     outline: none;
     transition: all var(--transition-fast);
 }
 
 .search-input:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 .search-input::placeholder {
@@ -1151,7 +1153,7 @@ body::before {
     justify-content: center;
     flex-wrap: wrap;
     gap: 6px;
-    opacity: 0.6;
+    opacity: 0.7;
 }
 
 .app-footer__brand,
@@ -1164,7 +1166,7 @@ body::before {
 .app-footer__links {
     display: flex;
     align-items: center;
-    opacity: 0.6;
+    opacity: 0.7;
 }
 
 .app-footer__link {
@@ -1178,30 +1180,36 @@ body::before {
 
 .app-footer__link:hover {
     opacity: 1;
+    color: var(--text-secondary);
 }
 
 /* ── Modal Overlay ── */
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(6px);
+    background: rgba(0, 0, 0, 0.55);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    animation: fadeIn 0.2s ease;
+    animation: fadeIn 0.15s ease;
 }
 
 .modal-content {
     background: var(--bg-secondary);
-    border: 1px solid var(--border-subtle);
+    border: 2px solid var(--border-strong);
     border-radius: var(--radius-xl);
+    clip-path: polygon(
+        0 var(--pn), var(--pn) var(--pn), var(--pn) 0,
+        calc(100% - var(--pn)) 0, calc(100% - var(--pn)) var(--pn), 100% var(--pn),
+        100% calc(100% - var(--pn)), calc(100% - var(--pn)) calc(100% - var(--pn)), calc(100% - var(--pn)) 100%,
+        var(--pn) 100%, var(--pn) calc(100% - var(--pn)), 0 calc(100% - var(--pn))
+    );
     padding: 28px;
     max-width: 480px;
     width: 90%;
     box-shadow: var(--shadow-lg);
-    animation: fadeSlideIn 0.3s ease;
+    animation: fadeSlideIn 0.25s ease;
     max-height: 90vh;
     overflow-y: auto;
 }
@@ -1211,9 +1219,14 @@ body::before {
 }
 
 .modal-content h3 {
-    font-size: 1.1rem;
-    font-weight: 700;
+    font-family: var(--font-display);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 1.05rem;
+    font-weight: 400;
     margin-bottom: 16px;
+    color: var(--accent-primary);
 }
 
 .modal-header {
@@ -1223,6 +1236,10 @@ body::before {
     margin-bottom: 20px;
     padding-bottom: 14px;
     border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-header h3 {
+    margin-bottom: 0;
 }
 
 .modal-header__profile {
@@ -1235,12 +1252,14 @@ body::before {
     width: 48px;
     height: 48px;
     border-radius: var(--radius-md);
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
-    box-shadow: var(--shadow-glow);
+    font-size: 1.3rem;
+    color: var(--accent-primary);
+    overflow: hidden;
 }
 
 .player-rating-badge {
@@ -1249,21 +1268,25 @@ body::before {
     font-family: var(--font-mono);
     font-size: 0.75rem;
     font-weight: 700;
-    color: var(--accent-primary);
-    background: rgba(124, 92, 255, 0.15);
+    color: var(--text-secondary);
+    background: var(--bg-input);
     padding: 2px 8px;
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(124, 92, 255, 0.25);
+    border: 1px solid var(--border-subtle);
 }
 
 .modal-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     cursor: pointer;
     line-height: 1;
-    padding: 4px 8px;
+    width: 30px;
+    height: 30px;
     border-radius: var(--radius-sm);
     transition: all var(--transition-fast);
 }
@@ -1286,12 +1309,11 @@ body::before {
     border-radius: var(--radius-md);
     padding: 12px 10px;
     text-align: center;
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast);
 }
 
 .stat-box:hover {
-    border-color: var(--border-glow);
-    background: rgba(124, 92, 255, 0.06);
+    border-color: var(--border-strong);
 }
 
 .stat-box__val {
@@ -1302,6 +1324,10 @@ body::before {
 }
 
 .stat-box__lbl {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
     font-size: 0.7rem;
     color: var(--text-muted);
     margin-top: 4px;
@@ -1310,25 +1336,145 @@ body::before {
     letter-spacing: 0.04em;
 }
 
-/* Leaderboard row clickable */
-.leaderboard-table tbody tr {
-    cursor: pointer;
-}
-
-.leaderboard-table tbody tr:hover {
-    background: rgba(124, 92, 255, 0.12);
-    transform: translateY(-1px);
-}
-
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
 }
 
+/* ── Admin: VRChat Gallery Management ── */
+.gallery-admin-section {
+    margin-bottom: 22px;
+}
+
+.gallery-admin-section:last-child {
+    margin-bottom: 0;
+}
+
+.gallery-admin-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.gallery-admin-section__title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.gallery-admin-section__empty {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding: 10px 0;
+}
+
+.gallery-admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.gallery-admin-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: opacity var(--transition-fast);
+}
+
+.gallery-admin-card--hidden {
+    opacity: 0.5;
+}
+
+.gallery-admin-card__photo {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    display: block;
+}
+
+.gallery-admin-card__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px 0;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.gallery-admin-card__toggle {
+    margin: 8px;
+    justify-content: center;
+}
+
+/* ── Admin: Newsletter (VRChat Group Posts) Management ── */
+.newsletter-admin-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.newsletter-admin-card {
+    display: flex;
+    gap: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 12px;
+}
+
+.newsletter-admin-card__photo {
+    width: 90px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.newsletter-admin-card__body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.newsletter-admin-card__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.newsletter-admin-card__text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.newsletter-admin-card__meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+}
+
+.newsletter-admin-card__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .app-header__title {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
     }
 
     .tab-btn__label {
@@ -1336,11 +1482,20 @@ body::before {
     }
 
     .tab-btn {
+        /* flex:1 on the desktop rule is really "flex: 1 1 0%" — items start
+           at zero size and grow, which lets them shrink arbitrarily thin
+           too (combined with the old min-width:0). "1 1 auto" instead:
+           still grows to fill the bar when there's room (so tabs stretch
+           edge-to-edge on a normal phone width), but shrinking is bounded
+           by min-width — once that floor is hit, .tab-nav's overflow-x
+           takes over as a scroll instead of squeezing further. */
+        flex: 1 1 auto;
+        min-width: 44px;
         padding: 10px 12px;
     }
 
     .tab-btn__icon {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
     }
 
     .form-row {
@@ -1361,6 +1516,24 @@ body::before {
         text-align: center;
     }
 
+    .match-card__player--white .match-card__player-label,
+    .match-card__player--black .match-card__player-label {
+        justify-content: center;
+    }
+
+    /* .match-card collapses to one centered column above, but
+       .match-card__actions is a flex row with no justify-content — it was
+       defaulting to flex-start, so the Anulir/Edit/Hapus buttons sat
+       pinned to the left edge while everything else in the card was
+       centered. Admin-only, so this only ever shows logged in as admin. */
+    .match-card__actions {
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 8px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border-subtle);
+    }
+
     .leaderboard-table {
         font-size: 0.8rem;
     }
@@ -1368,11 +1541,6 @@ body::before {
     .leaderboard-table th,
     .leaderboard-table td {
         padding: 8px 8px;
-    }
-
-    .connection-bar {
-        flex-wrap: wrap;
-        font-size: 0.72rem;
     }
 
     /* ── Analysis tab mobile fixes ── */
@@ -1474,11 +1642,22 @@ body::before {
     .leaderboard-table .hide-mobile {
         display: none;
     }
+
+    /* The admin dashboard's stat grid always has exactly 4 boxes — at
+       narrow widths auto-fit's minmax(78px,1fr) only fits 3 per row, so
+       the 4th wraps onto a row by itself and (having nothing beside it to
+       stretch against) ends up visibly shorter than the row above it.
+       Force a clean 2x2 instead. Scoped to #tab-admin specifically since
+       the player-profile modal reuses .stats-overview-grid with 5 boxes,
+       where auto-fit's wrapping is fine. */
+    #tab-admin .stats-overview-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 /* ── Estimated Rating Performance (accuracy-derived, like Chess.com's Game Report) ── */
 .est-rating-badge {
-    color: #fff;
+    color: var(--text-primary);
     font-size: 0.8rem;
     font-weight: 700;
     white-space: nowrap;
@@ -1486,18 +1665,17 @@ body::before {
 
 /* ── Real-Time Engine Stream Badge ── */
 .pulse-dot {
-    width: 8px;
-    height: 8px;
-    background-color: #7fa650;
+    width: 7px;
+    height: 7px;
+    background-color: var(--accent-green);
     border-radius: 50%;
     display: inline-block;
-    box-shadow: 0 0 8px #7fa650;
     animation: pulse-stream 0.8s infinite alternate ease-in-out;
 }
 
 @keyframes pulse-stream {
-    from { opacity: 0.3; transform: scale(0.75); }
-    to   { opacity: 1; transform: scale(1.25); }
+    from { opacity: 0.35; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1.15); }
 }
 
 .engine-stream-badge {
@@ -1506,9 +1684,9 @@ body::before {
     gap: 8px;
     font-size: 0.75rem;
     font-family: var(--font-mono);
-    background: rgba(127, 166, 80, 0.15);
-    border: 1px solid rgba(127, 166, 80, 0.4);
-    color: #a3d959;
+    background: color-mix(in srgb, var(--accent-green) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-green) 30%, transparent);
+    color: var(--accent-green);
     font-weight: 700;
     padding: 4px 10px;
     border-radius: 12px;
@@ -1541,22 +1719,6 @@ body::before {
     align-items: center;
 }
 
-/* Leaderboard rows: keyboard focus + a livelier hover on the rank badge */
-.leaderboard-table tbody tr:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: -2px;
-}
-
-.rank-badge {
-    transition: transform var(--transition-fast);
-}
-
-.leaderboard-table tbody tr:hover .rank-badge--gold,
-.leaderboard-table tbody tr:hover .rank-badge--silver,
-.leaderboard-table tbody tr:hover .rank-badge--bronze {
-    transform: scale(1.08);
-}
-
 /* ── Player Profile Modal ── */
 .modal-header__badges {
     display: flex;
@@ -1568,8 +1730,8 @@ body::before {
 
 .player-rating-badge--rank {
     color: var(--accent-gold);
-    background: rgba(251, 191, 36, 0.12);
-    border-color: rgba(251, 191, 36, 0.25);
+    background: color-mix(in srgb, var(--accent-gold) 10%, transparent);
+    border-color: color-mix(in srgb, var(--accent-gold) 25%, transparent);
 }
 
 /* Recent-form dots (last 5 valid results) */
@@ -1607,18 +1769,18 @@ body::before {
 }
 
 .form-dot:hover {
-    transform: scale(1.2);
+    transform: scale(1.15);
 }
 
-.form-dot--win { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
-.form-dot--draw { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
-.form-dot--loss { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+.form-dot--win { background: color-mix(in srgb, var(--accent-green) 18%, transparent); color: var(--accent-green); }
+.form-dot--draw { background: color-mix(in srgb, var(--accent-orange) 18%, transparent); color: var(--accent-orange); }
+.form-dot--loss { background: color-mix(in srgb, var(--accent-red) 18%, transparent); color: var(--accent-red); }
 
 /* Segmented Win / Draw / Loss proportion bar */
 .wdl-bar {
     display: flex;
     width: 100%;
-    height: 12px;
+    height: 10px;
     border-radius: 99px;
     overflow: hidden;
     background: var(--bg-input);
@@ -1702,10 +1864,9 @@ body::before {
 }
 
 .modal-tab-btn.active {
-    background: linear-gradient(135deg, rgba(124, 92, 255, 0.2), rgba(92, 225, 230, 0.1));
+    background: var(--bg-card-hover);
     color: var(--text-primary);
     font-weight: 600;
-    box-shadow: 0 2px 12px rgba(124, 92, 255, 0.15);
 }
 
 .modal-tab-content {
@@ -1714,7 +1875,7 @@ body::before {
 
 .modal-tab-content.active {
     display: block;
-    animation: fadeSlideIn 0.3s ease;
+    animation: fadeSlideIn 0.25s ease;
 }
 
 .profile-meta-row {
@@ -1745,12 +1906,11 @@ body::before {
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
     padding: 10px 12px;
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast);
 }
 
 .profile-history-row:hover {
-    border-color: var(--border-glow);
-    background: rgba(124, 92, 255, 0.06);
+    border-color: var(--border-strong);
 }
 
 .profile-history-row.is-invalid {
@@ -1770,9 +1930,9 @@ body::before {
     flex-shrink: 0;
 }
 
-.profile-history-row__result--win { background: rgba(34, 197, 94, 0.18); color: var(--accent-green); }
-.profile-history-row__result--draw { background: rgba(245, 158, 11, 0.18); color: var(--accent-orange); }
-.profile-history-row__result--loss { background: rgba(239, 68, 68, 0.18); color: var(--accent-red); }
+.profile-history-row__result--win { background: color-mix(in srgb, var(--accent-green) 16%, transparent); color: var(--accent-green); }
+.profile-history-row__result--draw { background: color-mix(in srgb, var(--accent-orange) 16%, transparent); color: var(--accent-orange); }
+.profile-history-row__result--loss { background: color-mix(in srgb, var(--accent-red) 16%, transparent); color: var(--accent-red); }
 
 .profile-history-row__main {
     min-width: 0;
@@ -1837,7 +1997,7 @@ body::before {
 
 .profile-history-row__link {
     font-size: 0.68rem;
-    color: var(--accent-secondary);
+    color: var(--accent-cyan);
     text-decoration: none;
     white-space: nowrap;
 }
@@ -1952,12 +2112,32 @@ img.player-avatar-sm {
 }
 
 .vrchat-candidate:hover {
-    border-color: var(--border-glow);
-    background: rgba(124, 92, 255, 0.08);
+    border-color: var(--border-strong);
+    background: var(--bg-card-hover);
 }
 
 .vrchat-candidate__name {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-primary);
+}
+
+/* ── Analysis board scope reset ──
+   #analysisMainLayout is a deliberately separate chess.com-style skin (its
+   own brown/olive palette, hardcoded inline throughout) — it predates the
+   theme system and was never meant to pick up whichever theme is active.
+   Its buttons DO still inherit .btn's clip-path/font-family from the
+   global rules though (inline styles there only ever pinned background/
+   color/border, not shape or type), which is what actually broke: gold
+   pixel-notched corners and Press Start 2P on an otherwise untouched brown
+   button. Reset the box/type properties specifically back to plain. */
+#analysisMainLayout .btn {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    clip-path: none;
+    box-shadow: none;
+    border-radius: 4px;
+}
+
+#analysisMainLayout .btn:active {
+    box-shadow: none;
 }

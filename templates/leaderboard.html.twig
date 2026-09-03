@@ -1,45 +1,19 @@
-<!DOCTYPE html>
-<html lang="id">
+{% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as icons %}
 
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% block title %}VRChess Indonesia — Peringkat Catur &amp; Admin Panel{% endblock %}
 
-        <!-- ── Basic Meta Tags ── -->
-        <title>VRChess Indonesia — Peringkat Catur &amp; Admin Panel</title>
-        <meta name="description"
-            content="VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan kelola API token.">
-        <meta name="keywords" content="catur, chess, VR, Indonesia, rating, peringkat, turnamen, API tokens">
-        <meta name="author" content="VRChess Indonesia">
-        <meta name="robots" content="index, follow">
-        <link rel="canonical" href="https://chess.cvar1984.net/">
+{% block head_meta %}
+    {% include '_meta.html.twig' %}
+{% endblock %}
 
-        <!-- ── Open Graph / Facebook ── -->
-        <meta property="og:type" content="website">
-        <meta property="og:url" content="https://chess.cvar1984.net/">
-        <meta property="og:title" content="VRChess Indonesia — Peringkat Catur &amp; API Token Management">
-        <meta property="og:description"
-            content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan kelola API token.">
-        <meta property="og:image" content="https://chess.cvar1984.net/thumbnail.png">
-        <meta property="og:image:width" content="1200">
-        <meta property="og:image:height" content="630">
-        <meta property="og:image:alt" content="VRChess Indonesia - Platform Peringkat Catur">
-        <meta property="og:site_name" content="VRChess Indonesia">
-        <meta property="og:locale" content="id_ID">
+{# app.js is loaded explicitly near the end of {% block body %} as a plain
+   script tag, not as an AssetMapper entrypoint — suppress base.html.twig's
+   default importmap output so app.js isn't also loaded a second time
+   through that mechanism (which would double-run the whole SPA's init). #}
+{% block javascripts %}{% endblock %}
 
-        <!-- ── Twitter Card ── -->
-        <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:url" content="https://chess.cvar1984.net/">
-        <meta name="twitter:title" content="VRChess Indonesia — Peringkat Catur &amp; API Token Management">
-        <meta name="twitter:description"
-            content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia.">
-        <meta name="twitter:image" content="https://chess.cvar1984.net/thumbnail.png">
-        <meta name="twitter:image:alt" content="VRChess Indonesia - Platform Peringkat Catur">
-
-        <!-- ── Favicon ── -->
-        <link rel="icon" type="image/svg+xml"
-            href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>♚</text></svg>">
-
+{% block stylesheets %}
         <!-- ── Chess libraries ── -->
         <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
@@ -74,6 +48,13 @@
             };
         </script>
 
+        <!-- ── Theme + Design System ──
+             theme-8bit.css defines every design token (colors, fonts, radii,
+             shadows) as a CSS custom property; style.css only ever reads
+             var(--...) and has no theme knowledge of its own. To go back to
+             the modern theme (or add a new one), swap the href below —
+             nothing else needs to change. -->
+        <link rel="stylesheet" href="{{ asset('css/theme-8bit.css') }}">
         <link rel="stylesheet" href="{{ asset('css/style.css') }}">
         <style>
             /* Base fixes for chessground */
@@ -106,10 +87,12 @@
             }
 
             .auth-badge--admin {
-                background: linear-gradient(135deg, rgba(124, 92, 255, 0.25), rgba(92, 225, 230, 0.15));
-                color: var(--accent-secondary);
-                border: 1px solid var(--accent-primary);
-                box-shadow: 0 0 12px rgba(124, 92, 255, 0.2);
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: rgba(99, 102, 241, 0.12);
+                color: var(--accent-primary);
+                border: 1px solid rgba(99, 102, 241, 0.3);
             }
 
             .admin-only {
@@ -150,8 +133,8 @@
             }
 
             .admin-banner {
-                background: linear-gradient(135deg, rgba(124, 92, 255, 0.15), rgba(92, 225, 230, 0.08));
-                border: 1px solid rgba(124, 92, 255, 0.3);
+                background: rgba(99, 102, 241, 0.08);
+                border: 1px solid rgba(99, 102, 241, 0.25);
                 border-radius: var(--radius-lg);
                 padding: 12px 20px;
                 margin-bottom: 20px;
@@ -162,26 +145,41 @@
             }
 
             .token-code {
+                /* Was a plain (inline) span with a background/border, wrapping
+                   a long token across several lines — an inline element's
+                   background renders separately per wrapped line, so instead
+                   of one cohesive pill it fragmented into a disconnected
+                   chunk per line. inline-block keeps it sitting in the table
+                   cell's flow but makes it one solid box. */
+                display: inline-block;
+                max-width: 100%;
                 font-family: var(--font-mono);
-                background: rgba(0, 0, 0, 0.4);
+                background: var(--bg-input);
                 padding: 4px 8px;
-                border-radius: 4px;
+                border-radius: var(--radius-sm);
                 border: 1px solid var(--border-subtle);
                 font-size: 0.78rem;
-                color: var(--accent-secondary);
+                color: var(--accent-primary);
                 word-break: break-all;
+                line-height: 1.4;
             }
         </style>
-    </head>
+{% endblock %}
 
-    <body>
+{% block body %}
 
         <div class="app-wrapper">
 
             <!-- ── Header ── -->
             <header class="app-header">
+                <!-- Only shown by themes that set --show-hero-banner (the 8-bit theme) —
+                     see .hero-banner in style.css. Real community banner artwork,
+                     not a generated graphic. -->
+                <div class="hero-banner">
+                    <img src="{{ asset('images/gallery/banner-wide.jpg') }}" alt="VRChess Indonesia">
+                </div>
                 <div class="app-header__logo">
-                    <div class="app-header__icon">♚</div>
+                    <div class="app-header__icon"><img src="{{ asset('images/gallery/logo.png') }}" alt=""></div>
                     <div>
                         <h1 class="app-header__title">VRChess Indonesia</h1>
                         <p class="app-header__subtitle">Rating &amp; Match Management System</p>
@@ -189,55 +187,51 @@
                 </div>
                 <div class="app-header__actions">
                     <span id="authBadge" class="auth-badge admin-only"></span>
-                    <button class="btn btn--primary btn--sm visitor-only" id="btnOpenLoginModal" type="button">🔑 Admin
-                        Login</button>
-                    <button class="btn btn--secondary btn--sm admin-only" id="btnLogoutBtn" type="button">🚪
+                    <button class="btn btn--primary btn--sm visitor-only" id="btnOpenLoginModal" type="button">{{ icons.icon('key') }}
+                        Admin Login</button>
+                    <button class="btn btn--secondary btn--sm admin-only" id="btnLogoutBtn" type="button">{{ icons.icon('door') }}
                         Logout</button>
                 </div>
             </header>
 
+            {% include '_nav.html.twig' %}
+
             <!-- ── Admin Status Banner ── -->
             <div class="admin-banner admin-only" id="adminBanner">
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <span style="font-size:1.2rem;">👑</span>
+                    <span style="color:var(--accent-primary); display:flex;">{{ icons.icon('crown') }}</span>
                     <span><strong>Mode Admin Aktif (<span id="currentAdminName"></span>)</strong> — Penuh kontrol:
                         kelola Users Admin, API Tokens, catat &amp; edit pertandingan.</span>
                 </div>
             </div>
 
-            <!-- ── Connection Status ── -->
-            <div class="connection-bar" id="connectionBar">
-                <span class="connection-bar__dot" id="statusDot"></span>
-                <span id="statusText">Menghubungkan ke server…</span>
-            </div>
-
             <!-- ── Tab Navigation ── -->
             <nav class="tab-nav" id="tabNav">
                 <button class="tab-btn active" data-tab="leaderboard" id="tabBtnLeaderboard">
-                    <span class="tab-btn__icon">🏆</span>
+                    <span class="tab-btn__icon">{{ icons.icon('trophy') }}</span>
                     <span class="tab-btn__label">Leaderboard</span>
                     <span class="tab-btn__count" id="playerCount">0</span>
                 </button>
                 <button class="tab-btn" data-tab="matches" id="tabBtnMatches">
-                    <span class="tab-btn__icon">⚔</span>
+                    <span class="tab-btn__icon">{{ icons.icon('swords') }}</span>
                     <span class="tab-btn__label">Match History</span>
                     <span class="tab-btn__count" id="matchCount">0</span>
                 </button>
                 <button class="tab-btn admin-only" data-tab="play" id="tabBtnPlay">
-                    <span class="tab-btn__icon">🎮</span>
+                    <span class="tab-btn__icon">{{ icons.icon('flag') }}</span>
                     <span class="tab-btn__label">Submit Match</span>
                 </button>
                 <button class="tab-btn admin-only" data-tab="admin" id="tabBtnAdmin">
-                    <span class="tab-btn__icon">⚙</span>
+                    <span class="tab-btn__icon">{{ icons.icon('gear') }}</span>
                     <span class="tab-btn__label">Admin Panel</span>
                 </button>
                 <button class="tab-btn" data-tab="analysis" id="tabBtnAnalysis">
-                    <span class="tab-btn__icon">🧠</span>
-                    <span class="tab-btn__label">Analisis (Stockfish)</span>
+                    <span class="tab-btn__icon">{{ icons.icon('cpu') }}</span>
+                    <span class="tab-btn__label">Analisis</span>
                 </button>
                 <button class="tab-btn" data-tab="analyses-history" id="tabBtnAnalysesHistory">
-                    <span class="tab-btn__icon">📚</span>
-                    <span class="tab-btn__label">Daftar Analisis</span>
+                    <span class="tab-btn__icon">{{ icons.icon('book') }}</span>
+                    <span class="tab-btn__label">Riwayat Analisis</span>
                     <span class="tab-btn__count" id="analysisCount">0</span>
                 </button>
             </nav>
@@ -248,25 +242,25 @@
             <section class="tab-content active" id="tab-leaderboard">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">🏆 Player Rankings</div>
+                        <div class="card__title">{{ icons.icon('trophy') }} Player Rankings</div>
                         <div style="display:flex; gap:8px;">
-                            <button class="btn btn--primary btn--sm admin-only" id="btnAddPlayerBtn" type="button">➕
+                            <button class="btn btn--primary btn--sm admin-only" id="btnAddPlayerBtn" type="button">{{ icons.icon('plus') }}
                                 Tambah Pemain</button>
                             <button class="btn btn--secondary btn--sm admin-only" id="btnRefreshVrchatAvatars"
-                                title="Segarkan foto profil VRChat" type="button">🔄 Avatar VRChat</button>
+                                title="Segarkan foto profil VRChat" type="button">{{ icons.icon('refresh') }} Avatar VRChat</button>
                             <button class="btn btn--secondary btn--sm" id="btnRefreshPlayers"
-                                title="Refresh leaderboard" type="button">↻ Refresh</button>
+                                title="Refresh leaderboard" type="button">{{ icons.icon('refresh') }} Refresh</button>
                         </div>
                     </div>
 
                     <div class="search-wrapper">
-                        <span class="search-wrapper__icon">🔍</span>
+                        <span class="search-wrapper__icon">{{ icons.icon('search') }}</span>
                         <input type="text" class="search-input" id="playerSearch" placeholder="Cari pemain...">
                     </div>
 
                     <div id="leaderboardContainer">
                         <div class="empty-state">
-                            <div class="empty-state__icon">♟</div>
+                            <div class="empty-state__icon">{{ icons.icon('pawn') }}</div>
                             <div class="empty-state__text">Belum ada pemain</div>
                             <div class="empty-state__sub">Pertandingan pertama akan otomatis mendaftarkan pemain</div>
                         </div>
@@ -280,35 +274,35 @@
             <section class="tab-content" id="tab-matches">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">⚔ Match History</div>
+                        <div class="card__title">{{ icons.icon('swords') }} Match History</div>
                         <button class="btn btn--secondary btn--sm" id="btnRefreshMatches" title="Refresh matches"
-                            type="button">↻ Refresh</button>
+                            type="button">{{ icons.icon('refresh') }} Refresh</button>
                     </div>
 
                     <!-- Match Filters -->
                     <datalist id="playerNamesList"></datalist>
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
                         <div class="search-wrapper" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                            <span class="search-wrapper__icon" style="font-size: 0.9rem;">🔍</span>
+                            <span class="search-wrapper__icon" style="font-size: 0.9rem;">{{ icons.icon('search') }}</span>
                             <input type="text" class="search-input" id="matchSearch"
                                 placeholder="Cari (nama, w:nama, b:nama, y:2026, m:8, d:15)..." list="playerNamesList"
                                 autocomplete="off"
                                 title="Filter: w:nama (putih), b:nama (hitam), y:YYYY (tahun), m:MM (bulan), d:DD (hari)">
                         </div>
-                        <button class="btn btn--secondary" id="btnResetMatchFilters"
-                            style="padding: 0 16px;">Reset</button>
+                        <button class="btn btn--secondary btn--sm" id="btnResetMatchFilters"
+                            style="padding: 0 14px;">Reset</button>
                     </div>
                     <div class="filter-bar">
                         <button class="filter-btn active" data-filter="all" id="filterAllMatches">Semua
                             Pertandingan</button>
-                        <button class="filter-btn" data-filter="valid" id="filterValidMatches">✅ Valid</button>
-                        <button class="filter-btn" data-filter="invalid" id="filterInvalidMatches">🚫
+                        <button class="filter-btn" data-filter="valid" id="filterValidMatches">{{ icons.icon('checkcircle') }} Valid</button>
+                        <button class="filter-btn" data-filter="invalid" id="filterInvalidMatches">{{ icons.icon('ban') }}
                             Invalidated</button>
                     </div>
 
                     <div id="matchesContainer">
                         <div class="empty-state">
-                            <div class="empty-state__icon">📋</div>
+                            <div class="empty-state__icon">{{ icons.icon('clipboard') }}</div>
                             <div class="empty-state__text">Belum ada riwayat pertandingan</div>
                         </div>
                     </div>
@@ -321,7 +315,7 @@
             <section class="tab-content" id="tab-play">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">🎮 Catat Pertandingan Baru</div>
+                        <div class="card__title">{{ icons.icon('flag') }} Catat Pertandingan Baru</div>
                         <span class="card__badge card__badge--purple">ADMIN ACTION</span>
                     </div>
 
@@ -340,7 +334,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label" for="playResult">🏆 Hasil Pertandingan</label>
+                            <label class="form-label" for="playResult">{{ icons.icon('trophy') }} Hasil Pertandingan</label>
                             <select class="form-select" id="playResult" required>
                                 <option value="1">1 - 0 (White Menang)</option>
                                 <option value="0">½ - ½ (Draw / Seri)</option>
@@ -350,7 +344,7 @@
 
                         <!-- PGN is the primary option — saved automatically on submit -->
                         <div class="form-group">
-                            <label class="form-label">📄 Upload PGN <span
+                            <label class="form-label">{{ icons.icon('filetext') }} Upload PGN <span
                                     style="font-weight:400;color:var(--text-secondary);">(Diutamakan)</span></label>
                             <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:8px;">
                                 PGN akan disimpan otomatis sebagai analisis saat pertandingan dicatat.
@@ -361,16 +355,16 @@
                                 style="font-family: var(--font-mono); font-size: 0.78rem; resize: vertical;"></textarea>
                             <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
                                 <label class="btn btn--secondary btn--sm" style="cursor:pointer; margin:0;"
-                                    for="playPgnFile">📂 Buka File PGN</label>
+                                    for="playPgnFile">{{ icons.icon('folder') }} Buka File PGN</label>
                                 <input type="file" id="playPgnFile" accept=".pgn" style="display:none;">
-                                <button type="button" class="btn btn--secondary btn--sm" id="btnClearPlayPgn">✕
+                                <button type="button" class="btn btn--secondary btn--sm" id="btnClearPlayPgn">{{ icons.icon('close') }}
                                     Hapus</button>
                             </div>
                         </div>
 
                         <!-- URL fallback — only used if no PGN is provided -->
                         <div class="form-group">
-                            <label class="form-label" for="playUrl">🔗 URL Analisis Eksternal <span
+                            <label class="form-label" for="playUrl">{{ icons.icon('link') }} URL Analisis Eksternal <span
                                     style="font-weight:400;color:var(--text-secondary);">(Opsional, diabaikan jika PGN
                                     diisi)</span></label>
                             <input type="text" class="form-input" id="playUrl"
@@ -378,25 +372,25 @@
                         </div>
 
                         <button type="submit" class="btn btn--primary btn--full" id="btnSubmitMatch">
-                            ⚡ Catat Pertandingan &amp; Hitung Ulang Rating
+                            {{ icons.icon('zap') }} Catat Pertandingan
                         </button>
                     </form>
 
                     <!-- Match Result Reveal -->
                     <div class="result-panel" id="playResultPanel" style="display:none;">
-                        <div class="result-panel__title">🎉 Pertandingan Berhasil Dicatat!</div>
+                        <div class="result-panel__title">{{ icons.icon('checkcircle') }} Pertandingan Berhasil Dicatat!</div>
                         <div class="result-panel__grid">
                             <div class="result-player">
                                 <div class="result-player__name" id="resWhiteName">White</div>
                                 <div class="result-player__rating">
-                                    <span id="resWhiteOld">400</span> ➔ <strong id="resWhiteNew">430</strong>
+                                    <span id="resWhiteOld">400</span> {{ icons.icon('arrowright') }} <strong id="resWhiteNew">430</strong>
                                     <span class="result-player__change positive" id="resWhiteChange">+30</span>
                                 </div>
                             </div>
                             <div class="result-player">
                                 <div class="result-player__name" id="resBlackName">Black</div>
                                 <div class="result-player__rating">
-                                    <span id="resBlackOld">400</span> ➔ <strong id="resBlackNew">395</strong>
+                                    <span id="resBlackOld">400</span> {{ icons.icon('arrowright') }} <strong id="resBlackNew">395</strong>
                                     <span class="result-player__change negative" id="resBlackChange">-5</span>
                                 </div>
                             </div>
@@ -411,7 +405,7 @@
             <section class="tab-content" id="tab-admin">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">⚙ Dashboard Kontrol Admin</div>
+                        <div class="card__title">{{ icons.icon('gear') }} Dashboard Kontrol Admin</div>
                         <span class="card__badge card__badge--green">SYSTEM CONTROL</span>
                     </div>
 
@@ -438,8 +432,8 @@
                 <!-- Kelola Admin Users Card -->
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">🛡️ Kelola User Admins</div>
-                        <button class="btn btn--primary btn--sm" id="btnShowCreateAdminModal" type="button">➕ Tambah
+                        <div class="card__title">{{ icons.icon('shield') }} Kelola User Admins</div>
+                        <button class="btn btn--primary btn--sm" id="btnShowCreateAdminModal" type="button">{{ icons.icon('plus') }} Tambah
                             Admin</button>
                     </div>
                     <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
@@ -448,7 +442,7 @@
 
                     <div id="adminsContainer">
                         <div class="empty-state">
-                            <div class="empty-state__icon">🛡️</div>
+                            <div class="empty-state__icon">{{ icons.icon('shield') }}</div>
                             <div class="empty-state__text">Memuat Admin Users...</div>
                         </div>
                     </div>
@@ -457,19 +451,67 @@
                 <!-- API Tokens Management Card -->
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">🔑 Kelola API Access Tokens</div>
-                        <button class="btn btn--primary btn--sm" id="btnShowCreateTokenModal" type="button">➕ Buat Token
+                        <div class="card__title">{{ icons.icon('key') }} Kelola API Access Tokens</div>
+                        <button class="btn btn--primary btn--sm" id="btnShowCreateTokenModal" type="button">{{ icons.icon('plus') }} Buat Token
                             Baru</button>
                     </div>
-                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
-                        Setiap request API dapat diautentikasi menggunakan Header
-                        <code>X-API-Token: &lt;token&gt;</code> atau <code>Authorization: Bearer &lt;token&gt;</code>.
-                    </p>
-
                     <div id="tokensContainer">
                         <div class="empty-state">
-                            <div class="empty-state__icon">🔑</div>
+                            <div class="empty-state__icon">{{ icons.icon('key') }}</div>
                             <div class="empty-state__text">Memuat API Tokens...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VRChat Gallery Management Card -->
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">{{ icons.icon('image') }} Kelola Galeri VRChat</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn--secondary btn--sm" id="btnRefreshGallery" type="button">{{ icons.icon('refresh') }} Refresh</button>
+                            <button class="btn btn--primary btn--sm" id="btnShowCreateGalleryModal" type="button">{{ icons.icon('plus') }} Galeri
+                                Baru</button>
+                        </div>
+                    </div>
+                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
+                        Foto diambil otomatis dari setiap galeri grup VRChat. Upload gambar langsung ke galeri VRChat
+                        di sini, atau sembunyikan foto tertentu agar hilang dari halaman
+                        <a href="{{ path('gallery') }}" target="_blank" style="color:var(--accent-primary);">/gallery</a>
+                        publik tanpa mengubah status approve di VRChat.
+                    </p>
+
+                    <input type="file" id="galleryUploadInput" accept="image/*" style="display:none">
+
+                    <div id="galleryAdminContainer">
+                        <div class="empty-state">
+                            <div class="empty-state__icon">{{ icons.icon('image') }}</div>
+                            <div class="empty-state__text">Memuat Galeri VRChat...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VRChat Newsletter (Group Posts) Management Card -->
+                <div class="card">
+                    <div class="card__header">
+                        <div class="card__title">{{ icons.icon('filetext') }} Kelola Newsletter (Post Grup VRChat)</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn--secondary btn--sm" id="btnRefreshNewsletter" type="button">{{ icons.icon('refresh') }} Refresh</button>
+                            <button class="btn btn--primary btn--sm" id="btnShowCreatePostModal" type="button">{{ icons.icon('plus') }} Post
+                                Baru</button>
+                        </div>
+                    </div>
+                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
+                        Post di sini adalah post resmi grup VRChat. Visibility "Publik" muncul di halaman
+                        <a href="{{ path('newsletter') }}" target="_blank" style="color:var(--accent-primary);">/newsletter</a>
+                        publik; "Grup" hanya terlihat oleh anggota grup VRChat.
+                    </p>
+
+                    <input type="file" id="postImageInput" accept="image/*" style="display:none">
+
+                    <div id="newsletterAdminContainer">
+                        <div class="empty-state">
+                            <div class="empty-state__icon">{{ icons.icon('filetext') }}</div>
+                            <div class="empty-state__text">Memuat Post Grup VRChat...</div>
                         </div>
                     </div>
                 </div>
@@ -483,7 +525,7 @@
                 <!-- Import PGN Card -->
                 <div class="card" id="analysisPgnImportCard">
                     <div class="card__header">
-                        <div class="card__title">🧠 Stockfish PGN Analysis</div>
+                        <div class="card__title">{{ icons.icon('cpu') }} Stockfish PGN Analysis</div>
                         <span class="card__badge card__badge--green">Powered by Stockfish 18</span>
                     </div>
                     <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
@@ -497,12 +539,12 @@
                             style="font-family: var(--font-mono); font-size: 0.8rem; resize: vertical;"></textarea>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <label class="btn btn--secondary btn--sm" style="cursor:pointer;" for="pgnFileInput">📂 Buka
+                        <label class="btn btn--secondary btn--sm" style="cursor:pointer;" for="pgnFileInput">{{ icons.icon('folder') }} Buka
                             File PGN</label>
                         <input type="file" id="pgnFileInput" accept=".pgn" style="display:none;">
-                        <button class="btn btn--primary" id="btnStartPgnAnalysis" type="button">⚡ Mulai Analisis
+                        <button class="btn btn--primary btn--sm" id="btnStartPgnAnalysis" type="button">{{ icons.icon('zap') }} Mulai Analisis
                             PGN</button>
-                        <button class="btn btn--secondary" id="btnStartFreeAnalysis" type="button">Mulai Kosong (Free
+                        <button class="btn btn--secondary btn--sm" id="btnStartFreeAnalysis" type="button">Mulai Kosong (Free
                             Play)</button>
                     </div>
                     <!-- Progress -->
@@ -513,7 +555,7 @@
                         </div>
                         <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:8px; overflow:hidden;">
                             <div id="analysisProgressBar"
-                                style="width:0%; height:100%; background:linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); border-radius:6px; transition: width 0.3s ease;">
+                                style="width:0%; height:100%; background:var(--accent-primary); border-radius:6px; transition: width 0.3s ease;">
                             </div>
                         </div>
                     </div>
@@ -527,10 +569,12 @@
                             background: transparent;
                             border: none;
                             color: #b3b3b2;
-                            padding: 10px 16px;
+                            padding: 10px 12px;
                             font-size: 1.2rem;
                             cursor: pointer;
                             transition: background 0.15s, color 0.15s;
+                            flex: 1 1 auto;
+                            min-width: 0;
                         }
 
                         .btn-cc:hover {
@@ -637,14 +681,14 @@
                             <!-- Board Controls -->
                             <div class="board-controls-row"
                                 style="display:flex; justify-content:center; gap:0; background:#262421; border-radius:6px; overflow:hidden; margin-top:4px; border: 1px solid #33312e;">
-                                <button class="btn-cc" id="btnAnalysisFlip2" title="Flip board">⇅</button>
-                                <button class="btn-cc" id="btnAnalysisFirst" title="First move">⏮</button>
-                                <button class="btn-cc" id="btnAnalysisPrev" title="Previous move">◀</button>
+                                <button class="btn-cc" id="btnAnalysisFlip2" title="Flip board" style="display:flex; align-items:center; justify-content:center;"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/></svg></button>
+                                <button class="btn-cc" id="btnAnalysisFirst" title="First move" style="display:flex; align-items:center; justify-content:center;"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5 8 12l9 7Z"/><path d="M6 5v14"/></svg></button>
+                                <button class="btn-cc" id="btnAnalysisPrev" title="Previous move" style="display:flex; align-items:center; justify-content:center;"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5 8 12l9 7Z"/></svg></button>
                                 <div class="btn-cc-text" id="analysisMoveLabel"
-                                    style="width:120px; text-align:center; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700; color:#aaa; font-family:var(--font-mono);">
+                                    style="flex:1 1 auto; min-width:50px; max-width:120px; text-align:center; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700; color:#aaa; font-family:var(--font-mono);">
                                     Start</div>
-                                <button class="btn-cc" id="btnAnalysisNext" title="Next move">▶</button>
-                                <button class="btn-cc" id="btnAnalysisLast" title="Last move">⏭</button>
+                                <button class="btn-cc" id="btnAnalysisNext" title="Next move" style="display:flex; align-items:center; justify-content:center;"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 5 9 7-9 7Z"/></svg></button>
+                                <button class="btn-cc" id="btnAnalysisLast" title="Last move" style="display:flex; align-items:center; justify-content:center;"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 5 9 7-9 7Z"/><path d="M18 5v14"/></svg></button>
                             </div>
 
                         </div>
@@ -667,20 +711,20 @@
                                     <div
                                         style="margin-left:auto; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:6px 12px;">
                                         <button class="btn btn--secondary btn--xs" id="btnExportPgn"
-                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">📥
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">{{ icons.icon('download') }}
                                             Export</button>
                                         <button class="btn btn--secondary btn--xs" id="btnSaveAnalysis"
-                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">🔗
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">{{ icons.icon('link') }}
                                             Share Link</button>
                                         <button class="btn btn--secondary btn--xs" id="btnNewAnalysis"
-                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">➕
+                                            style="background:#33312e; border:none; color:#ddd; font-weight:600; white-space:nowrap;">{{ icons.icon('plus') }}
                                             New</button>
                                     </div>
                                 </div>
 
                                 <!-- Prominent Opening Display -->
                                 <div id="openingInfo"
-                                    style="display:flex; align-items:center; gap:12px; background:linear-gradient(90deg, #242b1f, #1e231b); padding:12px 20px; border-bottom: 2px solid #334024; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 10;">
+                                    style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; background:linear-gradient(90deg, #242b1f, #1e231b); padding:12px 20px; border-bottom: 2px solid #334024; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 10;">
                                     <span
                                         style="font-size:0.9rem; font-weight:800; background:#7fa650; color:#fff; padding:4px 10px; border-radius:4px; font-family:var(--font-mono); box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
                                         id="openingEco">A00</span>
@@ -726,12 +770,12 @@
                                             <button id="btnEngineSource" class="btn btn--secondary btn--xs"
                                                 style="background:#33312e; color:#aaa; border:1px solid #444; font-weight:700; padding:3px 8px; white-space:nowrap;"
                                                 type="button" title="Klik untuk beralih mesin analisis">
-                                                ⏳ …
+                                                <span class="spinner" style="width:11px;height:11px;border-width:2px;"></span> …
                                             </button>
                                             <button id="btnToggleLiveEngine" class="btn btn--secondary btn--xs"
                                                 style="background:#33312e; color:#7fa650; border:1px solid rgba(127,166,80,0.5); font-weight:700; padding:3px 8px; white-space:nowrap;"
                                                 type="button" title="Toggle Live Engine">
-                                                ⚡ Live: ON
+                                                {{ icons.icon('zap') }} Live: ON
                                             </button>
                                         </div>
                                     </div>
@@ -786,27 +830,27 @@
             <section class="tab-content" id="tab-analyses-history">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">📚 Riwayat Analisis PGN</div>
+                        <div class="card__title">{{ icons.icon('book') }} Riwayat Analisis PGN</div>
                         <button class="btn btn--secondary btn--sm" id="btnRefreshAnalyses" title="Refresh riwayat"
-                            type="button">↻ Refresh</button>
+                            type="button">{{ icons.icon('refresh') }} Refresh</button>
                     </div>
 
                     <!-- Search Filter for Analyses -->
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; padding: 0 16px; flex-wrap: wrap;">
                         <div class="search-wrapper" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                            <span class="search-wrapper__icon" style="font-size: 0.9rem;">🔍</span>
+                            <span class="search-wrapper__icon" style="font-size: 0.9rem;">{{ icons.icon('search') }}</span>
                             <input type="text" class="search-input" id="analysisSearch"
                                 placeholder="Cari analisis (nama, event, opening, elo, title, w:nama)..."
                                 autocomplete="off"
                                 title="Filter: w:nama (putih), b:nama (hitam), elo:2600 (rating), title:GM (gelar)">
                         </div>
-                        <button class="btn btn--secondary" id="btnResetAnalysisFilters"
-                            style="padding: 0 16px;">Reset</button>
+                        <button class="btn btn--secondary btn--sm" id="btnResetAnalysisFilters"
+                            style="padding: 0 14px;">Reset</button>
                     </div>
 
                     <div id="analysesContainer">
                         <div class="empty-state">
-                            <div class="empty-state__icon">📚</div>
+                            <div class="empty-state__icon">{{ icons.icon('book') }}</div>
                             <div class="empty-state__text">Belum ada analisis tersimpan</div>
                         </div>
                     </div>
@@ -839,7 +883,7 @@
         <div class="modal-overlay" id="loginModal" style="display:none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>🔑 Admin Authentication</h3>
+                    <h3>{{ icons.icon('key') }} Admin Authentication</h3>
                     <button class="modal-close-btn" id="btnCloseLoginModal" aria-label="Close">&times;</button>
                 </div>
                 <form id="loginForm">
@@ -867,7 +911,7 @@
         <div class="modal-overlay" id="createTokenModal" style="display:none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>➕ Buat API Token Baru</h3>
+                    <h3>{{ icons.icon('plus') }} Buat API Token Baru</h3>
                     <button class="modal-close-btn" id="btnCloseCreateTokenModal" aria-label="Close">&times;</button>
                 </div>
                 <form id="createTokenForm">
@@ -888,7 +932,7 @@
         <div class="modal-overlay" id="editTokenModal" style="display:none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>✏ Edit API Token</h3>
+                    <h3>{{ icons.icon('pencil') }} Edit API Token</h3>
                     <button class="modal-close-btn" id="btnCloseEditTokenModal" aria-label="Close">&times;</button>
                 </div>
                 <form id="editTokenForm">
@@ -916,7 +960,7 @@
         <div class="modal-overlay" id="createAdminModal" style="display:none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>➕ Tambah User Admin Baru</h3>
+                    <h3>{{ icons.icon('plus') }} Tambah User Admin Baru</h3>
                     <button class="modal-close-btn" id="btnCloseCreateAdminModal" aria-label="Close">&times;</button>
                 </div>
                 <form id="createAdminForm">
@@ -940,7 +984,7 @@
         <div class="modal-overlay" id="editAdminModal" style="display:none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>✏ Ubah Password Admin</h3>
+                    <h3>{{ icons.icon('pencil') }} Ubah Password Admin</h3>
                     <button class="modal-close-btn" id="btnCloseEditAdminModal" aria-label="Close">&times;</button>
                 </div>
                 <form id="editAdminForm">
@@ -961,12 +1005,108 @@
             </div>
         </div>
 
+        <!-- ── Modal: Create VRChat Gallery ── -->
+        <div class="modal-overlay" id="createGalleryModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>{{ icons.icon('image') }} Buat Galeri VRChat Baru</h3>
+                    <button class="modal-close-btn" id="btnCloseCreateGalleryModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="createGalleryForm">
+                    <div class="form-group">
+                        <label class="form-label" for="createGalleryName">Nama Galeri</label>
+                        <input type="text" class="form-input" id="createGalleryName"
+                            placeholder="Contoh: Turnamen, Poster, Meetup..." required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="createGalleryDescription">Deskripsi (opsional)</label>
+                        <input type="text" class="form-input" id="createGalleryDescription">
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelCreateGallery">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitCreateGallery">Buat Galeri</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal: Create Newsletter Post ── -->
+        <div class="modal-overlay" id="createPostModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>{{ icons.icon('plus') }} Buat Post Baru</h3>
+                    <button class="modal-close-btn" id="btnCloseCreatePostModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="createPostForm">
+                    <div class="form-group">
+                        <label class="form-label" for="createPostTitle">Judul</label>
+                        <input type="text" class="form-input" id="createPostTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="createPostText">Isi Post</label>
+                        <textarea class="form-input" id="createPostText" rows="5" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="createPostVisibility">Visibility</label>
+                        <select class="form-select" id="createPostVisibility">
+                            <option value="group">Grup (anggota VRChat saja)</option>
+                            <option value="public">Publik (tampil di /newsletter)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="createPostNotify">
+                        <label class="form-label" for="createPostNotify" style="margin:0;">Kirim notifikasi ke anggota grup</label>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelCreatePost">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitCreatePost">Buat Post</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Modal: Edit Newsletter Post ── -->
+        <div class="modal-overlay" id="editPostModal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>{{ icons.icon('pencil') }} Edit Post</h3>
+                    <button class="modal-close-btn" id="btnCloseEditPostModal" aria-label="Close">&times;</button>
+                </div>
+                <form id="editPostForm">
+                    <input type="hidden" id="editPostId">
+                    <div class="form-group">
+                        <label class="form-label" for="editPostTitle">Judul</label>
+                        <input type="text" class="form-input" id="editPostTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editPostText">Isi Post</label>
+                        <textarea class="form-input" id="editPostText" rows="5" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editPostVisibility">Visibility</label>
+                        <select class="form-select" id="editPostVisibility">
+                            <option value="group">Grup (anggota VRChat saja)</option>
+                            <option value="public">Publik (tampil di /newsletter)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="editPostNotify">
+                        <label class="form-label" for="editPostNotify" style="margin:0;">Kirim notifikasi ke anggota grup (untuk perubahan ini)</label>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn--secondary" id="btnCancelEditPost">Batal</button>
+                        <button type="submit" class="btn btn--primary" id="btnSubmitEditPost">Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- ── Modal 6: Player Stats Modal ── -->
         <div class="modal-overlay" id="playerStatsModal" style="display:none;">
             <div class="modal-content modal-content--wide">
                 <div class="modal-header">
                     <div class="modal-header__profile">
-                        <div class="modal-avatar" id="modalPlayerAvatar">♚</div>
+                        <div class="modal-avatar" id="modalPlayerAvatar">{{ icons.icon('crown') }}</div>
                         <div>
                             <h3 id="modalPlayerUsername" style="margin:0;">Player</h3>
                             <div class="modal-header__badges">
@@ -1000,10 +1140,10 @@
 
                 <div class="tab-nav tab-nav--modal">
                     <button class="modal-tab-btn active" data-modal-tab="overview" type="button">
-                        <span class="tab-btn__icon">📊</span><span class="tab-btn__label">Ringkasan</span>
+                        <span class="tab-btn__icon">{{ icons.icon('chart') }}</span><span class="tab-btn__label">Ringkasan</span>
                     </button>
                     <button class="modal-tab-btn" data-modal-tab="history" type="button">
-                        <span class="tab-btn__icon">📜</span><span class="tab-btn__label">Riwayat</span>
+                        <span class="tab-btn__icon">{{ icons.icon('clock') }}</span><span class="tab-btn__label">Riwayat</span>
                         <span class="tab-btn__count" id="modalHistoryCount">0</span>
                     </button>
                 </div>
@@ -1030,7 +1170,7 @@
                         <div class="stat-box" id="statBrilliantBox"
                             title="Total langkah Brilliant dari game yang sudah dianalisis">
                             <div class="stat-box__val" id="statBrilliantCount">—</div>
-                            <div class="stat-box__lbl">✨ Brilliant</div>
+                            <div class="stat-box__lbl">{{ icons.icon('sparkle') }} Brilliant</div>
                         </div>
                     </div>
                     <div class="profile-meta-row">
@@ -1045,9 +1185,9 @@
 
                 <div class="modal-footer"
                     style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap;">
-                    <button class="btn btn--secondary btn--sm admin-only" id="btnEditPlayerModalAction" type="button">✏
+                    <button class="btn btn--secondary btn--sm admin-only" id="btnEditPlayerModalAction" type="button">{{ icons.icon('pencil') }}
                         Edit Pemain</button>
-                    <button class="btn btn--danger btn--sm admin-only" id="btnDeletePlayerModalAction" type="button">🗑
+                    <button class="btn btn--danger btn--sm admin-only" id="btnDeletePlayerModalAction" type="button">{{ icons.icon('trash') }}
                         Hapus Pemain</button>
                     <button class="btn btn--secondary btn--sm" id="btnClosePlayerStatsBtn" type="button">Tutup</button>
                 </div>
@@ -1058,7 +1198,7 @@
         <div class="modal-overlay" id="editPlayerModal" style="display:none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>✏ Edit Data Pemain</h3>
+                    <h3>{{ icons.icon('pencil') }} Edit Data Pemain</h3>
                     <button class="modal-close-btn" id="btnCloseEditPlayerModal" aria-label="Close">&times;</button>
                 </div>
                 <form id="editPlayerForm">
@@ -1082,7 +1222,7 @@
                     <div class="vrchat-link-status" id="vrchatLinkStatus"></div>
                     <div class="vrchat-search-row">
                         <input type="text" class="form-input" id="vrchatSearchInput" placeholder="Cari nama VRChat...">
-                        <button type="button" class="btn btn--secondary btn--sm" id="btnVrchatSearch">🔍 Cari</button>
+                        <button type="button" class="btn btn--secondary btn--sm" id="btnVrchatSearch">{{ icons.icon('search') }} Cari</button>
                     </div>
                     <div class="vrchat-search-results" id="vrchatSearchResults"></div>
                 </div>
@@ -1093,7 +1233,7 @@
         <div class="modal-overlay" id="editMatchModal" style="display:none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>✏ Edit Pertandingan #<span id="editMatchIdTitle"></span></h3>
+                    <h3>{{ icons.icon('pencil') }} Edit Pertandingan #<span id="editMatchIdTitle"></span></h3>
                     <button class="modal-close-btn" id="btnCloseEditMatchModal" aria-label="Close">&times;</button>
                 </div>
                 <form id="editMatchForm">
@@ -1130,10 +1270,18 @@
              hardcoded in the JS. -->
         <script>
             window.OPENINGS_DB_URL = "{{ asset('data/openings_fen.json') }}";
+            window.MOVE_ICON_URLS = {
+                brilliant: "{{ asset('images/brilliant.png') }}",
+                the_only_move: "{{ asset('images/the_only_move.png') }}",
+                best_move: "{{ asset('images/best_move.png') }}",
+                good_move: "{{ asset('images/good_move.png') }}",
+                theoritical_move: "{{ asset('images/theoritical_move.png') }}",
+                tactical_move: "{{ asset('images/tactical_move.png') }}",
+                strange_move: "{{ asset('images/strange_move.png') }}",
+                missed_tactic: "{{ asset('images/missed_tactic.png') }}",
+                blunder: "{{ asset('images/blunder.png') }}",
+                ok_move: "{{ asset('images/ok_move.png') }}",
+            };
         </script>
         <script src="{{ asset('app.js') }}"></script>
-
-        <!-- Chess libs moved to <head> -->
-    </body>
-
-</html>
+{% endblock %}

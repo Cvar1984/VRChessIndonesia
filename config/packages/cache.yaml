@@ -20,3 +20,12 @@ framework:
             # cache (cache/avatars/*.cache) with the same filesystem backend,
             # just through Symfony's PSR-6 abstraction — see AvatarProxyController.
             cache.avatars: null
+
+            # VRChat group gallery image list + proxied image bytes — see
+            # GalleryController. Same reasoning as cache.avatars: avoids
+            # hitting the VRChat API (and needing a live session) on every
+            # visitor's page load.
+            cache.vrchat_gallery: null
+
+            # VRChat group posts (newsletter) list — see NewsletterController.
+            cache.vrchat_posts: null

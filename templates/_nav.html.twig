@@ -1,0 +1,8 @@
+{# Cross-page nav — the leaderboard's own tab-nav is internal to that one
+   page's SPA; this is the only way to get from Leaderboard to Gallery (or
+   back) since they're separate routed pages, not SPA tabs. #}
+<nav class="site-nav">
+    <a href="{{ path('leaderboard') }}" class="btn btn--secondary btn--sm{% if app.current_route == 'leaderboard' %} site-nav__link--active{% endif %}">Leaderboard</a>
+    <a href="{{ path('gallery') }}" class="btn btn--secondary btn--sm{% if app.current_route == 'gallery' %} site-nav__link--active{% endif %}">Gallery</a>
+    <a href="{{ path('newsletter') }}" class="btn btn--secondary btn--sm{% if app.current_route == 'newsletter' %} site-nav__link--active{% endif %}">Newsletter</a>
+</nav>
