@@ -2,6 +2,22 @@
 <html>
     <head>
         <meta charset="UTF-8">
+        {# Anchors every relative/root-relative URL on the page (assets, favicons,
+           nav links, and JS-driven fetch()/XHR calls alike — the <base> element
+           affects all of them, not just plain relative paths) back to this app's
+           real origin, regardless of what domain a viewer's browser bar actually
+           shows. Needed because some client-reported "broken page" cases turned
+           out to be viewing through a web proxy that mirrors this site under its
+           own domain without rewriting embedded URLs — root-relative paths like
+           /assets/... then resolved against the proxy's origin instead of ours
+           and 404'd. Computed via absolute_url() rather than hardcoded so this
+           still resolves correctly in local dev (http://127.0.0.1:.../) instead
+           of always pointing at production. One real side effect: plain page
+           navigation links (e.g. <a href="/gallery">) now also resolve to the
+           real domain, so clicking around while viewing through such a proxy
+           takes you out of it and onto the real site directly — an intentional
+           tradeoff, not an oversight. -#}
+        <base href="{{ absolute_url('/') }}">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{% block title %}VRChess Indonesia{% endblock %}</title>
         {% block favicon %}
