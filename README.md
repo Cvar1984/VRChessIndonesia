@@ -106,6 +106,7 @@ Dependencies (`composer.json`): `symfony/framework-bundle`, `symfony/security-bu
 composer install
 cp example.env .env   # then fill in the real values
 php bin/console doctrine:mongodb:schema:create   # if collections/indexes don't exist yet
+php bin/console asset-map:compile --env=prod --no-interaction # bake the assets for production
 symfony server:start  # or: php -S 127.0.0.1:8000 -t public
 ```
 
