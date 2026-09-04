@@ -103,8 +103,9 @@ Copy `example.env` to `.env` and fill in:
 Dependencies (`composer.json`): `symfony/framework-bundle`, `symfony/security-bundle`, `symfony/http-client`, `symfony/process`, `symfony/twig-bundle`, `symfony/asset-mapper` + `symfony/asset`, `doctrine/mongodb-odm-bundle`, `mongodb/mongodb`. Requires PHP ≥ 8.1 with the `mongodb` and `gd` extensions (GD normalizes admin-uploaded gallery/post images to PNG before handing them to VRChat), plus a `stockfish` binary on disk.
 
 ```bash
-composer install
+composer install --no-dev --optimize-autoloader --no-interaction
 cp example.env .env   # then fill in the real values
+php bin/console cache:clear --env=prod
 php bin/console doctrine:mongodb:schema:create   # if collections/indexes don't exist yet
 php bin/console asset-map:compile --env=prod --no-interaction # bake the assets for production
 symfony server:start  # or: php -S 127.0.0.1:8000 -t public
