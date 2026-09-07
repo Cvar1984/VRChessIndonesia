@@ -16,4 +16,7 @@ return [
         'path' => './assets/app.js',
         'entrypoint' => true,
     ],
+    'chess.mjs/src/Chess.js' => [
+        'version' => '2.3.2',
+    ],
 ];

@@ -3329,11 +3329,18 @@
                         }
                         initialClock = getInitialClock(analysisHeaders.TimeControl);
 
-                        let chess = new window.Chess();
+                        // Uses chess.mjs (via the cm-pgn package) rather than the window.Chess
+                        // CDN build used elsewhere: its sloppy-move parser natively resolves
+                        // redundant disambiguation (e.g. "R4xd5" when only one rook can reach
+                        // d5 at all), which some PGN sources emit and which the CDN chess.js
+                        // build rejects outright. This only changes *interpretation* — the
+                        // original SAN token from the PGN is still what gets stored/displayed
+                        // (see `analysisMovesSan.push(san)` below), never a "corrected" one.
+                        let chess = new window.CmChess({ chess960: isCurrentGame960 });
                         let startFen = analysisHeaders.FEN || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
                         if (isCurrentGame960) {
-                            // Replace X-FEN castling rights with pseudo-FEN KQkq so chess.js can load it
+                            // Replace X-FEN castling rights with pseudo-FEN KQkq so chess.mjs can load it
                             const parts = startFen.split(' ');
                             if (parts.length >= 3 && !parts[2].match(/^[KkQq-]+$/)) {
                                 parts[2] = 'KQkq';
@@ -3348,12 +3355,19 @@
 
                         const fenList = [chess.fen()];
                         analysisMovesSan = [];
+                        const failedMoves = [];
 
                         for (let i = 0; i < movesParsed.length; i++) {
                             const move = movesParsed[i];
                             let san = move.san;
                             if (isCurrentGame960 && (san === 'O-O' || san === 'O-O-O')) {
-                                // Manual 960 castling workaround
+                                // Manual 960 castling workaround. chess.mjs's own Chess960
+                                // castling *generation* has gaps for some non-corner rook
+                                // layouts (confirmed: king e1 / rook g1 with an empty board
+                                // otherwise fails to generate O-O at all), so rather than rely
+                                // on chess.move("O-O") finding a matching legal move, apply the
+                                // king/rook relocation directly to the FEN — this is a replay
+                                // of a game already known to be legal, not legality validation.
                                 const fen = chess.fen();
                                 const parts = fen.split(' ');
                                 let board = parts[0], turn = parts[1], castling = parts[2];
@@ -3389,10 +3403,25 @@
                                 if (castling === '') castling = '-';
                                 chess.load(`${board} ${turn === 'w' ? 'b' : 'w'} ${castling} ${ep} ${halfmove} ${fullmove}`);
                             } else {
-                                chess.move(san, { sloppy: true });
+                                const moveResult = chess.move(san, { sloppy: true });
+                                if (!moveResult) {
+                                    // A move the parser genuinely can't interpret at all (not just
+                                    // redundant disambiguation — chess.mjs's sloppy parser already
+                                    // resolves that natively). Record it and move on rather than
+                                    // silently re-pushing the unchanged pre-move position, which
+                                    // would corrupt this and every subsequent saved position with
+                                    // no indication anything had gone wrong.
+                                    failedMoves.push({ ply: i + 1, san });
+                                    console.error(`Move ${i + 1} ("${san}") could not be applied — position from here on may be incorrect.`, chess.fen());
+                                }
                             }
                             fenList.push(chess.fen());
                             analysisMovesSan.push(san);
+                        }
+
+                        if (failedMoves.length > 0) {
+                            const list = failedMoves.map(m => `${m.ply}. ${m.san}`).join(', ');
+                            toast(`Peringatan: ${failedMoves.length} langkah gagal diproses (${list}) — posisi setelahnya mungkin tidak akurat.`, 'error');
                         }
 
                         const total = fenList.length;

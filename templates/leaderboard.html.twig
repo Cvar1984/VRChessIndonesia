@@ -25,6 +25,16 @@
             window.Chessground = Chessground;
         </script>
 
+        <!-- ── chess.mjs, used only for parsing PGN move analysis ──
+             Unlike the chess.js 0.10.3 CDN build above (used for interactive board play),
+             chess.mjs's sloppy-move parser natively resolves redundant SAN disambiguation
+             (e.g. "R4xd5" when only one rook can reach d5 at all) that some PGN sources
+             emit and that chess.js 0.10.3 rejects outright — see startPgnAnalysis() in app.js. -->
+        <script type="module">
+            import { Chess } from '{{ asset('vendor/chess.mjs/src/Chess.js') }}';
+            window.CmChess = Chess;
+        </script>
+
         <!-- ── In-browser Stockfish (lichess-org/stockfish-web), default analysis engine ──
              Falls back to /api/engine/analyze (native Stockfish on the server) when the browser
              can't run the threaded WASM build — see assets/engine/vrchess-engine.js. -->
