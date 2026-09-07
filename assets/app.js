@@ -2619,7 +2619,7 @@
                         });
                     }
 
-                    function updateEngineStreamBadge(isComputing, depth = 0, targetDepth = 18, nps = 0, source = null) {
+                    function updateEngineStreamBadge(isComputing, depth = 0, targetDepth = 99, nps = 0, source = null) {
                         const badge = $('#engineStreamBadge');
                         const textEl = $('#engineStreamText');
                         if (!badge || !textEl) return;
@@ -2691,7 +2691,7 @@
                         liveAnalysisAbort = new AbortController();
                         const signal = liveAnalysisAbort.signal;
 
-                        const depth = parseInt($('#liveDepthSelect')?.value) || 18;
+                        const depth = parseInt($('#liveDepthSelect')?.value) || 99;
                         const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
 
                         if (currentMoveIdx === idx && (!analysisPositions[idx] || analysisPositions[idx].score === null)) {
@@ -3256,7 +3256,10 @@
                     async function startPgnAnalysis() {
                         const pgn = $('#pgnInput').value.trim();
                         if (!pgn) { toast('Masukkan PGN terlebih dahulu.', 'error'); return; }
-                        const depth = parseInt($('#liveDepthSelect')?.value) || 18;
+                        // Fixed standard depth, independent of #liveDepthSelect — that input
+                        // controls only the live/interactive position eval (depth 99), which
+                        // would make a full-game batch analysis impractically slow at this depth.
+                        const depth = 22;
                         const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
 
                         // Parse PGN client-side
