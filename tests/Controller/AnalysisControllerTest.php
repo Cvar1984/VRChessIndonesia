@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace VRchessIndo\Tests\Controller;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use VRchessIndo\Tests\ApiTestCase;
 
 class AnalysisControllerTest extends ApiTestCase
@@ -85,6 +86,70 @@ class AnalysisControllerTest extends ApiTestCase
         self::assertSame('Test', $list[0]['headers']['Event']);
         self::assertSame('Alice', $list[0]['headers']['White']);
         self::assertStringStartsWith('1. e4 e5', $list[0]['pgn_preview']);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: array<string, string>}>
+     */
+    public static function realWorldPgnFixtures(): array
+    {
+        return [
+            'standard multi-line PGN, unicode player name' => [
+                'example.pgn',
+                ['White' => 'Dr Slebew', 'Black' => 'James-Music 杰姆斯', 'Result' => '1-0', 'GameID' => '20260726143042'],
+            ],
+            'FIDE tournament PGN with %clk/%emt move annotations' => [
+                'example_fide.pgn',
+                ['White' => 'Cheparinov Ivan (BUL)', 'Black' => 'Alhassadi Yousef A. (LBA)', 'WhiteElo' => '2663', 'BlackFideId' => '9204725'],
+            ],
+            'Chess960 PGN with X-FEN (file-letter) castling rights' => [
+                '960_rapid_CH_fischer.pgn',
+                [
+                    'Variant' => 'Fischerandom',
+                    'White' => 'Ganguly, Surya Shekhar',
+                    'FEN' => 'qnbnrkrb/pppppppp/8/8/8/8/PPPPPPPP/QNBNRKRB w GEge - 0 1',
+                ],
+            ],
+            "VRChess's own compact single-line format (all headers on one line)" => [
+                'vrchess.pgn',
+                ['White' => 'Dr Slebew', 'Black' => 'nekofold', 'Result' => '0-1', 'GameID' => '20260809161251'],
+            ],
+        ];
+    }
+
+    /**
+     * Real PGN samples (data/pgn/) spanning the format variety this app
+     * actually receives: standard multi-line, a FIDE export with %clk/%emt
+     * comment annotations, a Chess960 game whose [FEN] castling rights use
+     * X-FEN file letters instead of KQkq, and VRChess's own compact
+     * single-line PGN. Confirms Analysis::toPreviewArray()'s header regex —
+     * the only PHP-side PGN parsing in this app (move-by-move parsing is
+     * entirely client-side, in assets/app.js) — handles all of them.
+     *
+     * @param array<string, string> $expectedHeaders
+     */
+    #[DataProvider('realWorldPgnFixtures')]
+    public function testHeaderExtractionAcrossRealWorldPgnFormats(string $fixtureFile, array $expectedHeaders): void
+    {
+        $path = dirname(__DIR__, 2) . '/data/pgn/' . $fixtureFile;
+        $pgn = file_get_contents($path);
+        self::assertIsString($pgn, "Fixture {$fixtureFile} must exist and be readable at {$path}");
+
+        $this->jsonRequest('POST', '/api/analyses', ['pgn' => $pgn]);
+        self::assertResponseIsSuccessful();
+        self::assertTrue($this->jsonBody()['success']);
+
+        $this->client->request('GET', '/api/analyses');
+        $list = $this->jsonBody()['analyses'];
+        self::assertCount(1, $list);
+
+        foreach ($expectedHeaders as $key => $value) {
+            self::assertSame(
+                $value,
+                $list[0]['headers'][$key] ?? null,
+                "Header [{$key}] extracted from {$fixtureFile}",
+            );
+        }
     }
 
     public function testDeleteRequiresApiAccess(): void
