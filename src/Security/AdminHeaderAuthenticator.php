@@ -40,7 +40,7 @@ class AdminHeaderAuthenticator extends AbstractAuthenticator
         $username = $this->extractUsername($request);
         $password = $this->extractPassword($request) ?? '';
 
-        $admin = $this->verifier->verify($username, $password);
+        $admin = $this->verifier->verify($username, $password, $request->getClientIp() ?? 'unknown');
         if ($admin === null) {
             throw new CustomUserMessageAuthenticationException('Invalid admin credentials');
         }

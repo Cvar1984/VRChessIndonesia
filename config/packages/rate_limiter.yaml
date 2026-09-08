@@ -1,0 +1,36 @@
+framework:
+    cache:
+        pools:
+            # Dedicated pool (rather than the default cache.app) so its
+            # adapter can be swapped to in-memory under when@test below,
+            # without that override also affecting any other cache.app use.
+            cache.rate_limiter.admin_login:
+                adapter: cache.app
+
+    rate_limiter:
+        # Brute-force guard on admin credential verification — shared by
+        # both AdminLoginAuthenticator (session login) and
+        # AdminHeaderAuthenticator (per-request X-Admin-* header auth),
+        # since AdminCredentialsVerifier::verify() is the one choke point
+        # both go through. Deliberately NOT applied to ApiTokenAuthenticator
+        # (a different threat model — legitimate token holders can
+        # legitimately make many requests per minute and shouldn't be
+        # throttled by a limiter meant for password-guessing).
+        admin_login:
+            policy: 'sliding_window'
+            limit: 5
+            interval: '5 minutes'
+            cache_pool: 'cache.rate_limiter.admin_login'
+
+when@test:
+    framework:
+        cache:
+            pools:
+                # The filesystem-backed cache.app persists across separate
+                # `vendor/bin/phpunit` invocations (it's real files under
+                # var/cache/test/, not reset per-process) — an in-memory
+                # array adapter keeps every test run starting from zero
+                # instead of inheriting leftover attempt counts from a
+                # previous run and failing non-deterministically.
+                cache.rate_limiter.admin_login:
+                    adapter: cache.adapter.array

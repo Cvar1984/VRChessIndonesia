@@ -40,7 +40,7 @@ class AdminLoginAuthenticator extends AbstractAuthenticator
         $username = (string) ($input['username'] ?? $request->query->get('username') ?? 'admin');
         $password = (string) ($input['password'] ?? $request->query->get('password') ?? '');
 
-        $admin = $this->verifier->verify($username, $password);
+        $admin = $this->verifier->verify($username, $password, $request->getClientIp() ?? 'unknown');
         if ($admin === null) {
             throw new CustomUserMessageAuthenticationException('Username atau password admin salah!');
         }

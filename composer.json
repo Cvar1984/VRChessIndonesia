@@ -17,7 +17,9 @@
         "symfony/process": "6.4.*",
         "symfony/twig-bundle": "6.4.*",
         "symfony/asset-mapper": "6.4.*",
-        "symfony/asset": "6.4.*"
+        "symfony/asset": "6.4.*",
+        "symfony/rate-limiter": "6.4.*",
+        "symfony/lock": "6.4.*"
     },
     "license": "MIT",
     "autoload": {
@@ -52,6 +54,7 @@
         }
     },
     "scripts": {
+        "test": "phpunit",
         "auto-scripts": {
             "cache:clear": "symfony-cmd",
             "assets:install %PUBLIC_DIR%": "symfony-cmd",
