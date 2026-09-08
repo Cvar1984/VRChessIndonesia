@@ -1,21 +1,26 @@
-{# SEO / social-share metadata. Kept out of leaderboard.html.twig so that file
-   is just page content — if a second page is ever added, it can {% include %}
-   this too (with these values pulled into variables at that point) instead of
-   duplicating the whole block. #}
+{# SEO / social-share metadata, shared by every page. Include with
+   `{ title, description, url }` for page-specific values (each falls back to
+   the site-wide default below when omitted) — `url` should be that page's own
+   *self-referencing* canonical absolute URL in the normal case. Only deviate
+   from self-reference when deliberately consolidating near-duplicate content
+   (e.g. a query-string variation that isn't meant to rank on its own) into
+   another canonical target; don't default every page to the homepage, that
+   tells search engines everything is a duplicate of it. #}
+{% set metaTitle = title|default('VRChess Indonesia — Peringkat Catur & API Token Management') %}
+{% set metaDescription = description|default('VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan kelola API token.') %}
+{% set metaUrl = url|default('https://chess.cvar1984.net/') %}
 
-<meta name="description"
-    content="VRChess Indonesia — Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan kelola API token.">
+<meta name="description" content="{{ metaDescription }}">
 <meta name="keywords" content="catur, chess, VR, Indonesia, rating, peringkat, turnamen, API tokens">
 <meta name="author" content="VRChess Indonesia">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://chess.cvar1984.net/">
+<link rel="canonical" href="{{ metaUrl }}">
 
 <!-- ── Open Graph / Facebook ── -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://chess.cvar1984.net/">
-<meta property="og:title" content="VRChess Indonesia — Peringkat Catur &amp; API Token Management">
-<meta property="og:description"
-    content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia. Lacak rating, riwayat pertandingan, dan kelola API token.">
+<meta property="og:url" content="{{ metaUrl }}">
+<meta property="og:title" content="{{ metaTitle }}">
+<meta property="og:description" content="{{ metaDescription }}">
 <meta property="og:image" content="{{ absolute_url(asset('images/gallery/thumbnail.png')) }}">
 <meta property="og:image:width" content="1341">
 <meta property="og:image:height" content="797">
@@ -25,9 +30,18 @@
 
 <!-- ── Twitter Card ── -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:url" content="https://chess.cvar1984.net/">
-<meta name="twitter:title" content="VRChess Indonesia — Peringkat Catur &amp; API Token Management">
-<meta name="twitter:description"
-    content="Platform peringkat dan manajemen pertandingan catur VR untuk komunitas Indonesia.">
+<meta name="twitter:url" content="{{ metaUrl }}">
+<meta name="twitter:title" content="{{ metaTitle }}">
+<meta name="twitter:description" content="{{ metaDescription }}">
 <meta name="twitter:image" content="{{ absolute_url(asset('images/gallery/thumbnail.png')) }}">
 <meta name="twitter:image:alt" content="VRChess Indonesia - Platform Peringkat Catur">
+
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "VRChess Indonesia",
+    "url": "https://chess.cvar1984.net/",
+    "logo": "{{ absolute_url(asset('images/gallery/logo.png')) }}"
+}
+</script>

@@ -295,6 +295,7 @@ svg.icon {
 }
 
 .card__title {
+    margin: 0;
     font-family: var(--font-display);
     font-size: 1.02rem;
     font-weight: 400;

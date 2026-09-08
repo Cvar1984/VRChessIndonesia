@@ -4,8 +4,10 @@
 {% block title %}Gallery — VRChess Indonesia{% endblock %}
 
 {% block head_meta %}
-    <meta name="description" content="Photos from the VRChess Indonesia community — in-world chess lounge, meetups, and matches.">
-    <meta name="robots" content="index, follow">
+    {% include '_meta.html.twig' with meta|merge({
+        title: 'Gallery — VRChess Indonesia',
+        description: 'Photos from the VRChess Indonesia community — in-world chess lounge, meetups, and matches.',
+    }) %}
 {% endblock %}
 
 {% block javascripts %}{% endblock %}

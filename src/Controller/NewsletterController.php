@@ -39,13 +39,14 @@ class NewsletterController extends AbstractApiController
     }
 
     #[Route('/newsletter', name: 'newsletter', methods: ['GET'])]
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $posts = $this->groupPosts(publicOnly: true);
         usort($posts, fn (array $a, array $b) => $b['createdAt'] <=> $a['createdAt']);
 
         return $this->render('newsletter.html.twig', [
             'posts' => $posts,
+            'meta' => ['url' => $request->getSchemeAndHttpHost() . $request->getPathInfo()],
         ]);
     }
 

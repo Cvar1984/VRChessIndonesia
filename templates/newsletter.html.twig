@@ -3,8 +3,10 @@
 {% block title %}Newsletter — VRChess Indonesia{% endblock %}
 
 {% block head_meta %}
-    <meta name="description" content="News and announcements from the VRChess Indonesia community group.">
-    <meta name="robots" content="index, follow">
+    {% include '_meta.html.twig' with meta|merge({
+        title: 'Newsletter — VRChess Indonesia',
+        description: 'News and announcements from the VRChess Indonesia community group.',
+    }) %}
 {% endblock %}
 
 {% block javascripts %}{% endblock %}

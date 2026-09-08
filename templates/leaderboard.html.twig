@@ -1,10 +1,10 @@
 {% extends 'base.html.twig' %}
 {% import '_icons.html.twig' as icons %}
 
-{% block title %}VRChess Indonesia — Peringkat Catur &amp; Admin Panel{% endblock %}
+{% block title %}{{ meta.title|default('VRChess Indonesia — Peringkat Catur & Admin Panel') }}{% endblock %}
 
 {% block head_meta %}
-    {% include '_meta.html.twig' %}
+    {% include '_meta.html.twig' with meta %}
 {% endblock %}
 
 {# app.js is loaded explicitly near the end of {% block body %} as a plain
@@ -15,8 +15,9 @@
 
 {% block stylesheets %}
         <!-- ── Chess libraries ── -->
-        <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+        <link rel="preconnect" href="https://unpkg.com" crossorigin>
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" defer></script>
         <link rel="stylesheet" href="https://unpkg.com/chessground/assets/chessground.base.css">
         <link rel="stylesheet" href="https://unpkg.com/chessground/assets/chessground.brown.css">
         <link rel="stylesheet" href="https://unpkg.com/chessground/assets/chessground.cburnett.css">
@@ -252,7 +253,7 @@
             <section class="tab-content active" id="tab-leaderboard">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('trophy') }} Player Rankings</div>
+                        <h2 class="card__title">{{ icons.icon('trophy') }} Player Rankings</h2>
                         <div style="display:flex; gap:8px;">
                             <button class="btn btn--primary btn--sm admin-only" id="btnAddPlayerBtn" type="button">{{ icons.icon('plus') }}
                                 Tambah Pemain</button>
@@ -284,7 +285,7 @@
             <section class="tab-content" id="tab-matches">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('swords') }} Match History</div>
+                        <h2 class="card__title">{{ icons.icon('swords') }} Match History</h2>
                         <button class="btn btn--secondary btn--sm" id="btnRefreshMatches" title="Refresh matches"
                             type="button">{{ icons.icon('refresh') }} Refresh</button>
                     </div>
@@ -325,7 +326,7 @@
             <section class="tab-content" id="tab-play">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('flag') }} Catat Pertandingan Baru</div>
+                        <h2 class="card__title">{{ icons.icon('flag') }} Catat Pertandingan Baru</h2>
                         <span class="card__badge card__badge--purple">ADMIN ACTION</span>
                     </div>
 
@@ -415,7 +416,7 @@
             <section class="tab-content" id="tab-admin">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('gear') }} Dashboard Kontrol Admin</div>
+                        <h2 class="card__title">{{ icons.icon('gear') }} Dashboard Kontrol Admin</h2>
                         <span class="card__badge card__badge--green">SYSTEM CONTROL</span>
                     </div>
 
@@ -442,7 +443,7 @@
                 <!-- Kelola Admin Users Card -->
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('shield') }} Kelola User Admins</div>
+                        <h2 class="card__title">{{ icons.icon('shield') }} Kelola User Admins</h2>
                         <button class="btn btn--primary btn--sm" id="btnShowCreateAdminModal" type="button">{{ icons.icon('plus') }} Tambah
                             Admin</button>
                     </div>
@@ -461,7 +462,7 @@
                 <!-- API Tokens Management Card -->
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('key') }} Kelola API Access Tokens</div>
+                        <h2 class="card__title">{{ icons.icon('key') }} Kelola API Access Tokens</h2>
                         <button class="btn btn--primary btn--sm" id="btnShowCreateTokenModal" type="button">{{ icons.icon('plus') }} Buat Token
                             Baru</button>
                     </div>
@@ -476,7 +477,7 @@
                 <!-- VRChat Gallery Management Card -->
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('image') }} Kelola Galeri VRChat</div>
+                        <h2 class="card__title">{{ icons.icon('image') }} Kelola Galeri VRChat</h2>
                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
                             <button class="btn btn--secondary btn--sm" id="btnRefreshGallery" type="button">{{ icons.icon('refresh') }} Refresh</button>
                             <button class="btn btn--primary btn--sm" id="btnShowCreateGalleryModal" type="button">{{ icons.icon('plus') }} Galeri
@@ -503,7 +504,7 @@
                 <!-- VRChat Newsletter (Group Posts) Management Card -->
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('filetext') }} Kelola Newsletter (Post Grup VRChat)</div>
+                        <h2 class="card__title">{{ icons.icon('filetext') }} Kelola Newsletter (Post Grup VRChat)</h2>
                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
                             <button class="btn btn--secondary btn--sm" id="btnRefreshNewsletter" type="button">{{ icons.icon('refresh') }} Refresh</button>
                             <button class="btn btn--primary btn--sm" id="btnShowCreatePostModal" type="button">{{ icons.icon('plus') }} Post
@@ -535,7 +536,7 @@
                 <!-- Import PGN Card -->
                 <div class="card" id="analysisPgnImportCard">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('cpu') }} Stockfish PGN Analysis</div>
+                        <h2 class="card__title">{{ icons.icon('cpu') }} Stockfish PGN Analysis</h2>
                         <span class="card__badge card__badge--green">Powered by Stockfish 19</span>
                     </div>
                     <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
@@ -840,7 +841,7 @@
             <section class="tab-content" id="tab-analyses-history">
                 <div class="card">
                     <div class="card__header">
-                        <div class="card__title">{{ icons.icon('book') }} Riwayat Analisis PGN</div>
+                        <h2 class="card__title">{{ icons.icon('book') }} Riwayat Analisis PGN</h2>
                         <button class="btn btn--secondary btn--sm" id="btnRefreshAnalyses" title="Refresh riwayat"
                             type="button">{{ icons.icon('refresh') }} Refresh</button>
                     </div>

@@ -56,7 +56,7 @@ class GalleryController extends AbstractApiController
     }
 
     #[Route('/gallery', name: 'gallery', methods: ['GET'])]
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $hidden = $this->hiddenIds();
         $photosByGallery = [];
@@ -86,6 +86,7 @@ class GalleryController extends AbstractApiController
 
         return $this->render('gallery.html.twig', [
             'galleries' => $galleries,
+            'meta' => ['url' => $request->getSchemeAndHttpHost() . $request->getPathInfo()],
         ]);
     }
 
