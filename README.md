@@ -1,6 +1,6 @@
 # ♚ VRChess Indonesia — Documentation
 
-**VRChess Indonesia** is a chess rating and match-tracking platform for a VRChat chess community. It combines a custom Elo-style rating system, a Symfony 6.4 + MongoDB Atlas backend, a Stockfish 18 analysis engine (server-side and in-browser WASM), and deep integration with VRChat's unofficial API — real profile pictures on the leaderboard, a photo gallery pulled live from the group's VRChat galleries, and a newsletter pulled live from the group's VRChat posts, all manageable from an in-app admin panel.
+**VRChess Indonesia** is a chess rating and match-tracking platform for a VRChat chess community. It combines a custom Elo-style rating system, a Symfony 6.4 + MongoDB Atlas backend, a Stockfish 19 analysis engine (server-side and in-browser WASM), and deep integration with VRChat's unofficial API — real profile pictures on the leaderboard, a photo gallery pulled live from the group's VRChat galleries, and a newsletter pulled live from the group's VRChat posts, all manageable from an in-app admin panel.
 
 This document covers every HTTP endpoint the backend exposes, the rating and move-accuracy formulas behind the numbers, and how to configure and run the app.
 

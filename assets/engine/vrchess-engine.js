@@ -6,16 +6,18 @@
 // If the browser can't run it, getEngine() resolves to null and callers must fall
 // back to the server-side engine at /stockfish.php.
 //
-// The build outputs (sf_18_smallnet*.js/.wasm, the .nnue net) live in public/engine/
+// The build outputs (sf_19_smallnet*.js/.wasm, the .nnue net) live in public/engine/
 // rather than assets/engine/: Emscripten's glue code and locateFile() resolve sibling
 // files by their exact original filename, which AssetMapper's content-hashed public
 // paths can never match (only this file, statically imported via asset(), gets a
 // hashed URL). Keeping them in public/ serves them as plain, unhashed static files.
 const ENGINE_DIR = '/engine/';
-const NNUE_FILE = 'nn-4ca89e4b3abf.nnue';
+// sf_19_smallnet's net, per https://github.com/lichess-org/stockfish-web's README
+// ("sscg13/size-optimize-nnue") — not interchangeable with sf_19 (non-smallnet)'s net.
+const NNUE_FILE = 'nn-61e7af4bb97d.nnue';
 // Ordered by preference: relaxed-simd is faster but needs newer CPU/browser support,
 // so fall back to the baseline SIMD build before giving up on the client engine.
-const BUILDS = ['sf_18_smallnet_relaxed-simd.js', 'sf_18_smallnet.js'];
+const BUILDS = ['sf_19_smallnet_relaxed-simd.js', 'sf_19_smallnet.js'];
 
 let enginePromise = null;
 let nnuePromise = null;
