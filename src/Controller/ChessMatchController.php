@@ -198,11 +198,47 @@ class ChessMatchController extends AbstractApiController
 
         $input = json_decode($request->getContent(), true) ?? [];
         $newData = [];
+
         if (isset($input['result'])) {
-            $newData['result'] = $input['result'];
+            // Same enum as play() — unvalidated free text here previously let
+            // an API-token-only caller (ROLE_API_TOKEN, not ROLE_ADMIN) stash
+            // arbitrary JS in a value the SPA later interpolates unescaped
+            // into an onclick="..." attribute for admins viewing the match
+            // list (stored XSS -> admin session takeover).
+            $result = match ((string) $input['result']) {
+                '1', '1-0' => MatchManager::WHITE_WIN,
+                '0', '1/2-1/2' => MatchManager::DRAW,
+                '-1', '0-1' => MatchManager::BLACK_WIN,
+                default => null,
+            };
+
+            if ($result === null) {
+                return $this->json([
+                    'success' => false,
+                    'error' => 'Nilai result tidak valid (gunakan 1 untuk White, 0 untuk Draw, -1 untuk Black)',
+                ], 400);
+            }
+
+            $newData['result'] = $result;
         }
+
         if (isset($input['analysis_url'])) {
-            $newData['analysis_url'] = $input['analysis_url'];
+            $analysisUrl = trim((string) $input['analysis_url']);
+            // Same shapes play() accepts: our own internal analysis id (hex),
+            // or a genuine http(s) URL (e.g. an external chess.com/chessigma
+            // link) — never a javascript:/data: URI, which the SPA renders
+            // straight into an <a href> for every visitor, admin or not.
+            if ($analysisUrl !== ''
+                && !preg_match('/^[a-f0-9]{8,}$/i', $analysisUrl)
+                && !preg_match('#^https?://#i', $analysisUrl)
+            ) {
+                return $this->json([
+                    'success' => false,
+                    'error' => 'analysis_url harus berupa ID analisis internal atau URL http(s)://',
+                ], 400);
+            }
+
+            $newData['analysis_url'] = $analysisUrl;
         }
 
         if ($newData === []) {

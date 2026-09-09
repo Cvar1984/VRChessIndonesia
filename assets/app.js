@@ -824,8 +824,14 @@
 
                         // Resolve analysis URL: build full URL from raw ID or legacy path/absolute URLs
                         const resolvedAnalysisUrl = resolveAnalysisUrl(m.analysis_url);
+                        // Defense in depth against a malicious analysis_url (the server now
+                        // rejects anything but an internal id or http(s):// URL on write, but
+                        // this also guards any record written before that validation existed).
+                        // escHtml() only entity-escapes — it doesn't stop a javascript:/data:
+                        // URI from sitting in href and firing on click.
+                        const isSafeAnalysisUrl = resolvedAnalysisUrl && /^https?:\/\//i.test(resolvedAnalysisUrl);
 
-                        const analysisLink = resolvedAnalysisUrl
+                        const analysisLink = isSafeAnalysisUrl
                             ? `<a class="match-card__link" href="${escHtml(resolvedAnalysisUrl)}" target="_blank" rel="noopener">${ICONS.chart} Analisis</a>`
                             : '';
 
@@ -840,7 +846,7 @@
                             } else {
                                 adminButtons += `<button class="btn btn--success btn--xs match-actions-btn" onclick="window.appRevalidateMatch(${m.id})" title="Pulihkan Pertandingan">${ICONS.refresh} Pulihkan</button>`;
                             }
-                            adminButtons += `<button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditMatch(${m.id}, '${m.result}', '${escHtml(m.analysis_url || '')}')" title="Edit Match">${ICONS.pencil} Edit</button>`;
+                            adminButtons += `<button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditMatch(${m.id}, '${escHtml(m.result)}', '${escHtml(m.analysis_url || '')}')" title="Edit Match">${ICONS.pencil} Edit</button>`;
                             adminButtons += `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteMatch(${m.id})" title="Hapus Match">${ICONS.trash} Hapus</button>`;
                         }
 
