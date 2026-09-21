@@ -388,14 +388,14 @@ class VRChatClient
     }
 
     /**
-     * Picks the best available "picture" field from a VRChat user object —
-     * a custom profile picture if they've set one, otherwise their current
-     * avatar's thumbnail (what VRChat itself shows in friends lists), otherwise
-     * their user icon.
+     * Picks the best available "picture" field from a VRChat user object.
+     * `iconUrl` is the current field; the rest are pre-update names kept as
+     * fallback since VRChat dropped them from the documented schema
+     * (see https://vrchat.community/reference/get-user).
      */
     private function pickAvatarUrl(array $user): ?string
     {
-        foreach (['profilePicOverrideThumbnail', 'profilePicOverride', 'currentAvatarThumbnailImageUrl', 'userIcon'] as $field) {
+        foreach (['iconUrl', 'profilePicOverrideThumbnail', 'profilePicOverride', 'currentAvatarThumbnailImageUrl', 'userIcon'] as $field) {
             if (!empty($user[$field]) && is_string($user[$field])) {
                 return $user[$field];
             }

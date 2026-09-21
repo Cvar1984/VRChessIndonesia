@@ -76,7 +76,7 @@ class VRChatClientTest extends KernelTestCase
                 'response_headers' => ['Set-Cookie: auth=cookie123; Path=/'],
             ]),
             new MockResponse(json_encode([
-                ['id' => 'usr_abc', 'displayName' => 'Alice VR', 'currentAvatarThumbnailImageUrl' => 'https://example.com/thumb.png'],
+                ['id' => 'usr_abc', 'displayName' => 'Alice VR', 'iconUrl' => 'https://example.com/icon.png', 'currentAvatarThumbnailImageUrl' => 'https://example.com/thumb.png'],
                 ['id' => '', 'displayName' => 'Skip me, no id'],
             ]), ['http_code' => 200]),
         ]);
@@ -87,7 +87,7 @@ class VRChatClientTest extends KernelTestCase
         self::assertCount(1, $results, 'The user without an id is filtered out');
         self::assertSame('usr_abc', $results[0]['id']);
         self::assertSame('Alice VR', $results[0]['displayName']);
-        self::assertSame('https://example.com/thumb.png', $results[0]['thumbnail']);
+        self::assertSame('https://example.com/icon.png', $results[0]['thumbnail'], 'iconUrl (current API field) wins over the legacy fallback field');
 
         // Session was persisted to the settings collection.
         $setting = $this->settings->findOneByKey('vrchat_session');
