@@ -93,6 +93,29 @@ class EngineControllerTest extends WebTestCase
         self::assertNotNull($body['positions'][0]['bestmove']);
     }
 
+    public function testAnalyzeBatchReportsWhatItActuallyCovered(): void
+    {
+        $client = self::createClient();
+        $client->jsonRequest('POST', '/api/engine/analyze/batch', [
+            'fens' => [self::STARTPOS, self::STARTPOS],
+            'depth' => 6,
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $body = json_decode($client->getResponse()->getContent(), true);
+
+        // app.js re-queues any requested position missing from `positions`, so these two
+        // fields are a contract: without them a truncated batch silently strands work.
+        self::assertSame(2, $body['requested']);
+        self::assertFalse($body['truncated'], 'Two shallow positions fit well inside the budget');
+        self::assertCount($body['count'], $body['positions']);
+        self::assertSame(
+            range(0, $body['count'] - 1),
+            array_column($body['positions'], 'move_index'),
+            'move_index must index into the requested fens array, which is how the caller maps results back',
+        );
+    }
+
     public function testAnalyzeBatchRejectsNonArrayFens(): void
     {
         $client = self::createClient();

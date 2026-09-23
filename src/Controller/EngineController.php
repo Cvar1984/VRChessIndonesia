@@ -22,6 +22,13 @@ use VRchessIndo\Service\Engine\StockfishEngineFactory;
  */
 class EngineController extends AbstractController
 {
+    /**
+     * Wall-clock ceiling for one batch request. Well under the 100s Cloudflare
+     * allows the origin before it returns a 524 in place of the response — the
+     * margin covers one more position finishing after the last budget check.
+     */
+    private const float BATCH_BUDGET_SECONDS = 45.0;
+
     public function __construct(private readonly StockfishEngineFactory $engines)
     {
     }
@@ -84,6 +91,10 @@ class EngineController extends AbstractController
                 'positions' => $positions,
                 'depth' => $depth,
                 'count' => count($positions),
+                // A short batch is normal, not an error: the caller compares these two
+                // and re-sends whatever `positions` didn't cover (match by move_index).
+                'requested' => count($cleanFens),
+                'truncated' => count($positions) < count($cleanFens),
             ]);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);
@@ -154,8 +165,24 @@ class EngineController extends AbstractController
         $engine = $this->engines->create($multipv, $chess960);
         $results = [];
 
+        $startedAt = microtime(true);
+        $slowest = 0.0;
+
         foreach ($fens as $i => $fen) {
+            // A batch sends nothing back until it returns, so a long enough request is
+            // killed by whatever sits in front of PHP (Cloudflare cuts the origin off at
+            // 100s) and the caller gets an error page instead of the positions that were
+            // already analyzed. Stop while there's still headroom and return a partial
+            // result; the caller re-queues the rest. The first position always runs — a
+            // response with nothing in it makes no progress and would spin the caller.
+            $elapsed = microtime(true) - $startedAt;
+            if ($i > 0 && $elapsed + $slowest * 1.3 > self::BATCH_BUDGET_SECONDS) {
+                break;
+            }
+
+            $positionStartedAt = microtime(true);
             $res = $engine->analyze($fen, $depth);
+            $slowest = max($slowest, microtime(true) - $positionStartedAt);
 
             $scoreDisplay = null;
             $scoreCp = null;

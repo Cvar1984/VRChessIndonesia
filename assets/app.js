@@ -3574,17 +3574,36 @@
                                 });
                                 const data = await res.json();
                                 if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
+                                // The server always covers at least one position, so an empty batch
+                                // means something is wrong. Fail loudly rather than re-queueing the
+                                // same indices forever against a server that isn't consuming them.
+                                if (!data.positions?.length) throw new Error('Server returned no positions');
+                                const returnedIdxs = new Set();
                                 for (const pos of data.positions) {
                                     const globalIdx = batchIdxs[pos.move_index];
                                     analysisPositions[globalIdx] = buildPosEntry(pos, globalIdx);
+                                    returnedIdxs.add(pos.move_index);
                                     recordProgress();
                                 }
+
+                                // The server stops a batch early when finishing it would outrun the
+                                // origin's request limit, so a short response is expected rather than
+                                // a failure. Put whatever it didn't reach back at the head of the
+                                // queue — dropping it would strand those positions and leave the
+                                // progress bar short of 100% forever.
+                                const leftover = batchIdxs.filter((_, i) => !returnedIdxs.has(i));
+                                if (leftover.length) serverBacklog.unshift(...leftover);
 
                                 // Adapt: shrink the cloud's next slice when it's measurably slower per
                                 // position than the browser (lagging), grow it back when it's keeping
                                 // pace — so a lagging server never locks up a large chunk of positions
                                 // that the browser engine could otherwise have gotten to.
-                                serverAvgMs = emaUpdate(serverAvgMs, (performance.now() - startedAt) / batchIdxs.length);
+                                // Divide by what came back, not what was asked for — a truncated
+                                // batch spent its whole wall-clock on fewer positions, and charging
+                                // the time to the full request would understate the real cost and
+                                // size the next chunk too big.
+                                const timedCount = data.positions.length || batchIdxs.length;
+                                serverAvgMs = emaUpdate(serverAvgMs, (performance.now() - startedAt) / timedCount);
                                 if (localAvgMs !== null && serverAvgMs !== null) {
                                     if (serverAvgMs > localAvgMs * 1.5) {
                                         serverChunkSize = Math.max(MIN_SERVER_CHUNK, serverChunkSize - 2);
