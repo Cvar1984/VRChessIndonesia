@@ -2142,3 +2142,41 @@ img.player-avatar-sm {
 #analysisMainLayout .btn:active {
     box-shadow: none;
 }
+
+/* ── Analysis board: flipped perspective ──
+   Flipping the board flips everything that describes a side, not just the
+   squares: the username, accuracy, estimated-rating badge, clock and
+   captured-piece row all belong to whichever player is now on the near side,
+   and the eval bar's halves swap with them. app.js toggles .flipped on
+   .board-column when Chessground's orientation becomes 'black'.
+
+   Every child needs an explicit order — one left out keeps the default order:0
+   and would jump above the reordered rows. */
+.board-column.flipped .player-row--bottom {
+    order: 1;
+    /* Spacing lives inline on the rows, so it has to move with them for each
+       row to stay snug against the board. */
+    margin-top: 0 !important;
+    margin-bottom: 4px !important;
+}
+
+.board-column.flipped .board-row {
+    order: 2;
+}
+
+.board-column.flipped .player-row--top {
+    order: 3;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+}
+
+.board-column.flipped .board-controls-row {
+    order: 4;
+}
+
+/* #evalBarWhite is sized from the container's end, so reversing the column
+   fills White's advantage from the top — matching White now being the far
+   side. !important because flex-direction is set inline on the element. */
+.board-column.flipped #evalBarOuter {
+    flex-direction: column-reverse !important;
+}
