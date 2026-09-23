@@ -1,0 +1,7 @@
+# LF everywhere, in the index and in every working copy — this overrides
+# core.autocrlf, which is set to true here and would otherwise hand a
+# checkout CRLF files. docker/start.sh and the Dockerfile are read by a
+# Linux container, where a CRLF shebang fails with
+# "/bin/sh^M: bad interpreter". text=auto leaves real binaries
+# (*.wasm, *.nnue, images, fonts) alone.
+* text=auto eol=lf
