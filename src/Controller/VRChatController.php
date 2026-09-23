@@ -9,6 +9,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use VRchessIndo\Repository\PlayerRepository;
+use VRchessIndo\Service\VRChat\AvatarRefresher;
 use VRchessIndo\Service\VRChat\VRChatClientFactory;
 
 /**
@@ -25,6 +26,7 @@ class VRChatController extends AbstractApiController
         private readonly VRChatClientFactory $clientFactory,
         private readonly PlayerRepository $players,
         private readonly DocumentManager $dm,
+        private readonly AvatarRefresher $avatarRefresher,
     ) {
     }
 
@@ -122,47 +124,17 @@ class VRChatController extends AbstractApiController
         }
 
         $input = json_decode($request->getContent(), true) ?? [];
-        $force = !empty($input['force']);
-        $ttlSeconds = 24 * 60 * 60;
 
         try {
-            $client = $this->clientFactory->build();
+            $result = $this->avatarRefresher->refresh(!empty($input['force']));
         } catch (\Throwable $e) {
             return $this->json(['success' => false, 'error' => $e->getMessage()], 502);
         }
 
-        $refreshed = 0;
-        $skipped = 0;
-        $failed = 0;
-
-        foreach ($this->players->findAll() as $player) {
-            if ($player->getVrchatUserId() === null) {
-                continue;
-            }
-
-            $cachedAt = $player->getAvatarCachedAt() !== null ? strtotime($player->getAvatarCachedAt()) : false;
-            if (!$force && $cachedAt !== false && (time() - $cachedAt) < $ttlSeconds) {
-                $skipped++;
-                continue;
-            }
-
-            try {
-                $vrchatUser = $client->getUser($player->getVrchatUserId());
-                $player->updateAvatarCache($vrchatUser !== null ? $vrchatUser['avatarUrl'] : null);
-                $refreshed++;
-            } catch (\Throwable) {
-                $failed++;
-            }
-        }
-
-        $this->dm->flush();
-
         return $this->json([
             'success' => true,
-            'message' => "Selesai: {$refreshed} diperbarui, {$skipped} dilewati (masih baru), {$failed} gagal.",
-            'refreshed' => $refreshed,
-            'skipped' => $skipped,
-            'failed' => $failed,
+            'message' => "Selesai: {$result['refreshed']} diperbarui, {$result['skipped']} dilewati (masih baru), {$result['failed']} gagal.",
+            ...$result,
         ]);
     }
 }

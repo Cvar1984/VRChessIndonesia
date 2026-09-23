@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace VRchessIndo\Tests\Controller;
 
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use VRchessIndo\Document\Player;
 use VRchessIndo\Tests\ApiTestCase;
@@ -190,5 +192,33 @@ class VRChatControllerTest extends ApiTestCase
     {
         $this->jsonRequest('POST', '/api/admin/vrchat/refresh-avatars', []);
         self::assertSame(401, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testDailyRefreshCommandUpdatesOnlyStaleAvatars(): void
+    {
+        $stale = new Player(1, 'Alice');
+        $stale->setVrchatLink('usr_abc', 'Alice VR', 'https://example.com/old.png');
+        $fresh = new Player(2, 'Bob');
+        $fresh->setVrchatLink('usr_bob', 'Bob VR', 'https://example.com/bob.png');
+        $this->dm->persist($stale);
+        $this->dm->persist($fresh);
+        $this->dm->flush();
+        $this->dm->getDocumentCollection(Player::class)
+            ->updateOne(['id' => 1], ['$set' => ['avatar_cached_at' => '2000-01-01 00:00:00']]);
+        $this->dm->clear();
+
+        // Login + exactly one getUser() — a fetch for fresh Bob would exhaust the queue and fail.
+        $this->mockHttpClient([
+            $this->loginResponse(),
+            new MockResponse(json_encode(['id' => 'usr_abc', 'displayName' => 'Alice VR', 'iconUrl' => 'https://example.com/new.png']), ['http_code' => 200]),
+        ]);
+
+        $tester = new CommandTester((new Application(self::$kernel))->find('app:vrchat:refresh-avatars'));
+        self::assertSame(0, $tester->execute([]));
+        self::assertStringContainsString('1 refreshed, 1 skipped', $tester->getDisplay());
+
+        $this->client->request('GET', '/api/players');
+        $alice = current(array_filter($this->jsonBody()['players'], static fn ($p) => $p['username'] === 'Alice'));
+        self::assertSame('https://example.com/new.png', $alice['avatar_url']);
     }
 }
