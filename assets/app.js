@@ -3188,8 +3188,11 @@
                                 if (pv1 && pv2) {
                                     let s1 = pv1.score_type === 'mate' ? (pv1.score > 0 ? 9999 : -9999) : pv1.score;
                                     let s2 = pv2.score_type === 'mate' ? (pv2.score > 0 ? 9999 : -9999) : pv2.score;
-                                    let pct1 = playerWinPct(s1, turn);
-                                    let pct2 = playerWinPct(s2, turn);
+                                    // Engine lines are scored from the side to move — here, the
+                                    // mover — so they're already the mover's win%. playerWinPct()
+                                    // expects White-side scores and would flip them again for Black.
+                                    let pct1 = getWinPct(s1);
+                                    let pct2 = getWinPct(s2);
                                     if (pct1 - pct2 >= requiredGap) {
                                         return { src: window.MOVE_ICON_URLS.the_only_move, title: "Great: The only good choice" };
                                     }
