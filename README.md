@@ -119,7 +119,40 @@ symfony server:start  # or: php -S 127.0.0.1:8000 -t public
 | :--- | :--- | :--- |
 | Refresh cached VRChat avatars | Daily, 03:00 UTC | `app:vrchat:refresh-avatars` (skips avatars cached in the last 24h) |
 
-Schedules only fire while a worker is running. The Docker image starts one from `docker/start.sh` and restarts it hourly. On a host without long-running processes (e.g. shared hosting), start a short-lived worker from cron every minute:
+Schedules only fire while a worker is running. The Docker image starts one from `docker/start.sh` and restarts it hourly. On a server you control, run the worker under Supervisor. On shared hosting, where long-running processes aren't allowed, start a short-lived worker from cron instead.
+
+**Supervisor (VPS or dedicated server):** Supervisor keeps the worker running and restarts it whenever it exits. Install it (`sudo apt install supervisor` on Debian/Ubuntu) and create `/etc/supervisor/conf.d/vrchess-scheduler.conf`:
+
+```ini
+[program:vrchess-scheduler]
+command=php /path/to/VRchessIndo/bin/console messenger:consume scheduler_default --time-limit=3600 --memory-limit=128M --env=prod
+user=www-data
+numprocs=1
+autostart=true
+autorestart=true
+startsecs=0
+stopwaitsecs=30
+stdout_logfile=/var/log/vrchess-scheduler.log
+redirect_stderr=true
+```
+
+The time and memory limits make the worker exit after an hour or once it uses 128 MB, and Supervisor starts a fresh one, so memory can't build up over days. Run it as the web server's user (`www-data` here) so both can write to `var/cache`. One process is enough: a second worker would only wait on the schedule's lock. Then load it:
+
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl status vrchess-scheduler
+```
+
+A running worker keeps the code it started with, so add this to your deploy steps after `cache:clear`:
+
+```bash
+php bin/console messenger:stop-workers
+```
+
+Each worker finishes its current job and exits, and Supervisor restarts it on the new code.
+
+**Cron (shared hosting):** start a short-lived worker every minute. It exits before the next one starts, and a new deploy is picked up on the next run:
 
 ```bash
 * * * * * cd /path/to/VRchessIndo && php bin/console messenger:consume scheduler_default --time-limit=55 --env=prod
