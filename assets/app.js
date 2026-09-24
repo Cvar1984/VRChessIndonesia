@@ -811,16 +811,37 @@
 
                     const sorted = matches.reverse();
 
+                    const RESULTS = {
+                        '1-0': { text: 'White wins', mod: 'white' },
+                        '0-1': { text: 'Black wins', mod: 'black' },
+                        '1/2-1/2': { text: 'Draw', mod: 'draw' },
+                    };
+
+                    // Name, then the rating the player carried into this game and what the
+                    // game did to it — the match-history counterpart of the PGN Elo pill.
+                    const playerHtml = (pieceIcon, name, oldRating, change) => {
+                        let s = `<span class="history-card__piece">${pieceIcon}</span>`
+                            + `<span class="history-card__name">${escHtml(name)}</span>`;
+                        if (Number.isFinite(oldRating)) s += `<span class="history-card__rating">${oldRating}</span>`;
+                        if (Number.isFinite(change)) {
+                            const dir = change > 0 ? 'up' : change < 0 ? 'down' : 'even';
+                            const sign = change > 0 ? '+' : change < 0 ? '−' : '±';
+                            s += `<span class="history-card__delta history-card__delta--${dir}">${sign}${Math.abs(change)}</span>`;
+                        }
+                        return s;
+                    };
+
+                    // Matches recorded with a PGN point at a saved analysis; its parsed
+                    // headers are already in allAnalyses, so no extra request is needed.
+                    const analysesById = new Map(allAnalyses.map(an => [an.id, an]));
+
                     let html = '';
                     sorted.forEach(m => {
+                        const pgnHeaders = analysesById.get(extractInternalAnalysisId(m.analysis_url))?.headers;
                         const whiteName = playerIdMap[m.white_id] || `Pemain #${m.white_id}`;
                         const blackName = playerIdMap[m.black_id] || `Pemain #${m.black_id}`;
                         const isValid = !('is_valid' in m) || m.is_valid === true;
-
-                        let resultClass = 'draw';
-                        let resultLabel = '½-½';
-                        if (m.result === '1-0') { resultClass = 'white'; resultLabel = '1-0'; }
-                        else if (m.result === '0-1') { resultClass = 'black'; resultLabel = '0-1'; }
+                        const result = RESULTS[m.result] || { text: m.result || '?', mod: 'unknown' };
 
                         // Resolve analysis URL: build full URL from raw ID or legacy path/absolute URLs
                         const resolvedAnalysisUrl = resolveAnalysisUrl(m.analysis_url);
@@ -832,11 +853,11 @@
                         const isSafeAnalysisUrl = resolvedAnalysisUrl && /^https?:\/\//i.test(resolvedAnalysisUrl);
 
                         const analysisLink = isSafeAnalysisUrl
-                            ? `<a class="match-card__link" href="${escHtml(resolvedAnalysisUrl)}" target="_blank" rel="noopener">${ICONS.chart} Analisis</a>`
+                            ? `<a class="history-card__link" href="${escHtml(resolvedAnalysisUrl)}" target="_blank" rel="noopener">${ICONS.chart} Open Analysis →</a>`
                             : '';
 
-                        const statusBadge = !isValid
-                            ? `<span class="match-card__status-tag match-card__status-tag--invalid">${ICONS.ban} Anulir (Invalid)</span>`
+                        const statusChip = !isValid
+                            ? `<span class="history-card__chip history-card__chip--danger">${ICONS.ban} Anulir (Invalid)</span>`
                             : '';
 
                         let adminButtons = '';
@@ -851,22 +872,25 @@
                         }
 
                         html += `
-                        <div class="match-card ${!isValid ? 'is-invalid' : ''}">
-                            <div class="match-card__player match-card__player--white">
-                                <span class="match-card__player-label">${ICONS.pieceWhite} White (#${m.white_id})</span>
-                                <span class="match-card__player-name">${escHtml(whiteName)}</span>
-                            </div>
-                            <div class="match-card__vs">
-                                <span class="match-card__result match-card__result--${resultClass}">${resultLabel}</span>
-                                ${statusBadge}
-                                <span class="match-card__date">${escHtml(m.date || '')}</span>
+                        <div class="history-card${!isValid ? ' history-card--invalid' : ''}">
+                            <div class="history-card__header">
+                                <span>${ICONS.clock} ${escHtml(m.date || '—')}</span>
                                 ${analysisLink}
                             </div>
-                            <div class="match-card__player match-card__player--black">
-                                <span class="match-card__player-label">${ICONS.pieceBlack} Black (#${m.black_id})</span>
-                                <span class="match-card__player-name">${escHtml(blackName)}</span>
+                            <div class="history-card__body">
+                                <div class="history-card__players">
+                                    ${playerHtml(ICONS.pieceWhite, whiteName, m.old_white_rating, m.rating_change_white)}
+                                    <span class="history-card__vs">vs</span>
+                                    ${playerHtml(ICONS.pieceBlack, blackName, m.old_black_rating, m.rating_change_black)}
+                                    <span class="history-card__result history-card__result--${result.mod}">${escHtml(result.text)}</span>
+                                </div>
+                                <div class="history-card__chips">
+                                    <span class="history-card__chip">#${m.id}</span>
+                                    ${statusChip}
+                                    ${pgnChipsHtml(pgnHeaders)}
+                                </div>
                             </div>
-                            ${isAdminState ? `<div class="match-card__actions">${adminButtons}</div>` : ''}
+                            ${isAdminState ? `<div class="history-card__footer">${adminButtons}</div>` : ''}
                         </div>`;
                     });
 
@@ -879,6 +903,77 @@
 
                 let allAnalyses = [];
 
+                // ── PGN header helpers — shared by the analysis and match history cards ──
+
+                // Case-insensitive tag lookup that treats the '-' and '?' placeholders as missing.
+                function pgnTag(headers, key) {
+                    const k = Object.keys(headers).find(x => x.toLowerCase() === key.toLowerCase());
+                    const v = k ? headers[k] : null;
+                    return (v && v !== '-' && v !== '?') ? v : null;
+                }
+
+                // ── TimeControl formatter ─────────────────────────────────────────
+                // PGN standard: values in seconds (e.g. 900+10 = 15 min + 10s).
+                // DGT/tournament style: base < 60 treated as minutes (e.g. 15+5 = 15 min + 5s).
+                // Handles: "3600" → "60 min", "900+10" → "15 min + 10s", "15+5" → "15 min + 5s"
+                function formatTimeControl(tc) {
+                    if (!tc || tc === '-' || tc === '?') return null;
+                    tc = tc.trim();
+
+                    // Pure number — always seconds per PGN standard
+                    if (/^\d+$/.test(tc)) {
+                        const secs = parseInt(tc, 10);
+                        if (secs === 0) return null;
+                        if (secs < 60) return `${secs}s`;
+                        const mins = secs / 60;
+                        return Number.isInteger(mins) ? `${mins} min` : `${(secs / 60).toFixed(1)} min`;
+                    }
+
+                    // base+increment: "900+10", "15+5", "15 + 5"
+                    const m = tc.match(/^(\d+)\s*\+\s*(\d+)$/);
+                    if (m) {
+                        const base = parseInt(m[1], 10);
+                        const inc = parseInt(m[2], 10);
+                        // If base < 60: DGT/tournament format — treat as minutes directly
+                        // If base >= 60: PGN seconds format — convert to minutes
+                        let baseFmt;
+                        if (base < 60) {
+                            baseFmt = `${base} min`;
+                        } else {
+                            const mins = base / 60;
+                            baseFmt = Number.isInteger(mins) ? `${mins} min` : `${(base / 60).toFixed(1)} min`;
+                        }
+                        return inc > 0 ? `${baseFmt} + ${inc}s` : baseFmt;
+                    }
+
+                    return tc; // unknown format — return as-is
+                }
+
+                // The PGN badges: event, variant, time control, date, round, site, opening.
+                // '' when there are no headers or none of these tags are set.
+                function pgnChipsHtml(headers) {
+                    if (!headers) return '';
+                    const tag = (key) => pgnTag(headers, key);
+                    const chip = (text, icon = '', mod = '') => text
+                        ? `<span class="history-card__chip${mod ? ` history-card__chip--${mod}` : ''}">${icon ? icon + ' ' : ''}${escHtml(text)}</span>`
+                        : '';
+
+                    // Prefer the PGN's own [Opening] tag; when a game only carries
+                    // [ECO "B01"], resolve it to a real name ("Scandinavian Defense")
+                    // via ecoNameIndex rather than showing the bare code.
+                    const ecoTag = tag('ECO');
+                    const opening = tag('Opening') || (ecoTag && ecoNameIndex[ecoTag]) || ecoTag;
+                    const round = tag('Round');
+
+                    return chip(tag('Event'), ICONS.trophy)
+                        + chip(tag('Variant'), ICONS.pawn)
+                        + chip(formatTimeControl(tag('TimeControl')), ICONS.stopwatch)
+                        + chip(tag('Date'), ICONS.calendar)
+                        + chip(round && 'R' + round)
+                        + chip(tag('Site'), ICONS.pin)
+                        + chip(opening, ICONS.book, 'accent');
+                }
+
                 async function fetchAnalyses(silent = false) {
                     try {
                         const res = await apiCall('/api/analyses');
@@ -888,6 +983,9 @@
                                 $('#analysisCount').textContent = allAnalyses.length;
                             }
                             renderAnalyses();
+                            // Match cards show PGN badges from these headers, and on page load
+                            // the match list renders before this data arrives.
+                            renderMatches();
                         }
                     } catch (err) {
                         console.error('Gagal memuat analisis', err);
@@ -968,43 +1066,6 @@
                         return;
                     }
 
-                    // ── TimeControl formatter ─────────────────────────────────────────
-                    // PGN standard: values in seconds (e.g. 900+10 = 15 min + 10s).
-                    // DGT/tournament style: base < 60 treated as minutes (e.g. 15+5 = 15 min + 5s).
-                    // Handles: "3600" → "60 min", "900+10" → "15 min + 10s", "15+5" → "15 min + 5s"
-                    function formatTimeControl(tc) {
-                        if (!tc || tc === '-' || tc === '?') return null;
-                        tc = tc.trim();
-
-                        // Pure number — always seconds per PGN standard
-                        if (/^\d+$/.test(tc)) {
-                            const secs = parseInt(tc, 10);
-                            if (secs === 0) return null;
-                            if (secs < 60) return `${secs}s`;
-                            const mins = secs / 60;
-                            return Number.isInteger(mins) ? `${mins} min` : `${(secs / 60).toFixed(1)} min`;
-                        }
-
-                        // base+increment: "900+10", "15+5", "15 + 5"
-                        const m = tc.match(/^(\d+)\s*\+\s*(\d+)$/);
-                        if (m) {
-                            const base = parseInt(m[1], 10);
-                            const inc = parseInt(m[2], 10);
-                            // If base < 60: DGT/tournament format — treat as minutes directly
-                            // If base >= 60: PGN seconds format — convert to minutes
-                            let baseFmt;
-                            if (base < 60) {
-                                baseFmt = `${base} min`;
-                            } else {
-                                const mins = base / 60;
-                                baseFmt = Number.isInteger(mins) ? `${mins} min` : `${(base / 60).toFixed(1)} min`;
-                            }
-                            return inc > 0 ? `${baseFmt} + ${inc}s` : baseFmt;
-                        }
-
-                        return tc; // unknown format — return as-is
-                    }
-
                     // ── Result helpers ──────────────────────────────────────────────
                     function resultLabel(r) {
                         if (r === '1-0') return { text: 'White wins', color: 'rgba(220,220,220,0.18)', border: 'rgba(220,220,220,0.35)' };
@@ -1028,12 +1089,7 @@
                         if (an.headers && Object.keys(an.headers).length > 0) {
                             const h = an.headers;
 
-                            // Case-insensitive, strips '-' and '?' placeholders
-                            const getTag = (key) => {
-                                const k = Object.keys(h).find(x => x.toLowerCase() === key.toLowerCase());
-                                const v = k ? h[k] : null;
-                                return (v && v !== '-' && v !== '?') ? v : null;
-                            };
+                            const getTag = (key) => pgnTag(h, key);
 
                             // Players
                             const whiteName = getTag('White') || '?';
@@ -1055,19 +1111,6 @@
 
                             const result = getTag('Result') || '?';
                             const rl = resultLabel(result);
-
-                            // Meta fields
-                            // Prefer the PGN's own [Opening] tag; when a game only carries
-                            // [ECO "B01"], resolve it to a real name ("Scandinavian Defense")
-                            // via ecoNameIndex rather than showing the bare code.
-                            const ecoTag = getTag('ECO');
-                            const opening = getTag('Opening') || (ecoTag && ecoNameIndex[ecoTag]) || ecoTag;
-                            const eventName = getTag('Event');
-                            const site = getTag('Site');
-                            const variant = getTag('Variant');
-                            const dateStr = getTag('Date');
-                            const round = getTag('Round');
-                            const timeFmt = formatTimeControl(getTag('TimeControl'));
 
                             // Tags that are explicitly rendered above — everything else goes to "extra"
                             const rendered = new Set([
@@ -1099,15 +1142,7 @@
                                 </div>
 
                                 <!-- Meta chips row -->
-                                <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.74rem;color:var(--text-secondary);">
-                                    ${eventName ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.trophy} ${escHtml(eventName)}</span>` : ''}
-                                    ${variant ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.pawn} ${escHtml(variant)}</span>` : ''}
-                                    ${timeFmt ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.stopwatch} ${escHtml(timeFmt)}</span>` : ''}
-                                    ${dateStr ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.calendar} ${escHtml(dateStr)}</span>` : ''}
-                                    ${round ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">R${escHtml(round)}</span>` : ''}
-                                    ${site ? `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 7px;">${ICONS.pin} ${escHtml(site)}</span>` : ''}
-                                    ${opening ? `<span style="background:rgba(80,120,255,0.08);border:1px solid rgba(80,120,255,0.2);border-radius:4px;padding:1px 7px;color:var(--accent-primary);">${ICONS.book} ${escHtml(opening)}</span>` : ''}
-                                </div>
+                                <div class="history-card__chips">${pgnChipsHtml(h)}</div>
 
                                 ${extras.length > 0 ? `<div style="font-size:0.7rem;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:6px;opacity:.75;">${extras.join('')}</div>` : ''}
                             </div>`;

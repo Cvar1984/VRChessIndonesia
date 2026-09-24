@@ -529,129 +529,148 @@ svg.icon {
     font-weight: 600;
 }
 
-/* ── Match History ── */
-.match-card {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr auto;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    background: var(--bg-glass);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    margin-bottom: 8px;
-    transition: all var(--transition-fast);
-    position: relative;
+/* ── Match History ──
+   Same card as Riwayat Analisis. Both tabs share the PGN badge chips
+   (pgnChipsHtml() in app.js); the rest of the analysis card is still styled
+   inline in renderAnalyses(), with the values below copied from there — change
+   them together or the two tabs drift apart. */
+.history-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.18);
 }
 
-.match-card:hover {
-    border-color: var(--border-strong);
-}
-
-.match-card.is-invalid {
+.history-card--invalid {
     opacity: 0.6;
-    background: color-mix(in srgb, var(--accent-red) 3%, transparent);
-    border-color: color-mix(in srgb, var(--accent-red) 20%, transparent);
     border-style: dashed;
-}
-
-.match-card.is-invalid:hover {
-    opacity: 0.85;
     border-color: color-mix(in srgb, var(--accent-red) 40%, transparent);
 }
 
-.match-card__player {
+.history-card__header {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.match-card__player--white {
-    text-align: left;
-}
-
-.match-card__player--black {
-    text-align: right;
-}
-
-.match-card__player-label {
-    display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    font-weight: 600;
+    justify-content: space-between;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
 }
 
-.match-card__player--white .match-card__player-label { justify-content: flex-start; }
-.match-card__player--black .match-card__player-label { justify-content: flex-end; }
-
-.match-card__player-name {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.match-card__vs {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
-
-.match-card__result {
-    font-family: var(--font-mono);
-    font-size: 0.85rem;
-    font-weight: 700;
-    padding: 4px 12px;
-    border-radius: var(--radius-sm);
-}
-
-.match-card__result--white { background: color-mix(in srgb, var(--accent-green) 14%, transparent); color: var(--accent-green); }
-.match-card__result--draw { background: color-mix(in srgb, var(--accent-orange) 14%, transparent); color: var(--accent-orange); }
-.match-card__result--black { background: color-mix(in srgb, var(--accent-cyan) 14%, transparent); color: var(--accent-cyan); }
-
-.match-card__date {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-}
-
-.match-card__link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.7rem;
+.history-card__link {
     color: var(--accent-primary);
     text-decoration: none;
-    transition: color var(--transition-fast);
-}
-
-.match-card__link:hover {
-    color: var(--accent-primary-hover);
-    text-decoration: underline;
-}
-
-.match-card__status-tag {
-    font-size: 0.65rem;
     font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
-    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+.history-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+}
+
+.history-card__players {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.88rem;
+}
+
+.history-card__piece {
+    opacity: 0.6;
+}
+
+.history-card__name {
+    font-weight: 600;
+}
+
+.history-card__rating {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    color: #bbb;
+    vertical-align: middle;
+    margin-left: 3px;
+}
+
+.history-card__delta {
+    font-size: 0.7rem;
+    font-weight: 700;
     font-family: var(--font-mono);
 }
 
-.match-card__status-tag--invalid {
-    background: color-mix(in srgb, var(--accent-red) 16%, transparent);
+.history-card__delta--up { color: var(--accent-green); }
+.history-card__delta--down { color: var(--accent-red); }
+.history-card__delta--even { color: var(--text-secondary); }
+
+.history-card__vs {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-style: italic;
+    margin: 0 2px;
+}
+
+.history-card__result {
+    margin-left: auto;
+    padding: 2px 9px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.history-card__result--white { background: rgba(220, 220, 220, 0.18); border-color: rgba(220, 220, 220, 0.35); }
+.history-card__result--black { background: rgba(40, 40, 60, 0.5); border-color: rgba(120, 120, 180, 0.3); }
+.history-card__result--draw { background: rgba(210, 175, 50, 0.15); border-color: rgba(210, 175, 50, 0.35); }
+.history-card__result--unknown { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.15); }
+
+.history-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+}
+
+.history-card__chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 1px 7px;
+}
+
+.history-card__chip--accent {
+    background: rgba(80, 120, 255, 0.08);
+    border-color: rgba(80, 120, 255, 0.2);
+    color: var(--accent-primary);
+}
+
+.history-card__chip--danger {
+    background: color-mix(in srgb, var(--accent-red) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent-red) 35%, transparent);
     color: var(--accent-red);
 }
 
-.match-card__actions {
+.history-card__footer {
     display: flex;
-    gap: 4px;
     align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* ── Forms ── */
@@ -1505,34 +1524,6 @@ svg.icon {
 
     .result-panel__grid {
         grid-template-columns: 1fr;
-    }
-
-    .match-card {
-        grid-template-columns: 1fr;
-        text-align: center;
-    }
-
-    .match-card__player--white,
-    .match-card__player--black {
-        text-align: center;
-    }
-
-    .match-card__player--white .match-card__player-label,
-    .match-card__player--black .match-card__player-label {
-        justify-content: center;
-    }
-
-    /* .match-card collapses to one centered column above, but
-       .match-card__actions is a flex row with no justify-content — it was
-       defaulting to flex-start, so the Anulir/Edit/Hapus buttons sat
-       pinned to the left edge while everything else in the card was
-       centered. Admin-only, so this only ever shows logged in as admin. */
-    .match-card__actions {
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-top: 8px;
-        padding-top: 10px;
-        border-top: 1px dashed var(--border-subtle);
     }
 
     .leaderboard-table {
