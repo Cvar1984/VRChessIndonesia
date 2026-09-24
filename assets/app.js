@@ -2239,6 +2239,71 @@
                     let liveAnalysisAbort = null;
                     let isLiveEngineEnabled = true;
                     let currentAnalysisId = null; // Tracks the ID if analysis was loaded from a saved link
+                    let lichessPausedUntil = 0;   // Lichess asks for a full minute of silence after a 429
+
+                    // ── Lichess cloud evaluations (Game Review's opening phase) ──
+
+                    // Lichess writes castling as king-takes-rook ("e1h1"); Stockfish, and the
+                    // arrow drawing and chess.js replay here, expect the king's destination
+                    // ("e1g1"). "e1h1" can also be a rook or queen sliding along the back rank,
+                    // so this replays the line and only rewrites genuine king moves. Stops at
+                    // the first move it can't play, returning the legal prefix.
+                    function normalizeLichessLine(fen, moves) {
+                        const board = new window.Chess(fen);
+                        const line = [];
+                        for (const uci of String(moves).trim().split(/\s+/)) {
+                            const from = uci.slice(0, 2);
+                            let to = uci.slice(2, 4);
+                            const piece = board.get(from);
+                            if (piece && piece.type === 'k' && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) > 1) {
+                                to = (to[0] > from[0] ? 'g' : 'c') + to[1];
+                            }
+                            const promotion = uci[4];
+                            if (!board.move({ from, to, promotion })) break;
+                            line.push(from + to + (promotion || ''));
+                        }
+                        return line;
+                    }
+
+                    // Maps a /api/cloud-eval response onto the position shape the engines produce.
+                    // Lichess scores every line from White's side. The top-level score_cp is
+                    // stored that way too, but `multipv` holds raw engine lines, which score from
+                    // the side to move — converted here so a Lichess position reads exactly
+                    // like an engine one. null when no usable line comes back.
+                    function lichessEvalToPosition(fen, moveIndex, data) {
+                        const turn = fen.split(' ')[1] || 'w';
+                        const multipv = {};
+                        (data.pvs || []).forEach((line, k) => {
+                            const pv = normalizeLichessLine(fen, line.moves || '');
+                            if (!pv.length) return;
+                            const isMate = line.mate !== undefined;
+                            const whiteSide = isMate ? line.mate : line.cp;
+                            const sideToMove = turn === 'b' ? -whiteSide : whiteSide;
+                            multipv[k + 1] = {
+                                score: sideToMove,
+                                score_type: isMate ? 'mate' : 'cp',
+                                eval: 100 / (1 + Math.exp(-sideToMove / 120)),
+                                pv,
+                            };
+                        });
+
+                        const best = data.pvs?.[0];
+                        if (!best || !multipv[1]) return null;
+
+                        const isMate = best.mate !== undefined;
+                        const scoreCp = isMate ? (best.mate > 0 ? 9999 : -9999) : best.cp;
+                        return {
+                            fen,
+                            move_index: moveIndex,
+                            score: isMate ? 'M' + Math.abs(best.mate) : scoreCp / 100,
+                            score_cp: scoreCp,
+                            score_type: isMate ? 'mate' : 'cp',
+                            bestmove: multipv[1].pv[0],
+                            pv: multipv[1].pv.slice(0, 6),
+                            depth: data.depth,
+                            multipv,
+                        };
+                    }
 
                     // Rating-aware move classification: if the PGN's White/Black name matches a
                     // registered player, use their actual rating to adjust how easily they earn
@@ -3508,6 +3573,31 @@
                             };
                         }
 
+                        // One Lichess cloud-eval lookup, shaped like analyzeFenClient()'s result.
+                        // null means "not from Lichess" for any reason — not stored, rate-limited,
+                        // timed out, offline — and the caller moves on to the engines.
+                        async function lookupLichessCloudEval(fen, moveIndex) {
+                            const controller = new AbortController();
+                            const timer = setTimeout(() => controller.abort(), 3000);
+                            try {
+                                const res = await fetch(
+                                    `https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=${multipv}`,
+                                    { signal: controller.signal, credentials: 'omit' },
+                                );
+                                if (res.status === 429) {
+                                    lichessPausedUntil = Date.now() + 60000;
+                                    return null;
+                                }
+                                // Error responses (429 included) are HTML pages, so check before parsing.
+                                if (!res.ok) return null;
+                                return lichessEvalToPosition(fen, moveIndex, await res.json());
+                            } catch (_) {
+                                return null;
+                            } finally {
+                                clearTimeout(timer);
+                            }
+                        }
+
                         // Work-shared batch: browser and server engines both pull positions off the
                         // same queue and analyze concurrently — a healthy pair finishes roughly
                         // twice as fast as either alone. The browser is prioritized: it always
@@ -3550,6 +3640,26 @@
                             completedCount++;
                             $('#analysisCurrent').textContent = completedCount;
                             $('#analysisProgressBar').style.width = Math.round((completedCount / total) * 100) + '%';
+                        }
+
+                        // Opening phase: take Lichess's stored evaluations one position at a time
+                        // from move 0, and stop at the first one it doesn't have. Once a game
+                        // leaves known theory, later positions are almost never stored, so
+                        // carrying on would only spend Lichess's rate limit. Advancing nextClaim
+                        // is the handoff — the engine workers claim from wherever this stopped.
+                        // Chess960 is skipped: its positions are practically never stored.
+                        async function runLichessOpeningPhase() {
+                            if (isCurrentGame960 || Date.now() < lichessPausedUntil) return 0;
+                            let hits = 0;
+                            while (nextClaim < total) {
+                                const pos = await lookupLichessCloudEval(fenList[nextClaim], nextClaim);
+                                if (!pos) break;
+                                analysisPositions[nextClaim] = buildPosEntry(pos, nextClaim);
+                                nextClaim++;
+                                hits++;
+                                recordProgress();
+                            }
+                            return hits;
                         }
 
                         async function clientBatchWorker() {
@@ -3663,10 +3773,13 @@
                         // turns out to be unavailable.
                         await probeClientEngine();
 
+                        const lichessHits = await runLichessOpeningPhase();
+
                         if ($('#analysisEngineLabel')) {
-                            const label = enginePreference === 'both' ? `(${ICONS.monitor} Browser + ${ICONS.cloud} Server)`
-                                : enginePreference === 'client' ? `(${ICONS.monitor} Browser)` : `(${ICONS.cloud} Server)`;
-                            $('#analysisEngineLabel').innerHTML = label;
+                            const engines = enginePreference === 'both' ? `${ICONS.monitor} Browser + ${ICONS.cloud} Server`
+                                : enginePreference === 'client' ? `${ICONS.monitor} Browser` : `${ICONS.cloud} Server`;
+                            const lichess = lichessHits ? `${ICONS.book} Lichess ×${lichessHits} + ` : '';
+                            $('#analysisEngineLabel').innerHTML = `(${lichess}${engines})`;
                         }
 
                         await Promise.all([clientBatchWorker(), serverBatchWorker()]);
