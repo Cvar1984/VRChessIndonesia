@@ -19,7 +19,9 @@
         "symfony/asset-mapper": "6.4.*",
         "symfony/asset": "6.4.*",
         "symfony/rate-limiter": "6.4.*",
-        "symfony/lock": "6.4.*"
+        "symfony/lock": "6.4.*",
+        "symfony/scheduler": "6.4.*",
+        "symfony/messenger": "6.4.*"
     },
     "license": "MIT",
     "autoload": {

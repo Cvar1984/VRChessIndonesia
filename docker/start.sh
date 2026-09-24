@@ -12,13 +12,11 @@ export SERVER_NAME=":${PORT:-80}"
 php bin/console cache:clear --env=prod --no-warmup
 php bin/console cache:warmup --env=prod
 
-# Daily VRChat avatar refresh. Runs once at boot, then every 24h; the command
-# skips avatars cached <24h ago, so frequent redeploys don't re-hit VRChat.
-# ponytail: sleep loop in the web container, one per replica — move to a
-# Railway cron service if this ever runs with more than one replica.
+# Symfony Scheduler worker (schedules live in src/Scheduler/). Restarted hourly
+# so a long-lived PHP process can't slowly leak memory; the schedule is stateful
+# and locked, so restarts and extra replicas neither miss nor double-fire a run.
 (while true; do
-    php bin/console app:vrchat:refresh-avatars --env=prod || true
-    sleep 86400
+    php bin/console messenger:consume scheduler_default --time-limit=3600 --env=prod || sleep 5
 done) &
 
 exec frankenphp run --config /etc/caddy/Caddyfile --adapter caddyfile

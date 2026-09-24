@@ -100,7 +100,7 @@ Copy `example.env` to `.env` and fill in:
 | `VRCHAT_GROUP_GALLERY_ID` | Optional | Leave blank to auto-discover and combine every gallery the group has (each shown under its own heading on `/gallery`); set to one gallery's ID (`ggal_...`) to show only that one. |
 | `VRCHAT_RATE_LIMIT_SECONDS` | Optional | Minimum seconds between the app's own outbound requests to VRChat's API — a self-imposed courtesy throttle, since VRChat's unofficial API publishes no rate-limit numbers but is known to temporarily block accounts that hammer it. Default `1`; bump to `5` if you see VRChat-side errors, `0` disables it. |
 
-Dependencies (`composer.json`): `symfony/framework-bundle`, `symfony/security-bundle`, `symfony/http-client`, `symfony/process`, `symfony/twig-bundle`, `symfony/asset-mapper` + `symfony/asset`, `doctrine/mongodb-odm-bundle`, `mongodb/mongodb`. Requires PHP ≥ 8.1 with the `mongodb` and `gd` extensions (GD normalizes admin-uploaded gallery/post images to PNG before handing them to VRChat), plus a `stockfish` binary on disk.
+Dependencies (`composer.json`): `symfony/framework-bundle`, `symfony/security-bundle`, `symfony/http-client`, `symfony/process`, `symfony/twig-bundle`, `symfony/asset-mapper` + `symfony/asset`, `symfony/scheduler` + `symfony/messenger`, `doctrine/mongodb-odm-bundle`, `mongodb/mongodb`. Requires PHP ≥ 8.1 with the `mongodb` and `gd` extensions (GD normalizes admin-uploaded gallery/post images to PNG before handing them to VRChat), plus a `stockfish` binary on disk.
 
 ```bash
 composer install --no-dev --optimize-autoloader --no-interaction
@@ -112,6 +112,20 @@ symfony server:start  # or: php -S 127.0.0.1:8000 -t public
 ```
 
 **Deployment:** the [Dockerfile](Dockerfile) builds a FrankenPHP image (Caddy + PHP in one process); [railway.json](railway.json) pins Railway to build from it directly (Railway doesn't auto-detect a Dockerfile otherwise). Real secrets are injected as Railway environment variables at deploy time — `example.env` is copied to `.env` at build time only so Symfony's Dotenv component has a base file to boot from; it holds no real values. A traditional Apache host also works: the root-level `.htaccess` transparently forwards every request into `public/` (so a vhost pointed at the repo root instead of `public/` still works, URL stays clean) and sets the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers the in-browser Stockfish WASM engine needs for `SharedArrayBuffer`; without them the app just falls back to server-side analysis automatically.
+
+**Scheduled tasks:** recurring jobs run on [Symfony Scheduler](https://symfony.com/doc/6.4/scheduler.html), defined in `src/Scheduler/DefaultSchedule.php`:
+
+| Task | When | Command |
+| :--- | :--- | :--- |
+| Refresh cached VRChat avatars | Daily, 03:00 UTC | `app:vrchat:refresh-avatars` (skips avatars cached in the last 24h) |
+
+Schedules only fire while a worker is running. The Docker image starts one from `docker/start.sh` and restarts it hourly. On a host without long-running processes (e.g. shared hosting), start a short-lived worker from cron every minute:
+
+```bash
+* * * * * cd /path/to/VRchessIndo && php bin/console messenger:consume scheduler_default --time-limit=55 --env=prod
+```
+
+The schedule records its last run in `cache.app` and holds a lock while running, so restarted or overlapping workers don't skip or repeat a run. To add a job, add a `RecurringMessage` to `DefaultSchedule`; `php bin/console debug:scheduler` lists every job with its next run time.
 
 ---
 
@@ -359,7 +373,7 @@ All **Admin Only**.
 
 **3. Unlink** — body `{ "username" }`. Clears the link and cached avatar.
 
-**4. Refresh** — body `{ "force": false }`. Iterates every linked player and re-fetches their avatar if the cache is older than 24h (or always, with `force:true`). Returns `{ success, message, refreshed, skipped, failed }` counts.
+**4. Refresh** — body `{ "force": false }`. Iterates every linked player and re-fetches their avatar if the cache is older than 24h (or always, with `force:true`). Returns `{ success, message, refreshed, skipped, failed }` counts. The same refresh also runs daily on its own (see [Scheduled tasks](#-setup--environment-variables)).
 
 ---
 
