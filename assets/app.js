@@ -2237,7 +2237,11 @@
                     let currentMoveIdx = 0;       // 0 = starting position
                     let evalChartInstance = null;
                     let liveAnalysisAbort = null;
-                    let isLiveEngineEnabled = true;
+                    // Off by default so browsing a reviewed game shows Game Review's evals instead of
+                    // re-searching (and overwriting) them from depth 1. gotoMove switches it on for
+                    // positions without an eval unless the user set it by hand (liveEngineByUser).
+                    let isLiveEngineEnabled = false;
+                    let liveEngineByUser = false;
                     let currentAnalysisId = null; // Tracks the ID if analysis was loaded from a saved link
                     let lichessPausedUntil = 0;   // Lichess asks for a full minute of silence after a 429
 
@@ -2672,19 +2676,9 @@
                         }
                         if (btnToggleEngine) {
                             btnToggleEngine.addEventListener('click', () => {
-                                isLiveEngineEnabled = !isLiveEngineEnabled;
-                                if (isLiveEngineEnabled) {
-                                    btnToggleEngine.style.color = '#7fa650';
-                                    btnToggleEngine.style.borderColor = 'rgba(127,166,80,0.5)';
-                                    btnToggleEngine.innerHTML = `${ICONS.zap} Live: ON`;
-                                    triggerReanalysis();
-                                } else {
-                                    btnToggleEngine.style.color = '#aaa';
-                                    btnToggleEngine.style.borderColor = '#444';
-                                    btnToggleEngine.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg> Live: OFF';
-                                    if (liveAnalysisAbort) liveAnalysisAbort.abort();
-                                    updateEngineStreamBadge(false);
-                                }
+                                liveEngineByUser = !isLiveEngineEnabled;
+                                setLiveEngineEnabled(!isLiveEngineEnabled);
+                                triggerReanalysis();
                             });
                         }
                         if (btnEngineSource) {
@@ -2791,6 +2785,21 @@
                     // one's early feedback and the more thorough one's eventual depth, and a
                     // failure/unavailability in either one just means it contributes nothing for
                     // this position — never a sticky fallback that has to be "switched back".
+                    function setLiveEngineEnabled(on) {
+                        isLiveEngineEnabled = on;
+                        const btn = $('#btnToggleLiveEngine');
+                        if (btn) {
+                            btn.style.color = on ? '#7fa650' : '#aaa';
+                            btn.style.borderColor = on ? 'rgba(127,166,80,0.5)' : '#444';
+                            btn.innerHTML = on ? `${ICONS.zap} Live: ON`
+                                : '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg> Live: OFF';
+                        }
+                        if (!on) {
+                            if (liveAnalysisAbort) liveAnalysisAbort.abort();
+                            updateEngineStreamBadge(false);
+                        }
+                    }
+
                     async function analyzeLivePosition(idx, fen) {
                         if (!isLiveEngineEnabled) return;
                         if (liveAnalysisAbort) liveAnalysisAbort.abort();
@@ -2855,6 +2864,7 @@
                             analysisPositions[idx].multipv = data.multipv || [];
                             analysisPositions[idx].depth = data.depth;
                             analysisPositions[idx].nps = data.nps;
+                            analysisPositions[idx].live = true; // eval now comes from here, not Game Review
 
                             updateEngineStreamBadge(true, d, depth, data.nps || 0, [...sourcesShown].join('+'));
 
@@ -3544,6 +3554,11 @@
 
                         const total = fenList.length;
 
+                        // A live search still running on the previous position would only take CPU
+                        // from the review; gotoMove(0) afterwards decides whether it resumes.
+                        if (liveAnalysisAbort) liveAnalysisAbort.abort();
+                        updateEngineStreamBadge(false);
+
                         // Show progress
                         $('#analysisProgress').style.display = 'block';
                         $('#analysisCurrent').textContent = '0';
@@ -3640,6 +3655,7 @@
                                 bestmove: pos.bestmove,
                                 pv: pos.pv || [],
                                 multipv: pos.multipv || [],
+                                depth: pos.depth ?? null,
                             };
                         }
 
@@ -3923,6 +3939,7 @@
                                 : '#fff';
                             updateEvalBar(pos.score_cp);
                         }
+                        if ($('#posEvalDepth')) $('#posEvalDepth').textContent = pos.depth ?? '—';
                         $('#posEvalBest').textContent = pos.bestmove || '—';
                         const pvText = pos.pv && pos.pv.length ? pos.pv.join(' ') : '—';
                         $('#posEvalPv').textContent = pvText;
@@ -3933,6 +3950,11 @@
                         drawMoveAnnotationOnBoard();
                         renderGameStats();
                         updateOpeningUI(idx);
+
+                        // Game Review already scored this position → leave it be; no eval yet, or one
+                        // the live engine itself produced (a variation still being explored) → run it.
+                        const needsLive = pos.score === null || pos.score === undefined || !!pos.live;
+                        if (!liveEngineByUser && isLiveEngineEnabled !== needsLive) setLiveEngineEnabled(needsLive);
 
                         if (isLiveEngineEnabled && analysisPositions[idx]) {
                             analyzeLivePosition(idx, pos.fen);
