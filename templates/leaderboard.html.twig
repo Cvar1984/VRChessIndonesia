@@ -40,7 +40,7 @@
              Falls back to /api/engine/analyze (native Stockfish on the server) when the browser
              can't run the threaded WASM build — see assets/engine/vrchess-engine.js. -->
         <script type="module">
-            import { getSession } from '{{ asset('engine/vrchess-engine.js') }}';
+            import { getSession, getPool } from '{{ asset('engine/vrchess-engine.js') }}';
 
             window.VRChessEngine = {
                 async isAvailable() {
@@ -55,6 +55,14 @@
                     const session = await getSession();
                     if (!session) throw new Error('Client engine unavailable');
                     return session.analyze(fen, opts, onUpdate, signal);
+                },
+                // Game Review's engines: the single-thread pool, or the shared engine on devices
+                // too small for one. [] only when the client engine can't run at all.
+                async pool() {
+                    const pool = await getPool();
+                    if (pool.length) return pool;
+                    const session = await getSession();
+                    return session ? [session] : [];
                 },
             };
         </script>

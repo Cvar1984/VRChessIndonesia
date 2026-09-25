@@ -89,8 +89,13 @@ function freshResult() {
 // Serializes UCI conversations against one engine instance — mirrors src/Logic/Stockfish.php
 // line-by-line so the client and server produce the same result shape.
 class EngineSession {
-    constructor(sf) {
+    // onWedged runs after a search times out; the session itself is unusable from then on.
+    constructor(sf, { threads, hash, onWedged }) {
         this.sf = sf;
+        this.threads = threads;
+        this.hash = hash;
+        this.onWedged = onWedged;
+        this.wedged = false;
         this.waiters = [];
         this.search = null; // { onUpdate, resolve, result }
         // Serializes analyze() calls. UCI only allows one search at a time, and stopping a
@@ -128,11 +133,10 @@ class EngineSession {
     }
 
     async init() {
-        const threads = Math.max(1, Math.min(navigator.hardwareConcurrency || 2, 4));
         this.send('uci');
         await this.waitFor('uciok');
-        this.send(`setoption name Threads value ${threads}`);
-        this.send('setoption name Hash value 32');
+        this.send(`setoption name Threads value ${this.threads}`);
+        this.send(`setoption name Hash value ${this.hash}`);
         this.send('isready');
         await this.waitFor('readyok');
     }
@@ -202,7 +206,7 @@ class EngineSession {
         return result;
     }
 
-    async _runSearch(fen, { depth, movetime, multipv = 1, chess960 = false } = {}, onUpdate, signal) {
+    async _runSearch(fen, { depth, nodes, movetime, multipv = 1, chess960 = false } = {}, onUpdate, signal) {
         await this.ready;
         // By the time its turn comes up, a queued call may already be stale (the user
         // navigated past it again) — skip engaging the engine entirely for it.
@@ -236,15 +240,17 @@ class EngineSession {
             });
 
             if (movetime != null) this.send(`go movetime ${movetime}`);
+            else if (nodes != null) this.send(`go nodes ${nodes}`);
             else this.send(`go depth ${Math.max(1, Math.min(99, depth ?? 18))}`);
 
             // Safety net: if the worker ever wedges (crashed thread, browser throttling a
             // background tab, etc.) donePromise would hang forever and jam the queue for every
             // position after it. A generous timeout — scaled to how long the search was asked
             // to run — turns that into "this position falls back to the server" instead, and
-            // discards the whole engine/session so the *next* position gets a fresh worker
-            // rather than being queued behind a permanently-stuck one.
-            const budgetMs = movetime != null ? movetime : (depth ?? 18) * 1500;
+            // retires this session (see onWedged) so nothing else gets queued behind a
+            // permanently-stuck worker.
+            // A node budget is priced at a slow single thread's 100k nodes/s.
+            const budgetMs = movetime != null ? movetime : nodes != null ? nodes / 100 : (depth ?? 18) * 1500;
             const timeoutMs = Math.max(15000, budgetMs * 3);
             let timeoutHandle;
             const timeout = new Promise((_, reject) => {
@@ -255,7 +261,8 @@ class EngineSession {
             } catch (e) {
                 if (/timed out/.test(e.message)) {
                     this.search = null;
-                    resetSession(); // next getSession() call boots a fresh worker
+                    this.wedged = true;
+                    this.onWedged?.();
                 }
                 throw e;
             } finally {
@@ -272,9 +279,32 @@ let sessionPromise = null;
 // Resolves to an EngineSession, or null if the client engine can't run in this browser.
 export async function getSession() {
     if (!sessionPromise) {
-        sessionPromise = getEngine().then((sf) => (sf ? new EngineSession(sf) : null));
+        sessionPromise = getEngine().then((sf) => (sf ? new EngineSession(sf, {
+            threads: Math.max(1, Math.min(navigator.hardwareConcurrency || 2, 4)),
+            hash: 32,
+            onWedged: resetSession, // next getSession() call boots a fresh worker
+        }) : null));
     }
     return sessionPromise;
+}
+
+let poolPromise = null;
+
+// Game Review's engines: one single-threaded instance per spare core, each searching its own
+// positions to a fixed node budget — the shape lichess's fishnet uses (cores − 1 engines,
+// Threads 1). Benchmarked on an 8-core desktop, 8 × 1 thread at 2M nodes reviewed games ~8×
+// faster than one 4-thread engine at depth 22, with comparable accuracy against a much stronger
+// reference. Each instance reserves 64MB of WASM memory, so deviceMemory (GB, Chromium-only)
+// caps the count too. Resolves to [] when fewer than two would fit; callers then fall back to
+// the shared getSession() engine.
+export async function getPool() {
+    if (!poolPromise) {
+        const size = Math.floor(Math.min((navigator.hardwareConcurrency || 2) - 1, navigator.deviceMemory ?? 8, 8));
+        poolPromise = size < 2 ? Promise.resolve([]) : Promise.all(Array.from({ length: size }, bootEngine))
+            .then((engines) => engines.filter(Boolean).map((sf) => new EngineSession(sf, { threads: 1, hash: 16 })));
+    }
+    // An engine that wedged during an earlier review is dropped; the rest keep working.
+    return (await poolPromise).filter((s) => !s.wedged);
 }
 
 // Discards the cached engine/session so the next getSession() call boots a fresh worker.

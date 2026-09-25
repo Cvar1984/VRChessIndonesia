@@ -3368,8 +3368,14 @@
                         // Fixed standard depth, independent of #liveDepthSelect — that input
                         // controls only the live/interactive position eval (depth 99), which
                         // would make a full-game batch analysis impractically slow at this depth.
+                        // Server-side engine only: the browser pool searches to clientNodes instead.
                         const depth = 22;
                         const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
+                        // Per-position budget for the browser engine pool — lichess's fishnet
+                        // model (a fixed node count, not a depth). 2M nodes matched depth 22's
+                        // accuracy against native full-net Stockfish in benchmarks; MultiPV splits
+                        // the search between lines, so each extra line gets its own 2M.
+                        const clientNodes = 2_000_000 * multipv;
 
                         // Parse PGN client-side
                         function parsePGNToMoves(pgnText) {
@@ -3544,9 +3550,9 @@
                         $('#analysisTotal').textContent = total;
                         $('#analysisProgressBar').style.width = '0%';
 
-                        // Analyzes one FEN with the in-browser engine, shaped like a /api/engine/analyze position entry.
-                        async function analyzeFenClient(fen, moveIndex) {
-                            const result = await window.VRChessEngine.analyze(fen, { depth, multipv, chess960: isCurrentGame960 });
+                        // Analyzes one FEN on one pool engine, shaped like a /api/engine/analyze position entry.
+                        async function analyzeFenClient(session, fen, moveIndex) {
+                            const result = await session.analyze(fen, { nodes: clientNodes, multipv, chess960: isCurrentGame960 });
 
                             let scoreDisplay = null;
                             let scoreCp = null;
@@ -3613,8 +3619,9 @@
                         const MAX_SERVER_CHUNK = 20;
                         const MIN_SERVER_CHUNK = 2;
                         let serverChunkSize = 8; // starting guess; adapts after the first chunk lands
-                        let localAvgMs = null;
+                        let localAvgMs = null; // per position across the whole browser pool
                         let serverAvgMs = null;
+                        let clientPoolSize = 1;
                         let nextClaim = 0;
                         let completedCount = 0;
                         const serverBacklog = [];
@@ -3662,23 +3669,33 @@
                             return hits;
                         }
 
-                        async function clientBatchWorker() {
-                            if (enginePreference === 'server') return;
-                            if (!(await probeClientEngine())) return;
-                            while (!batchFailed) {
+                        // One per pool engine. Progress is only recorded on success: a failed
+                        // position is counted when the server finishes it, and counting it here as
+                        // well would let the "browser only" backstop see completedCount >= total and
+                        // quit with that position still unanalyzed.
+                        async function clientBatchWorker(session) {
+                            while (!batchFailed && !session.wedged) {
                                 const i = nextClaim < total ? nextClaim++ : null;
                                 if (i === null) return;
                                 const startedAt = performance.now();
                                 try {
-                                    const pos = await analyzeFenClient(fenList[i], i);
+                                    const pos = await analyzeFenClient(session, fenList[i], i);
                                     analysisPositions[i] = buildPosEntry(pos, i);
-                                    localAvgMs = emaUpdate(localAvgMs, performance.now() - startedAt);
+                                    localAvgMs = emaUpdate(localAvgMs, (performance.now() - startedAt) / clientPoolSize);
+                                    recordProgress();
                                 } catch (err) {
                                     console.warn(`Client engine failed on position ${i}, handing it to the server:`, err);
                                     serverBacklog.push(i);
                                 }
-                                recordProgress();
                             }
+                        }
+
+                        async function runClientPool(pool) {
+                            clientPoolSize = Math.max(1, pool.length);
+                            await Promise.all(pool.map(clientBatchWorker));
+                            // No engine, or every engine wedged before the queue ran dry: hand the
+                            // rest to the server rather than leave them unclaimed in "browser only" mode.
+                            while (nextClaim < total) serverBacklog.push(nextClaim++);
                         }
 
                         async function serverBatchWorker() {
@@ -3773,16 +3790,20 @@
                         // turns out to be unavailable.
                         await probeClientEngine();
 
+                        // Boot the browser engine pool while the Lichess lookups are in flight.
+                        const poolReady = enginePreference === 'server' ? Promise.resolve([]) : window.VRChessEngine.pool();
                         const lichessHits = await runLichessOpeningPhase();
+                        const pool = await poolReady;
 
                         if ($('#analysisEngineLabel')) {
-                            const engines = enginePreference === 'both' ? `${ICONS.monitor} Browser + ${ICONS.cloud} Server`
-                                : enginePreference === 'client' ? `${ICONS.monitor} Browser` : `${ICONS.cloud} Server`;
+                            const browser = `${ICONS.monitor} Browser ×${pool.length}`;
+                            const engines = enginePreference === 'both' ? `${browser} + ${ICONS.cloud} Server`
+                                : enginePreference === 'client' ? browser : `${ICONS.cloud} Server`;
                             const lichess = lichessHits ? `${ICONS.book} Lichess ×${lichessHits} + ` : '';
                             $('#analysisEngineLabel').innerHTML = `(${lichess}${engines})`;
                         }
 
-                        await Promise.all([clientBatchWorker(), serverBatchWorker()]);
+                        await Promise.all([runClientPool(pool), serverBatchWorker()]);
 
                         $('#btnStartPgnAnalysis').disabled = false;
                         $('#analysisProgress').style.display = 'none';
