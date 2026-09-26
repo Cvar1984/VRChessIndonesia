@@ -553,7 +553,7 @@
                 // computePlayerAnalysisStats lives inside setupEvents() (near
                 // getMoveAnnotationIcon/computeGameAccuracy/classificationLeniency, which it
                 // depends on) and is bridged onto window from there — see near
-                // window.gotoMainMove for the same pattern.
+                // window.gotoMoveLine for the same pattern.
 
                 function isMatchValid(m) {
                     return !('is_valid' in m) || m.is_valid === true;
@@ -2230,8 +2230,28 @@
                     let mainPositions = [];       // Backup of the main PGN line
                     let isCurrentGame960 = false; // Flag for 960 mode
                     let initialClock = null;      // Extracted from TimeControl
-                    let variantPositions = null;  // Backup of the active variant line
                     let analysisPositions = [];   // Currently active line [{fen, move_san, score, score_cp, bestmove, pv}]
+                    // Move tree, like lichess: each position's continuations — [0] the main line,
+                    // the rest variations. Kept beside the positions rather than on them, so a saved
+                    // analysis stays a flat main-line array.
+                    const moveTree = new WeakMap();
+                    let moveListLines = [];       // move-list button → the line ending at that move
+
+                    function childrenOf(node) {
+                        let kids = moveTree.get(node);
+                        if (!kids) moveTree.set(node, kids = []);
+                        return kids;
+                    }
+
+                    // Records the active line in the tree (a no-op once it's there).
+                    function recordActiveLine() {
+                        for (let i = 1; i < analysisPositions.length; i++) {
+                            const parent = analysisPositions[i - 1], node = analysisPositions[i];
+                            if (!parent || !node) return;
+                            const kids = childrenOf(parent);
+                            if (!kids.includes(node)) kids.push(node);
+                        }
+                    }
                     let analysisHeaders = {};
                     let analysisMovesSan = [];
                     let currentMoveIdx = 0;       // 0 = starting position
@@ -2436,17 +2456,18 @@
                             return;
                         }
 
-                        currentMoveIdx++;
-                        variantPositions = analysisPositions.slice(0, currentMoveIdx);
+                        // A move that already exists here (the game's own, or a variation played
+                        // earlier) is reused with its eval; anything else becomes another branch
+                        // rather than replacing the previous one.
+                        const parent = analysisPositions[currentMoveIdx];
                         const newFen = analysisChess.fen();
-                        variantPositions.push({
-                            fen: newFen, move_san: move.san,
-                            score: null, score_cp: null, score_type: null, bestmove: null, pv: []
-                        });
-
-                        analysisPositions = [...variantPositions];
-                        analyzeLivePosition(currentMoveIdx, newFen);
-                        gotoMove(currentMoveIdx);
+                        let child = childrenOf(parent).find((c) => c.fen === newFen);
+                        if (!child) {
+                            child = { fen: newFen, move_san: move.san, score: null, score_cp: null, score_type: null, bestmove: null, pv: [] };
+                            childrenOf(parent).push(child);
+                        }
+                        analysisPositions = [...analysisPositions.slice(0, currentMoveIdx + 1), child];
+                        gotoMove(currentMoveIdx + 1);
                     }
 
                     function initAnalysisTab() {
@@ -2540,7 +2561,6 @@
                             $('#analysisPgnImportCard').style.display = '';
                             analysisPositions = [];
                             mainPositions = [];
-                            variantPositions = null;
                             clearArrows();
                         });
 
@@ -2805,11 +2825,15 @@
                         if (liveAnalysisAbort) liveAnalysisAbort.abort();
                         liveAnalysisAbort = new AbortController();
                         const signal = liveAnalysisAbort.signal;
+                        // Held by reference: the active line is rebuilt on navigation, so by the
+                        // time a late update lands, index idx may belong to another position.
+                        const node = analysisPositions[idx];
+                        const isCurrent = () => analysisPositions[currentMoveIdx] === node;
 
                         const depth = parseInt($('#liveDepthSelect')?.value) || 99;
                         const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
 
-                        if (currentMoveIdx === idx && (!analysisPositions[idx] || analysisPositions[idx].score === null)) {
+                        if (isCurrent() && (!node || node.score === null)) {
                             $('#posEvalBest').textContent = "Menghitung...";
                             $('#posEvalPv').textContent = "—";
                             clearArrows();
@@ -2835,7 +2859,7 @@
                         // displayed. Ties go to the browser engine — it's the prioritized one, so
                         // a same-depth server update never displaces what it already showed.
                         function applyLiveInfo(data, source) {
-                            if (!analysisPositions[idx]) return;
+                            if (!node) return;
                             const d = data.depth || 0;
                             if (d < bestDepthSeen) return;
                             if (d === bestDepthSeen && source === 'server' && sourcesShown.has('client')) return;
@@ -2856,19 +2880,19 @@
                                 scoreDisplay = "M" + Math.abs(data.score);
                             }
 
-                            analysisPositions[idx].score = scoreDisplay;
-                            analysisPositions[idx].score_cp = scoreCp;
-                            analysisPositions[idx].score_type = data.score_type;
-                            analysisPositions[idx].bestmove = data.bestmove;
-                            analysisPositions[idx].pv = data.pv || [];
-                            analysisPositions[idx].multipv = data.multipv || [];
-                            analysisPositions[idx].depth = data.depth;
-                            analysisPositions[idx].nps = data.nps;
-                            analysisPositions[idx].live = true; // eval now comes from here, not Game Review
+                            node.score = scoreDisplay;
+                            node.score_cp = scoreCp;
+                            node.score_type = data.score_type;
+                            node.bestmove = data.bestmove;
+                            node.pv = data.pv || [];
+                            node.multipv = data.multipv || [];
+                            node.depth = data.depth;
+                            node.nps = data.nps;
+                            node.live = true; // eval now comes from here, not Game Review
 
                             updateEngineStreamBadge(true, d, depth, data.nps || 0, [...sourcesShown].join('+'));
 
-                            if (currentMoveIdx === idx) {
+                            if (isCurrent()) {
                                 if (scoreDisplay !== null && scoreDisplay !== undefined) {
                                     const isNum = typeof scoreDisplay === 'number';
                                     let display = isNum ? (scoreDisplay >= 0 ? `+${scoreDisplay.toFixed(2)}` : scoreDisplay.toFixed(2)) : String(scoreDisplay);
@@ -2929,7 +2953,7 @@
                         }
 
                         const finish = () => {
-                            if (currentMoveIdx === idx) {
+                            if (isCurrent()) {
                                 updateEngineStreamBadge(false);
                                 renderMoveList();
                                 renderEvalChart();
@@ -2960,7 +2984,7 @@
                             // "computing" badge for this.
                             if (cloudTask) {
                                 cloudTask.then((ok) => {
-                                    if (ok && currentMoveIdx === idx) { renderMoveList(); renderEvalChart(); }
+                                    if (ok && isCurrent()) { renderMoveList(); renderEvalChart(); }
                                 });
                             }
                             return;
@@ -3171,7 +3195,7 @@
                     // evaluations. Matches with no saved analysis, or one pointing at an external
                     // URL (chessigma, etc.), are skipped rather than guessed at; gamesAnalyzed
                     // tells the caller how many of the player's games this is actually based on.
-                    // Bridged onto window (see window.gotoMainMove for the same pattern) since
+                    // Bridged onto window (see window.gotoMoveLine for the same pattern) since
                     // openPlayerStats/refreshPlayerAnalysisStats live outside setupEvents().
                     async function computePlayerAnalysisStats(username, history) {
                         const candidates = history
@@ -3869,6 +3893,14 @@
                         if (analysisPositions.length === 0) return;
                         idx = Math.max(0, Math.min(idx, analysisPositions.length - 1));
 
+                        // The active line is always "path to here, then the main line onward", so
+                        // Next follows the main line and Back out of a variation returns to it.
+                        recordActiveLine();
+                        analysisPositions = analysisPositions.slice(0, idx + 1);
+                        for (let kids; (kids = childrenOf(analysisPositions[analysisPositions.length - 1])).length;) {
+                            analysisPositions.push(kids[0]);
+                        }
+
                         currentMoveIdx = idx;
                         const pos = analysisPositions[idx];
 
@@ -4104,34 +4136,15 @@
                     function renderMoveList(liveUpdate = false) {
                         const container = $('#moveListContainer');
                         const savedScrollTop = container.scrollTop;
+                        const current = analysisPositions[currentMoveIdx];
 
                         // ── LIVE PATCH: avoid full rebuild during streaming ──
                         if (liveUpdate && container.querySelector('.lichess-move-list')) {
-                            // 1. Update active class on move buttons
                             container.querySelectorAll('.analysis-move-btn').forEach(btn => {
-                                const mainIdx = btn.dataset.mainIdx !== undefined
-                                    ? parseInt(btn.dataset.mainIdx, 10) : null;
-                                const varIdx = btn.dataset.varIdx !== undefined
-                                    ? parseInt(btn.dataset.varIdx, 10) : null;
-                                const idx = mainIdx !== null ? mainIdx : varIdx;
-                                if (idx === null) return;
-
-                                const isActive = (idx === currentMoveIdx);
-                                btn.classList.toggle('active', isActive);
-                            });
-
-                            // 2. Patch eval cells in-place
-                            container.querySelectorAll('.analysis-move-btn').forEach(btn => {
-                                const mainIdx = btn.dataset.mainIdx !== undefined
-                                    ? parseInt(btn.dataset.mainIdx, 10) : null;
-                                const varIdx = btn.dataset.varIdx !== undefined
-                                    ? parseInt(btn.dataset.varIdx, 10) : null;
-                                const idx = mainIdx !== null ? mainIdx : varIdx;
-                                if (idx === null) return;
-
-                                const srcArr = mainIdx !== null ? mainPositions : analysisPositions;
-                                const pos = srcArr[idx];
-                                if (!pos) return;
+                                const line = moveListLines[btn.dataset.k];
+                                if (!line) return;
+                                const pos = line[line.length - 1];
+                                btn.classList.toggle('active', pos === current);
 
                                 const { text, color } = formatEvalCell(pos);
                                 let evalSpan = btn.querySelector('.eval-score');
@@ -4143,98 +4156,83 @@
                                 if (evalSpan.textContent !== text) evalSpan.textContent = text;
                                 if (evalSpan.style.color !== color) evalSpan.style.color = color;
                             });
-
                             return;  // skip full rebuild
                         }
 
                         // ── FULL REBUILD ──
+                        recordActiveLine();
+                        moveListLines = [];
                         let html = `<div class="lichess-move-list" style="display:flex; flex-wrap:wrap; align-content:flex-start; padding:8px; font-size:0.9rem; color:#b3b3b2;">`;
 
-                        // Find divergence point
-                        let splitIdx = mainPositions.length;
-                        for (let i = 0; i < analysisPositions.length; i++) {
-                            if (!mainPositions[i] || mainPositions[i].fen !== analysisPositions[i].fen) {
-                                splitIdx = i;
-                                break;
-                            }
-                        }
-
-                        // Helper to render a single move button
-                        const renderMoveBtn = (idx, pos, isMain) => {
-                            if (!pos) return '';
-                            const isActive = (currentMoveIdx === idx && analysisPositions[idx] && analysisPositions[idx].fen === pos.fen) ? 'active' : '';
+                        // One move button; `line` runs from the start position to this move.
+                        const renderMoveBtn = (line, isMain) => {
+                            const pos = line[line.length - 1];
+                            const k = moveListLines.push(line) - 1;
+                            const isActive = pos === current ? 'active' : '';
                             const varClass = isMain ? '' : 'variant-move';
-                            const dataAttr = isMain ? `data-main-idx="${idx}"` : `data-var-idx="${idx}"`;
-                            const onClick = isMain ? `window.gotoMainMove(${idx})` : `window.gotoVariantMove(${idx})`;
 
                             const { text, color } = formatEvalCell(pos);
                             const evalHtml = `<span class="eval-score" style="font-size:0.65rem; margin-left:6px; color:${color}; font-family:var(--font-mono);">${text}</span>`;
 
                             const clockHtml = pos.clock ? `<span class="move-clock" style="font-size:0.6rem; color:#aaa; margin-left:4px; font-weight:normal; font-family:var(--font-mono);">(${pos.clock})</span>` : '';
 
-                            return `<button class="analysis-move-btn ${varClass} ${isActive}" ${dataAttr} 
+                            return `<button class="analysis-move-btn ${varClass} ${isActive}" data-k="${k}"
                                 style="background:none; border:none; color:#ddd; cursor:pointer; padding:4px 6px; border-radius:3px; display:inline-flex; align-items:center;"
-                                onclick="${onClick}">${pos.move_san || ''}${clockHtml}${evalHtml}</button>`;
+                                onclick="window.gotoMoveLine(${k})">${pos.move_san || ''}${clockHtml}${evalHtml}</button>`;
+                        };
+                        const moveNum = (text) => `<span style="color:#ff9e00; margin:0 2px 0 4px; font-size:0.85rem;">${text}</span>`;
+
+                        // A variation from `line`'s last move onward; its own branches nest in parentheses.
+                        const renderVariation = (line) => {
+                            let out = '', needNum = true;
+                            for (;;) {
+                                const pos = line[line.length - 1], ply = line.length - 1;
+                                if (ply % 2 === 1) out += moveNum(`${Math.ceil(ply / 2)}.`);
+                                else if (needNum) out += moveNum(`${ply / 2}...`);
+                                out += renderMoveBtn(line, false);
+                                needNum = false;
+                                const siblings = childrenOf(line[line.length - 2]);
+                                if (siblings[0] === pos && siblings.length > 1) {
+                                    for (const alt of siblings.slice(1)) {
+                                        out += `<span style="color:#777; display:inline-flex; flex-wrap:wrap; align-items:center;">(${renderVariation([...line.slice(0, -1), alt])})</span>`;
+                                    }
+                                    needNum = true;
+                                }
+                                const next = childrenOf(pos)[0];
+                                if (!next) return out;
+                                line = [...line, next];
+                            }
                         };
 
-                        // 1. Render Main Line
-                        for (let i = 1; i < mainPositions.length; i += 2) {
-                            const moveNum = Math.ceil(i / 2);
-                            const white = mainPositions[i];
-                            const black = mainPositions[i + 1];
-
-                            html += `<div style="width:100%; display:flex; align-items:center; margin-bottom:2px;">`;
-                            html += `<div style="width:35px; color:#666; text-align:right; margin-right:8px; font-size:0.85rem;">${moveNum}.</div>`;
-                            html += `<div style="flex:1; display:flex;">`;
-                            html += renderMoveBtn(i, white, true);
-                            if (black) {
-                                html += `<div style="width:12px;"></div>`; // spacer
-                                html += renderMoveBtn(i + 1, black, true);
+                        // Main line in numbered rows; a row breaks after any move that has
+                        // variations, which are listed right below it.
+                        let line = [analysisPositions[0]], row = null;
+                        const closeRow = () => { if (row !== null) { html += row + `</div></div>`; row = null; } };
+                        for (let pos = childrenOf(line[0])[0]; pos; pos = childrenOf(pos)[0]) {
+                            const parent = line[line.length - 1];
+                            line = [...line, pos];
+                            const ply = line.length - 1;
+                            if (ply % 2 === 1 || row === null) {
+                                closeRow();
+                                row = `<div style="width:100%; display:flex; align-items:center; margin-bottom:2px;">`
+                                    + `<div style="width:35px; color:#666; text-align:right; margin-right:8px; font-size:0.85rem;">${Math.ceil(ply / 2)}${ply % 2 === 1 ? '.' : '...'}</div>`
+                                    + `<div style="flex:1; display:flex;">`;
+                            } else {
+                                row += `<div style="width:12px;"></div>`; // spacer
                             }
-                            html += `</div></div>`;
-                        }
+                            row += renderMoveBtn(line, true);
 
-                        // 2. Render Variant (if deviated)
-                        if (splitIdx < analysisPositions.length) {
-                            html += `<div style="width:100%; background:rgba(255,170,0,0.1); padding:4px 8px; margin:8px 0; border-left:3px solid orange; color:orange; font-size:0.75rem;"><strong>Variant Aktif</strong></div>`;
-                            html += `<div style="width:100%; display:flex; flex-wrap:wrap; gap:4px; padding-left:8px;">`;
-
-                            // Variant moves inline
-                            for (let i = splitIdx; i < analysisPositions.length;) {
-                                let moveNumStr = Math.ceil(i / 2) + '.';
-                                let white = null, black = null;
-                                let wIdx = null, bIdx = null;
-
-                                if (i % 2 !== 0) { // White move
-                                    white = analysisPositions[i];
-                                    wIdx = i;
-                                    i++;
-                                    if (i < analysisPositions.length) {
-                                        black = analysisPositions[i];
-                                        bIdx = i;
-                                        i++;
-                                    }
-                                } else { // Black move
-                                    moveNumStr += '..';
-                                    black = analysisPositions[i];
-                                    bIdx = i;
-                                    i++;
+                            const alternatives = childrenOf(parent).slice(1);
+                            if (alternatives.length) {
+                                closeRow();
+                                html += `<div style="width:100%; background:rgba(255,170,0,0.08); border-left:3px solid #ff9e00; padding:4px 8px; margin:4px 0 6px;">`;
+                                for (const alt of alternatives) {
+                                    html += `<div style="display:flex; flex-wrap:wrap; align-items:center; gap:2px;">${renderVariation([...line.slice(0, -1), alt])}</div>`;
                                 }
-
-                                if (white || moveNumStr.includes('..')) {
-                                    html += `<span style="color:#ff9e00; margin-right:4px; display:inline-flex; align-items:center; font-size:0.85rem;">${moveNumStr}</span>`;
-                                }
-
-                                if (white) {
-                                    html += renderMoveBtn(wIdx, white, false);
-                                }
-                                if (black) {
-                                    if (white) html += `<span style="width:4px;"></span>`;
-                                    html += renderMoveBtn(bIdx, black, false);
-                                }
+                                html += `</div>`;
                             }
-                            html += `</div>`;
                         }
+                        closeRow();
 
                         html += `</div>`;
                         container.innerHTML = html;
@@ -4349,14 +4347,11 @@
                     }
 
                     // Global function for inline onclick in move list
-                    window.gotoMainMove = (idx) => {
-                        if (mainPositions.length > 0) analysisPositions = [...mainPositions];
-                        gotoMove(idx);
-                    };
-
-                    window.gotoVariantMove = (idx) => {
-                        if (variantPositions) analysisPositions = [...variantPositions];
-                        gotoMove(idx);
+                    window.gotoMoveLine = (k) => {
+                        const line = moveListLines[k];
+                        if (!line) return;
+                        analysisPositions = [...line];
+                        gotoMove(line.length - 1);
                     };
 
                     initAnalysisTab();
