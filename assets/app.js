@@ -757,6 +757,56 @@
                     });
                 }
 
+                // Renders a long card list one page at a time, appending the next page when the
+                // sentinel below it scrolls into view — the match and analysis histories both grow
+                // without bound, and building every card up front costs a visible hitch on open.
+                // Safe to call on every re-render (search, filter, admin toggle): the container is
+                // cleared and the previous observer disconnected first.
+                const PAGE_SIZE = 20;
+                const pagedObservers = new WeakMap();
+
+                function renderPaged(container, items, buildHtml) {
+                    pagedObservers.get(container)?.disconnect();
+                    pagedObservers.delete(container);
+
+                    container.innerHTML = '';
+                    const sentinel = document.createElement('div');
+                    sentinel.className = 'paged-sentinel';
+                    sentinel.textContent = 'Memuat…';
+                    container.appendChild(sentinel);
+
+                    let shown = 0;
+                    const appendPage = () => {
+                        sentinel.insertAdjacentHTML('beforebegin', items.slice(shown, shown + PAGE_SIZE).map(buildHtml).join(''));
+                        shown = Math.min(shown + PAGE_SIZE, items.length);
+                        if (shown >= items.length) {
+                            observer.disconnect();
+                            pagedObservers.delete(container);
+                            sentinel.remove();
+                        }
+                    };
+
+                    const observer = new IntersectionObserver((entries) => {
+                        // Only act on the sentinel actually coming into view — the callback also
+                        // fires on a non-intersecting first observation, and for a list sitting in
+                        // a hidden tab, where a rect of all zeros would look like "still on screen"
+                        // below and run the whole list out in one go.
+                        if (!entries[0].isIntersecting) return;
+                        // A page shorter than the viewport leaves the sentinel visible, and the
+                        // observer won't fire again without a change in intersection — so keep
+                        // appending until it's pushed off screen or the items run out.
+                        do {
+                            appendPage();
+                        } while (shown < items.length && sentinel.getBoundingClientRect().top < window.innerHeight);
+                    }, { rootMargin: '400px' });
+
+                    appendPage();
+                    if (shown < items.length) {
+                        pagedObservers.set(container, observer);
+                        observer.observe(sentinel);
+                    }
+                }
+
                 function renderMatches() {
                     const rawQuery = $('#matchSearch') ? $('#matchSearch').value.toLowerCase().trim() : '';
 
@@ -835,8 +885,7 @@
                     // headers are already in allAnalyses, so no extra request is needed.
                     const analysesById = new Map(allAnalyses.map(an => [an.id, an]));
 
-                    let html = '';
-                    sorted.forEach(m => {
+                    renderPaged(container, sorted, (m) => {
                         const pgnHeaders = analysesById.get(extractInternalAnalysisId(m.analysis_url))?.headers;
                         const whiteName = playerIdMap[m.white_id] || `Pemain #${m.white_id}`;
                         const blackName = playerIdMap[m.black_id] || `Pemain #${m.black_id}`;
@@ -871,7 +920,7 @@
                             adminButtons += `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteMatch(${m.id})" title="Hapus Match">${ICONS.trash} Hapus</button>`;
                         }
 
-                        html += `
+                        return `
                         <div class="history-card${!isValid ? ' history-card--invalid' : ''}">
                             <div class="history-card__header">
                                 <span>${ICONS.clock} ${escHtml(m.date || '—')}</span>
@@ -893,8 +942,6 @@
                             ${isAdminState ? `<div class="history-card__footer">${adminButtons}</div>` : ''}
                         </div>`;
                     });
-
-                    container.innerHTML = html;
                 }
 
                 // ==========================================
@@ -1075,8 +1122,7 @@
                     }
 
                     // ── Card builder ────────────────────────────────────────────────
-                    let html = '';
-                    analyses.forEach(an => {
+                    renderPaged(container, analyses, (an) => {
                         const shareUrl = window.location.origin + window.location.pathname + '?analysis=' + an.id;
 
                         // Admin delete button — always re-evaluated so it tracks login/logout instantly
@@ -1150,7 +1196,7 @@
                             cardBody = `<div style="font-size:0.82rem;color:var(--text-secondary);font-style:italic;padding:4px 0;">Informasi PGN tidak tersedia — Free Mode</div>`;
                         }
 
-                        html += `
+                        return `
                         <div style="display:flex;flex-direction:column;gap:0;border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.18);">
                             <!-- Card header: date + link -->
                             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.75rem;color:var(--text-secondary);">
@@ -1168,9 +1214,6 @@
                             </div>
                         </div>`;
                     });
-
-                    container.innerHTML = html;
-
                 }
 
                 window.appDeleteAnalysis = async (id) => {

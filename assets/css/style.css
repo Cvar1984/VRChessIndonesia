@@ -529,6 +529,16 @@ svg.icon {
     font-weight: 600;
 }
 
+/* Marks the end of a partly-rendered list (renderPaged() in app.js); scrolling it
+   into view appends the next page, and it removes itself on the last one. */
+.paged-sentinel {
+    padding: 14px;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
 /* ── Match History ──
    Same card as Riwayat Analisis. Both tabs share the PGN badge chips
    (pgnChipsHtml() in app.js); the rest of the analysis card is still styled
