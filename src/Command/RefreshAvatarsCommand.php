@@ -29,11 +29,15 @@ class RefreshAvatarsCommand extends Command
         }
 
         $output->writeln(sprintf(
-            'VRChat avatars: %d refreshed, %d skipped (still fresh), %d failed',
+            'VRChat avatars: %d refreshed, %d skipped (still fresh), %d failed, %d renamed to their VRChat name',
             $result['refreshed'],
             $result['skipped'],
             $result['failed'],
+            $result['renamed'],
         ));
+        foreach ($result['conflicts'] as $conflict) {
+            $output->writeln("<comment>Not renamed, name already taken by another player: {$conflict}</comment>");
+        }
 
         return Command::SUCCESS;
     }

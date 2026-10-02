@@ -328,6 +328,13 @@ class MatchManager
      * Only supports the fields the app actually edits (rating, username) —
      * the legacy version's generic array_key_exists loop would also let a
      * caller silently overwrite id, which is dangerous and never exercised.
+     *
+     * Admin edits are for debugging, so a VRChat-linked player can be renamed
+     * too; the next VRChat sync puts their real name back (both renames land
+     * in username_history).
+     *
+     * @throws \DomainException when the new name belongs to another player,
+     *   which the unique index on `username` would otherwise reject as a 500.
      */
     public function editPlayer(string $username, array $newData): bool
     {
@@ -336,11 +343,16 @@ class MatchManager
             return false;
         }
 
+        $newUsername = array_key_exists('username', $newData) ? trim((string) $newData['username']) : null;
+        if ($newUsername !== null && $newUsername !== '' && $newUsername !== $player->getUsername()) {
+            if ($this->playerRepository->isUsernameTaken($newUsername)) {
+                throw new \DomainException("Nama '{$newUsername}' sudah dipakai pemain lain.");
+            }
+            $player->rename($newUsername, 'admin');
+        }
+
         if (array_key_exists('rating', $newData)) {
             $player->setRating((int) $newData['rating']);
-        }
-        if (array_key_exists('username', $newData)) {
-            $player->setUsername(trim((string) $newData['username']));
         }
 
         $this->dm->flush();

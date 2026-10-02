@@ -1535,11 +1535,13 @@
                         });
 
                         if (res.success) {
-                            toast(`Ditautkan ke '${displayName}'.`, 'success');
-                            $('#vrchatSearchResults').innerHTML = '';
+                            toast(res.message || `Ditautkan ke '${displayName}'.`, 'success');
                             await fetchPlayers(true);
-                            const player = playersCache.find(p => p.username === username) || null;
-                            renderVrchatLinkStatus(player);
+                            await fetchMatches(true);
+                            // Linking renames the player to their VRChat name: reopen the
+                            // modal under it, or Save would PATCH the old name back.
+                            const player = playersCache.find(p => p.username === (res.username || username));
+                            if (player) window.appOpenEditPlayer(player.username, player.rating);
                         } else {
                             toast(res.error || 'Gagal menautkan akun VRChat', 'error');
                         }
@@ -2386,7 +2388,10 @@
                         if (!username) return null;
                         const uname = String(username).trim().toLowerCase();
                         if (!uname) return null;
-                        const found = playersCache.find(p => (p.username || '').trim().toLowerCase() === uname);
+                        // A game played before a player's VRChat rename carries the old name in its PGN.
+                        const names = p => [p.username, ...(p.previous_usernames || [])].map(n => (n || '').trim().toLowerCase());
+                        const found = playersCache.find(p => (p.username || '').trim().toLowerCase() === uname)
+                            || playersCache.find(p => names(p).includes(uname));
                         return found && typeof found.rating === 'number' ? found.rating : null;
                     }
 

@@ -311,7 +311,8 @@ Player object (from #1/#2 — sorted by `rating` descending, VRChat fields merge
   "losses": 3,
   "vrchat_user_id": "usr_88e4e686-3678-4516-97c3-c58550f0f1fc",
   "vrchat_display_name": "James-Music 杰姆斯",
-  "avatar_url": "https://api.vrchat.cloud/api/1/image/file_.../2/256"
+  "avatar_url": "https://api.vrchat.cloud/api/1/image/file_.../2/256",
+  "previous_usernames": []
 }
 ```
 
@@ -334,7 +335,7 @@ Player object (from #1/#2 — sorted by `rating` descending, VRChat fields merge
 }
 ```
 
-**4. Edit** — body `{ "rating": 550, "username": "NewName" }` (either/both fields).
+**4. Edit** — body `{ "rating": 550, "username": "NewName" }` (either/both fields). Returns `409` for a rename to a name another player already has. Every rename is kept in the player's `username_history`. Admin edits are meant for debugging: renaming a VRChat-linked player works, but the next VRChat sync puts their VRChat name back (see [VRChat Profile Linking](#-vrchat-profile-linking-admin)).
 **5. Delete** — removes the player record. Does **not** delete their match history (matches keep referencing the now-orphaned player ID, shown as `DeletedPlayer#<id>`).
 
 ---
@@ -402,11 +403,13 @@ All **Admin Only**.
 
 **1. Search** — fuzzy match on VRChat display name (VRChat's exact-username lookup is deprecated/admin-only on their side, so this is the only viable path). Returns `{ success, results: [{ id, displayName, thumbnail }] }` (up to 10).
 
-**2. Link** — body `{ "username": "<leaderboard username>", "vrchat_user_id": "usr_..." }`. Fetches the VRChat user, stores `vrchat_user_id`/`vrchat_display_name`/`avatar_url` on the player, and returns the resolved `vrchat` object.
+**2. Link** — body `{ "username": "<leaderboard username>", "vrchat_user_id": "usr_..." }`. Fetches the VRChat user, stores `vrchat_user_id`/`vrchat_display_name`/`avatar_url` on the player, renames the player to their VRChat display name, and returns the resolved `vrchat` object plus the resulting `username`.
+
+**Usernames follow VRChat.** A linked player's username is their VRChat display name. Linking renames them right away, and the refresh (#4) renames them again whenever their VRChat name changes. Each old name goes into the player's `username_history` (`[{ username, changed_at, source }]`, where `source` is `vrchat` or `admin`) and is listed in `previous_usernames`. Old names keep working: match submissions, stats and edits sent under a previous name reach the same player instead of creating a new one. If another player already has the VRChat name, the rename is skipped and reported, since that's usually an unlinked duplicate of the same person for an admin to sort out.
 
 **3. Unlink** — body `{ "username" }`. Clears the link and cached avatar.
 
-**4. Refresh** — body `{ "force": false }`. Iterates every linked player and re-fetches their avatar if the cache is older than 24h (or always, with `force:true`). Returns `{ success, message, refreshed, skipped, failed }` counts. The same refresh also runs daily on its own (see [Scheduled tasks](#-setup--environment-variables)).
+**4. Refresh** — body `{ "force": false }`. Iterates every linked player and re-fetches their avatar and display name if the cache is older than 24h (or always, with `force:true`), renaming them to match. Returns `{ success, message, refreshed, skipped, failed, renamed, conflicts }`, where `conflicts` lists renames skipped because the name was taken. The same refresh also runs daily on its own (see [Scheduled tasks](#-setup--environment-variables)).
 
 ---
 
@@ -659,6 +662,7 @@ Shown as an icon on the move that was just played (Analysis tab board overlay), 
 | `400` | Bad Request | Invalid/missing input parameters. |
 | `401` | Unauthorized | Missing or invalid API Token / Admin Authentication. |
 | `404` | Not Found | Player, Match, Token, Admin, Analysis, Post, Photo, or Avatar not found. |
+| `409` | Conflict | Renaming a player to a username another player already has. |
 | `500` | Internal Server Error | Unhandled server-side exception. |
 | `502` | Bad Gateway | VRChat API unreachable, rejected the request, isn't configured, or (gallery/newsletter uploads specifically) the connected account lacks VRC+. |
 | `204` | No Content | CORS preflight (`OPTIONS`, any route). |

@@ -40,9 +40,21 @@ class PlayerRepository extends ServiceDocumentRepository
         return $this->findOneBy(['id' => $id]);
     }
 
+    /**
+     * Falls back to earlier usernames, so a bot or admin still using a player's old
+     * name (before a VRChat rename) reaches the same record instead of, say, a match
+     * submission creating a duplicate player. A current username always wins.
+     */
     public function findOneByUsername(string $username): ?Player
     {
-        return $this->findOneBy(['username' => $username]);
+        return $this->findOneBy(['username' => $username])
+            ?? $this->findOneBy(['username_history.username' => $username]);
+    }
+
+    /** Current usernames only — what the unique index on `username` cares about. */
+    public function isUsernameTaken(string $username): bool
+    {
+        return $this->findOneBy(['username' => $username]) !== null;
     }
 
     /**

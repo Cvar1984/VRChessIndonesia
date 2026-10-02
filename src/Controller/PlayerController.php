@@ -97,7 +97,11 @@ class PlayerController extends AbstractApiController
             return $this->json(['success' => false, 'error' => 'Tidak ada data untuk diperbarui'], 400);
         }
 
-        $updated = $this->manager->editPlayer($username, $newData);
+        try {
+            $updated = $this->manager->editPlayer($username, $newData);
+        } catch (\DomainException $e) {
+            return $this->json(['success' => false, 'error' => $e->getMessage()], 409);
+        }
 
         return $this->json([
             'success' => $updated,

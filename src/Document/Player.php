@@ -60,6 +60,14 @@ class Player
     #[ODM\Field(type: 'string', nullable: true, name: 'avatar_cached_at')]
     private ?string $avatarCachedAt = null;
 
+    /**
+     * Every earlier username, oldest first: [{username, changed_at, source}], where
+     * source is 'vrchat' (followed a VRChat display-name change) or 'admin'. Old names
+     * keep resolving to this player — see PlayerRepository::findOneByUsername().
+     */
+    #[ODM\Field(type: 'raw', name: 'username_history')]
+    private array $usernameHistory = [];
+
     public const int INITIAL_RATING = 400;
 
     public function __construct(int $id, string $username)
@@ -125,6 +133,14 @@ class Player
     }
 
     /**
+     * @return string[] earlier usernames, oldest first
+     */
+    public function getPreviousUsernames(): array
+    {
+        return array_column($this->usernameHistory, 'username');
+    }
+
+    /**
      * Matches the legacy MatchManager::getPlayers() + mergeVrchatMeta() shape
      * (avatar_cached_at was never exposed over the API either).
      */
@@ -141,12 +157,26 @@ class Player
             'vrchat_user_id' => $this->vrchatUserId,
             'vrchat_display_name' => $this->vrchatDisplayName,
             'avatar_url' => $this->avatarUrl,
+            'previous_usernames' => $this->getPreviousUsernames(),
         ];
     }
 
-    public function setUsername(string $username): void
+    /**
+     * The only way a username changes, so every change lands in username_history.
+     * Returns false (recording nothing) when the name is already $newUsername.
+     *
+     * @param 'vrchat'|'admin' $source
+     */
+    public function rename(string $newUsername, string $source): bool
     {
-        $this->username = $username;
+        if ($newUsername === $this->username) {
+            return false;
+        }
+
+        $this->usernameHistory[] = ['username' => $this->username, 'changed_at' => date('Y-m-d H:i:s'), 'source' => $source];
+        $this->username = $newUsername;
+
+        return true;
     }
 
     /**
@@ -172,12 +202,13 @@ class Player
     }
 
     /**
-     * Matches legacy MongoDBDatabaseManager::updatePlayerAvatarCache() — the
-     * periodic refresh, which updates the cached picture without touching
-     * the VRChat link itself.
+     * The periodic refresh: updates the cached picture and display name without
+     * touching the VRChat link itself. A null display name (the VRChat account
+     * couldn't be fetched) keeps the last known one.
      */
-    public function updateAvatarCache(?string $avatarUrl): void
+    public function updateVrchatProfile(?string $displayName, ?string $avatarUrl): void
     {
+        $this->vrchatDisplayName = $displayName ?? $this->vrchatDisplayName;
         $this->avatarUrl = $avatarUrl;
         $this->avatarCachedAt = date('Y-m-d H:i:s');
     }

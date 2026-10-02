@@ -93,13 +93,70 @@ class VRChatControllerTest extends ApiTestCase
         $body = $this->jsonBody();
         self::assertTrue($body['success']);
         self::assertSame('usr_abc', $body['vrchat']['id']);
+        self::assertSame('Alice VR', $body['username']);
 
+        // Linking makes the VRChat display name the player's username, keeping the old one on record.
         $this->client->request('GET', '/api/players');
         $players = $this->jsonBody()['players'];
-        $alice = current(array_filter($players, static fn ($p) => $p['username'] === 'Alice'));
+        $alice = current(array_filter($players, static fn ($p) => $p['username'] === 'Alice VR'));
+        self::assertNotFalse($alice, 'Player was renamed to the VRChat display name');
+        self::assertSame(['Alice'], $alice['previous_usernames']);
         self::assertSame('usr_abc', $alice['vrchat_user_id']);
         self::assertSame('Alice VR', $alice['vrchat_display_name']);
         self::assertSame('https://example.com/icon.png', $alice['avatar_url']);
+    }
+
+    public function testLinkKeepsNameWhenVrchatNameBelongsToAnotherPlayer(): void
+    {
+        $this->dm->persist(new Player(1, 'Alice'));
+        $this->dm->persist(new Player(2, 'Alice VR')); // an unlinked duplicate of the same person
+        $this->dm->flush();
+        $this->dm->clear();
+
+        $this->mockHttpClient([
+            $this->loginResponse(),
+            new MockResponse(json_encode(['id' => 'usr_abc', 'displayName' => 'Alice VR', 'userIcon' => 'https://example.com/icon.png']), ['http_code' => 200]),
+        ]);
+
+        $this->loginAsAdmin();
+        $this->jsonRequest('POST', '/api/admin/vrchat/link', ['username' => 'Alice', 'vrchat_user_id' => 'usr_abc']);
+
+        self::assertResponseIsSuccessful();
+        $body = $this->jsonBody();
+        self::assertSame('Alice', $body['username']);
+        self::assertStringContainsString('sudah dipakai pemain lain', $body['message']);
+
+        $this->client->request('GET', '/api/players');
+        $names = array_column($this->jsonBody()['players'], 'username');
+        sort($names);
+        self::assertSame(['Alice', 'Alice VR'], $names);
+    }
+
+    public function testRenamedPlayerIsStillFoundByOldName(): void
+    {
+        $this->loginAsAdmin();
+        $this->jsonRequest('POST', '/api/matches', ['white' => 'Alice', 'black' => 'Bob', 'result' => '1']);
+
+        $this->mockHttpClient([
+            $this->loginResponse(),
+            new MockResponse(json_encode(['id' => 'usr_abc', 'displayName' => 'Alice VR', 'userIcon' => 'https://example.com/icon.png']), ['http_code' => 200]),
+        ]);
+        $this->jsonRequest('POST', '/api/admin/vrchat/link', ['username' => 'Alice', 'vrchat_user_id' => 'usr_abc']);
+        self::assertSame('Alice VR', $this->jsonBody()['username']);
+
+        // A bot still submitting under the old name must not create a second Alice.
+        $this->jsonRequest('POST', '/api/matches', ['white' => 'Alice', 'black' => 'Bob', 'result' => '0']);
+        self::assertResponseIsSuccessful();
+
+        $this->client->request('GET', '/api/players');
+        $players = $this->jsonBody()['players'];
+        self::assertCount(2, $players);
+        $alice = current(array_filter($players, static fn ($p) => $p['username'] === 'Alice VR'));
+        self::assertSame(2, $alice['games']);
+
+        $this->client->request('GET', '/api/players/Alice/stats');
+        self::assertResponseIsSuccessful();
+        self::assertSame('Alice VR', $this->jsonBody()['stats']['player']['username']);
     }
 
     public function testUnlinkRequiresAdmin(): void
@@ -216,9 +273,45 @@ class VRChatControllerTest extends ApiTestCase
         $tester = new CommandTester((new Application(self::$kernel))->find('app:vrchat:refresh-avatars'));
         self::assertSame(0, $tester->execute([]));
         self::assertStringContainsString('1 refreshed, 1 skipped', $tester->getDisplay());
+        self::assertStringContainsString('1 renamed', $tester->getDisplay());
+
+        // The refreshed player now carries their VRChat name; the skipped one is left alone.
+        $this->client->request('GET', '/api/players');
+        $players = $this->jsonBody()['players'];
+        $alice = current(array_filter($players, static fn ($p) => $p['username'] === 'Alice VR'));
+        self::assertSame('https://example.com/new.png', $alice['avatar_url']);
+        self::assertSame(['Alice'], $alice['previous_usernames']);
+        self::assertContains('Bob', array_column($players, 'username'));
+    }
+
+    public function testRefreshRecordsVrchatNameChange(): void
+    {
+        $player = new Player(1, 'Alice VR');
+        $player->setVrchatLink('usr_abc', 'Alice VR', 'https://example.com/icon.png');
+        $this->dm->persist($player);
+        $this->dm->flush();
+        $this->dm->clear();
+
+        // The person changed their display name on VRChat.
+        $this->mockHttpClient([
+            $this->loginResponse(),
+            new MockResponse(json_encode(['id' => 'usr_abc', 'displayName' => 'Alicia', 'userIcon' => 'https://example.com/icon.png']), ['http_code' => 200]),
+        ]);
+
+        $this->loginAsAdmin();
+        $this->jsonRequest('POST', '/api/admin/vrchat/refresh-avatars', ['force' => true]);
+        self::assertResponseIsSuccessful();
+        self::assertSame(1, $this->jsonBody()['renamed']);
 
         $this->client->request('GET', '/api/players');
-        $alice = current(array_filter($this->jsonBody()['players'], static fn ($p) => $p['username'] === 'Alice'));
-        self::assertSame('https://example.com/new.png', $alice['avatar_url']);
+        $alicia = $this->jsonBody()['players'][0];
+        self::assertSame('Alicia', $alicia['username']);
+        self::assertSame('Alicia', $alicia['vrchat_display_name']);
+        self::assertSame(['Alice VR'], $alicia['previous_usernames']);
+
+        $history = $this->dm->getDocumentCollection(Player::class)->findOne(['id' => 1])['username_history'];
+        self::assertSame('Alice VR', $history[0]['username']);
+        self::assertSame('vrchat', $history[0]['source']);
+        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $history[0]['changed_at']);
     }
 }

@@ -82,11 +82,20 @@ class VRChatController extends AbstractApiController
         }
 
         $player->setVrchatLink($vrchatUser['id'], $vrchatUser['displayName'], $vrchatUser['avatarUrl']);
+        $nameStatus = $this->avatarRefresher->syncUsername($player);
         $this->dm->flush();
+
+        $message = "'{$username}' berhasil ditautkan ke VRChat '{$vrchatUser['displayName']}'.";
+        if ($nameStatus === 'renamed') {
+            $message .= " Nama pemain kini mengikuti VRChat: '{$player->getUsername()}'.";
+        } elseif ($nameStatus === 'conflict') {
+            $message .= " Nama tidak diganti: '{$vrchatUser['displayName']}' sudah dipakai pemain lain (kemungkinan akun ganda).";
+        }
 
         return $this->json([
             'success' => true,
-            'message' => "'{$username}' berhasil ditautkan ke VRChat '{$vrchatUser['displayName']}'.",
+            'message' => $message,
+            'username' => $player->getUsername(),
             'vrchat' => $vrchatUser,
         ]);
     }
@@ -131,9 +140,14 @@ class VRChatController extends AbstractApiController
             return $this->json(['success' => false, 'error' => $e->getMessage()], 502);
         }
 
+        $message = "Selesai: {$result['refreshed']} diperbarui, {$result['skipped']} dilewati (masih baru), {$result['failed']} gagal, {$result['renamed']} nama diganti mengikuti VRChat.";
+        if ($result['conflicts'] !== []) {
+            $message .= ' Nama bentrok dengan pemain lain (tidak diganti): ' . implode(', ', $result['conflicts']) . '.';
+        }
+
         return $this->json([
             'success' => true,
-            'message' => "Selesai: {$result['refreshed']} diperbarui, {$result['skipped']} dilewati (masih baru), {$result['failed']} gagal.",
+            'message' => $message,
             ...$result,
         ]);
     }
