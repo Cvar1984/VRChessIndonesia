@@ -49,6 +49,35 @@ class AnalysisControllerTest extends ApiTestCase
         self::assertSame(400, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testListMarksWhichSavedGamesHaveEvaluations(): void
+    {
+        $this->jsonRequest('POST', '/api/analyses', ['pgn' => self::SAMPLE_PGN]);
+        $bare = $this->jsonBody()['id'];
+        $this->jsonRequest('POST', '/api/analyses', ['pgn' => self::SAMPLE_PGN, 'analysis' => [['fen' => 'x', 'score_cp' => 10]]]);
+        $reviewed = $this->jsonBody()['id'];
+
+        // The admin panel's "analyze unanalyzed games" button picks games by this flag.
+        $this->client->request('GET', '/api/analyses');
+        $flags = array_column($this->jsonBody()['analyses'], 'analyzed', 'id');
+        self::assertFalse($flags[$bare]);
+        self::assertTrue($flags[$reviewed]);
+    }
+
+    public function testListSummarizesTheSearchDepthOfEachReview(): void
+    {
+        $this->jsonRequest('POST', '/api/analyses', ['pgn' => self::SAMPLE_PGN]);
+        $bare = $this->jsonBody()['id'];
+        $positions = [['fen' => 'a', 'depth' => 30], ['fen' => 'b', 'depth' => 18], ['fen' => 'c', 'depth' => 21], ['fen' => 'd', 'depth' => 0]];
+        $this->jsonRequest('POST', '/api/analyses', ['pgn' => self::SAMPLE_PGN, 'analysis' => $positions]);
+        $reviewed = $this->jsonBody()['id'];
+
+        $this->client->request('GET', '/api/analyses');
+        $depths = array_column($this->jsonBody()['analyses'], 'depth', 'id');
+        self::assertNull($depths[$bare]);
+        // The game-over position (depth 0) isn't a search and doesn't drag the minimum down.
+        self::assertSame(['min' => 18, 'avg' => 23], $depths[$reviewed]);
+    }
+
     public function testGetNonexistentReturns404(): void
     {
         $this->client->request('GET', '/api/analyses/doesnotexist12345');

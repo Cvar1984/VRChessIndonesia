@@ -448,6 +448,49 @@
                     </div>
                 </div>
 
+                <!-- Game Review (re)analysis Card — runs in this browser via setupEvents()' reviewSavedAnalyses() -->
+                <div class="card">
+                    <div class="card__header">
+                        <h2 class="card__title">{{ icons.icon('cpu') }} Analisis Game Review</h2>
+                        <span class="card__badge card__badge--purple">ADMIN ACTION</span>
+                    </div>
+                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
+                        Akurasi dan Brilliant di profil pemain hanya dihitung dari game yang sudah dianalisis, jadi game yang
+                        belum atau masih dangkal membuat statistiknya kurang akurat. Game Review berjalan satu per satu di
+                        browser ini (tab Analisis) lalu hasilnya disimpan. Biarkan halaman tetap terbuka sampai selesai.
+                    </p>
+                    <div class="form-row" style="align-items:flex-end; flex-wrap:wrap;">
+                        <div class="form-group">
+                            <label class="form-label" for="reanalysisDepth">Depth (8–26, kosongkan untuk default)</label>
+                            <input type="number" class="form-input" id="reanalysisDepth" min="8" max="26" step="1"
+                                placeholder="Default (cepat)">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="reviewQueueFilter">Tampilkan</label>
+                            <select class="form-input" id="reviewQueueFilter">
+                                <option value="all">Semua game</option>
+                                <option value="unanalyzed">Belum dianalisis</option>
+                                <option value="shallow">Lebih dangkal dari depth di atas</option>
+                                <option value="analyzed">Sudah dianalisis</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" style="flex-wrap:wrap; gap:8px;">
+                        <button class="btn btn--primary" id="btnAnalyzeUnanalyzed" type="button">
+                            {{ icons.icon('cpu') }} Analisis yang Belum (<span id="unanalyzedCount">0</span>)
+                        </button>
+                        <button class="btn btn--secondary" id="btnAnalyzeShallow" type="button"
+                            title="Analisis ulang game yang depth minimumnya di bawah depth di atas">
+                            {{ icons.icon('refresh') }} Analisis Ulang yang Dangkal (<span id="shallowCount">0</span>)
+                        </button>
+                        <button class="btn btn--secondary" id="btnAnalyzeSelected" type="button">
+                            {{ icons.icon('cpu') }} Analisis yang Dipilih (<span id="selectedReviewCount">0</span>)
+                        </button>
+                    </div>
+                    <div id="reanalysisStatus" style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;"></div>
+                    <div id="reviewQueue" style="max-height:420px; overflow:auto; margin-top:12px;"></div>
+                </div>
+
                 <!-- Kelola Admin Users Card -->
                 <div class="card">
                     <div class="card__header">

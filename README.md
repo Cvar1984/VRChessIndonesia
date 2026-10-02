@@ -98,6 +98,7 @@ Copy `example.env` to `.env` and fill in:
 | `VRCHAT_CONTACT` | Optional | Free-text contact info appended to the `User-Agent` header VRChat's API requires (e.g. an email). |
 | `VRCHAT_GROUP_ID` | Optional | Required for `/gallery` and `/newsletter` to show anything — the VRChat group ID (`grp_...`) those pages pull from. |
 | `VRCHAT_GROUP_GALLERY_ID` | Optional | Leave blank to auto-discover and combine every gallery the group has (each shown under its own heading on `/gallery`); set to one gallery's ID (`ggal_...`) to show only that one. |
+| `LICHESS_API_TOKEN` | Optional | A Lichess personal API token (no scopes needed; create one at lichess.org/account/oauth/token). Game Review uses it, server-side, to look up opening theory in the Lichess masters database for the Book label, since Lichess's opening explorer now requires a token. Leave blank to fall back to the bundled list of named openings. |
 | `VRCHAT_RATE_LIMIT_SECONDS` | Optional | Minimum seconds between the app's own outbound requests to VRChat's API — a self-imposed courtesy throttle, since VRChat's unofficial API publishes no rate-limit numbers but is known to temporarily block accounts that hammer it. Default `1`; bump to `5` if you see VRChat-side errors, `0` disables it. |
 
 Dependencies (`composer.json`): `symfony/framework-bundle`, `symfony/security-bundle`, `symfony/http-client`, `symfony/process`, `symfony/twig-bundle`, `symfony/asset-mapper` + `symfony/asset`, `symfony/scheduler` + `symfony/messenger`, `doctrine/mongodb-odm-bundle`, `mongodb/mongodb`. Requires PHP ≥ 8.1 with the `mongodb` and `gd` extensions (GD normalizes admin-uploaded gallery/post images to PNG before handing them to VRChat), plus a `stockfish` binary on disk.
@@ -280,9 +281,11 @@ Analyses are Stockfish-evaluated PGN games, saved so a shareable link (`?analysi
 
 **3. Get one** — `404` if not found. Otherwise `{ success, data: { id, pgn, created_at, analysis? } }`, where `analysis` (if present) is the full array of evaluated positions (see [move accuracy model](#-move-accuracy--classification-model) for each position's shape: `fen`, `move_san`, `score_cp`, `score_type`, `bestmove`, `pv`, `multipv`, `depth`).
 
-**2. List all** — lightweight; omits the heavy `analysis` array. Returns `{ success, analyses: [{ id, created_at, pgn_preview, headers }] }`, where `headers` is the parsed PGN tag pairs (`White`, `Black`, `WhiteElo`, `Result`, `Event`, ...).
+**2. List all** — lightweight; omits the heavy `analysis` array. Returns `{ success, analyses: [{ id, created_at, updated_at, pgn_preview, headers, analyzed, depth }] }`, where `headers` is the parsed PGN tag pairs (`White`, `Black`, `WhiteElo`, `Result`, `Event`, ...), `analyzed` says whether the game has evaluations yet, `updated_at` is when they were last saved, and `depth` is `{ min, avg }` of the search depth over its positions (`null` when none is recorded, e.g. no evaluations or ones saved before depths were kept).
 
 **4. Update** — body `{ "analysis": [...] }`, same limits as #1. Anyone can fill in an analysis that has no evaluations yet; that's how a shared link saved without them gets completed by its first visitor's Game Review. Replacing existing evaluations needs an API token (`401` otherwise), since they feed every viewer's review and each player's profile accuracy and Brilliant count. ⚠️ One real quirk: if `id` doesn't exist, this returns `{success:false}` with HTTP **200**, not 404 — a deliberately preserved behavior of the original endpoint.
+
+**Re-analysis from the admin panel.** Profile accuracy and Brilliant counts only come from reviewed games, so the Admin Panel's *Analisis Game Review* card lists every saved game with its review depth (lowest / average over its positions), unreviewed and shallowest first, filterable by unreviewed, reviewed, or shallower than the depth field. It runs Game Review on the unreviewed games (`analyzed: false`), on the games whose lowest depth is below the depth field (or have none recorded), or on the ticked ones, one after another in the admin's browser on the Analysis tab, and saves each result through #4; the list updates as each game is saved. Each card in *Riwayat Analisis* also gets an *Analisis Ulang* button (admins only) to re-run a single game. Both take an optional depth from 8 to 26: left blank, the review uses its normal node budget plus Lichess cloud evals for the opening; with a depth, every position is searched to exactly that depth by the browser engines (or the server engine, for positions they hand off), with no cloud evals mixed in. The page has to stay open until the run finishes.
 
 ---
 
@@ -530,7 +533,14 @@ Wraps a local Stockfish binary via `StockfishEngine` (Symfony `Process`, UCI pro
 
 `score_cp` is always normalized to White's perspective (negated if it's Black to move in that FEN). For forced mates, `score` is `"M<n>"` and `score_cp` is `±9999` — the sign-flattening this causes is exactly what the [accuracy model](#-move-accuracy--classification-model) below has to specifically work around.
 
-### 3. Streaming analysis (SSE)
+### 3. Opening book
+| Method | URL |
+| :--- | :--- |
+| `GET` | `/api/opening-book?fen=<FEN>` |
+
+The moves played from a position in the Lichess masters database, for Game Review's Book label: `{ success, available, moves: [{ uci, san, games }] }`. Proxied server-side with `LICHESS_API_TOKEN` and cached for 30 days per position; `available: false` when no token is set or Lichess can't be reached. Shares the server engine's per-IP rate limit.
+
+### 4. Streaming analysis (SSE)
 | Method | URL |
 | :--- | :--- |
 | `GET`/`POST` | `/api/engine/analyze/stream` |
@@ -637,18 +647,20 @@ A piecewise-linear accuracy → rating curve (own best-effort reconstruction, si
 Linearly interpolated between points. This is a single-game estimate, not a rating measurement — high variance is expected, especially for short/decisive games.
 
 ### 5. Move classification badges
-Shown as an icon on the move that was just played (Analysis tab board overlay), based on win% lost (`loss`) and context — independent of the accuracy formula above. Icon files live in `assets/images/*.png`, resolved to their real AssetMapper URLs via `window.MOVE_ICON_URLS` (injected by `leaderboard.html.twig` before `app.js` loads, since a plain static JS file can't call Twig's `asset()` itself):
+Shown as an icon on the move that was just played (Analysis tab board overlay), modeled on chess.com's classification and checked in the order below (the first that applies wins). `loss` is the mover's win% lost by the move; the thresholds scale with the player's rating when the PGN name matches a registered player (lower-rated players get more generous cutoffs). Icon files live in `assets/images/*.png`, resolved to their real AssetMapper URLs via `window.MOVE_ICON_URLS` (injected by `leaderboard.html.twig` before `app.js` loads, since a plain static JS file can't call Twig's `asset()` itself):
 
 | Badge | Icon file | Condition |
 | :--- | :--- | :--- |
-| 📖 Book | `theoritical_move.png` | Move ≤ 5, win% between 40–60, `loss < 5` |
-| ✨ Brilliant | `brilliant.png` | `loss < 2`, win% ≥ 45, and the position's PV response drops material by ≥ 2 points (a sound sacrifice) |
-| 🌟 Great | `the_only_move.png` | `loss < 2` and this move beats the 2nd-best engine line by ≥ 18 win% (the only move that holds) |
-| 🔥 Blunder | `blunder.png` | `loss ≥ 20` |
-| ❌ Mistake | `strange_move.png` | `loss ≥ 10` |
-| ⚠️ Inaccuracy | `tactical_move.png` | `loss ≥ 5` |
-| ✅ Good | `good_move.png` | `loss ≥ 1` |
-| ⭐ Best | `best_move.png` | `loss < 1` |
+| 📖 Book | `theoritical_move.png` | Opening theory. Walking from move 1, each move counts while it's in the Lichess masters database (≥ 2 games, via `/api/opening-book`) or reaches a named opening in `assets/data/openings_fen.json`; the game leaves book at the first move that isn't. Without a Lichess token only the named openings apply. |
+| ✨ Brilliant | `brilliant.png` | A sound piece sacrifice: `loss < 2`, the mover gives up at least a minor piece's worth (taken in the engine's line and not won back two plies later, or left hanging), the position afterward isn't bad (win% ≥ 45), and the mover wouldn't be completely winning without it (the best other move scores under 90%). Trades and exchanges don't count. |
+| 🌟 Great | `the_only_move.png` | The engine's top move when it's the only one that holds: the second-best line is ≥ 20 win% worse and the move itself keeps ≥ 40%. Obvious moves (delivering mate, recaptures, taking free material, promoting) stay Best. Needs the engine's second line, which Game Review computes for every position where the played move was the engine's top move (a second, two-line pass, so the rest of the review stays single-line and fast). |
+| 💨 Miss | `missed_tactic.png` | A missed winning chance instead of a Mistake/Blunder: `loss ≥ 10` while the mover is still ≥ 70 win% afterward (e.g. missing a forced mate but staying at +5), or the opponent's previous move handed over ≥ 15 win% and this move gives back ≥ 10 of it. |
+| ⭐ Best | `best_move.png` | Exactly the engine's top move, so there's one per position. |
+| ✅ Excellent | `good_move.png` | Any other move with `loss < 2`, including equally good alternatives. |
+| ✅ Good | `good_move.png` | `loss` 2–5 |
+| ⚠️ Inaccuracy | `tactical_move.png` | `loss` 5–10 |
+| ❌ Mistake | `strange_move.png` | `loss` 10–20 |
+| 🔥 Blunder | `blunder.png` | `loss ≥ 20` and the mover is below 55 win% afterward (still better than that is at worst a Mistake). |
 
 ---
 

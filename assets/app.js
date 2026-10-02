@@ -10,6 +10,17 @@
                 // ECO code ("B01") to a real opening name ("Scandinavian Defense"), for
                 // PGNs that carry an [ECO] tag but no [Opening] tag.
                 let ecoNameIndex = {};
+
+                // The opening entry for a position, or null. The database writes FEN's
+                // en-passant field only when an en-passant capture is actually possible ("-"
+                // otherwise), while chess.mjs writes it after every double pawn push — so a
+                // plain four-field lookup missed the position after 1.e4, 1...e5, 1.d4 and
+                // every other double push. Tries the exact key, then the same position with "-".
+                function openingAt(fen) {
+                    const [board, side, castling, ep = '-'] = String(fen).split(' ');
+                    const key = `${board} ${side} ${castling}`;
+                    return openingsDatabase[`${key} ${ep}`] || openingsDatabase[`${key} -`] || null;
+                }
                 let matchesCache = [];
                 let tokensCache = [];
                 let adminsCache = [];
@@ -1031,6 +1042,7 @@
                             if ($('#analysisCount')) {
                                 $('#analysisCount').textContent = allAnalyses.length;
                             }
+                            renderReviewQueue();
                             renderAnalyses();
                             // Match cards show PGN badges from these headers, and on page load
                             // the match list renders before this data arrives.
@@ -1039,6 +1051,87 @@
                     } catch (err) {
                         console.error('Gagal memuat analisis', err);
                     }
+                }
+
+                // ── Admin "Analisis Game Review" panel ──
+                // Every saved game with how deeply it was reviewed (lowest / average search
+                // depth over its positions), so unreviewed or shallow games — which leave
+                // profile accuracy and Brilliant counts thin — can be picked and (re)analyzed.
+                const reviewSelection = new Set();
+
+                // Games reviewed less deeply than `depth` everywhere: the lowest depth any
+                // position reached is below it. Null depth = no target set, so none qualify.
+                function isShallowReview(an, depth) {
+                    return !!depth && an.analyzed !== false && (!an.depth || an.depth.min < depth);
+                }
+
+                function reviewTargetDepth() {
+                    const depth = Number($('#reanalysisDepth')?.value);
+                    return Number.isInteger(depth) && depth >= 8 && depth <= 26 ? depth : null;
+                }
+
+                function renderReviewQueue() {
+                    const container = $('#reviewQueue');
+                    if (!container) return;
+                    const target = reviewTargetDepth();
+                    const filter = $('#reviewQueueFilter')?.value || 'all';
+
+                    for (const id of reviewSelection) {
+                        if (!allAnalyses.some(an => an.id === id)) reviewSelection.delete(id);
+                    }
+                    $('#unanalyzedCount').textContent = allAnalyses.filter(an => an.analyzed === false).length;
+                    $('#shallowCount').textContent = allAnalyses.filter(an => isShallowReview(an, target)).length;
+                    $('#selectedReviewCount').textContent = reviewSelection.size;
+
+                    // Work-queue order: unreviewed first, then shallowest, newest within each.
+                    const rank = an => an.analyzed === false ? -1 : (an.depth ? an.depth.min : 0);
+                    const rows = allAnalyses
+                        .filter(an => filter === 'all'
+                            || (filter === 'unanalyzed' && an.analyzed === false)
+                            || (filter === 'analyzed' && an.analyzed !== false)
+                            || (filter === 'shallow' && isShallowReview(an, target)))
+                        .sort((a, b) => rank(a) - rank(b) || String(b.created_at).localeCompare(String(a.created_at)));
+
+                    if (rows.length === 0) {
+                        const text = filter === 'shallow' && !target
+                            ? 'Isi depth di atas untuk mencari game yang lebih dangkal.'
+                            : 'Tidak ada game di daftar ini.';
+                        container.innerHTML = `<div class="empty-state"><div class="empty-state__text">${text}</div></div>`;
+                        return;
+                    }
+
+                    const allChecked = rows.every(an => reviewSelection.has(an.id));
+                    container.innerHTML = `
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} aria-label="Pilih semua di daftar ini"></th>
+                                <th>Game</th>
+                                <th>Depth (min / rata-rata)</th>
+                                <th>Dianalisis</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows.map(an => {
+                            const h = an.headers || {};
+                            const players = `${escHtml(pgnTag(h, 'White') || '?')} vs ${escHtml(pgnTag(h, 'Black') || '?')}`;
+                            const meta = [pgnTag(h, 'Date'), pgnTag(h, 'Result')].filter(Boolean).map(escHtml).join(' · ');
+                            const depth = an.analyzed === false
+                                ? '<span class="card__badge card__badge--red">Belum dianalisis</span>'
+                                : !an.depth
+                                    ? '<span class="card__badge card__badge--orange">Tidak tercatat</span>'
+                                    : `<span class="card__badge card__badge--${isShallowReview(an, target) ? 'orange' : 'green'}">${an.depth.min} / ${an.depth.avg}</span>`;
+                            return `
+                            <tr>
+                                <td><input type="checkbox" data-review-id="${escHtml(an.id)}" ${reviewSelection.has(an.id) ? 'checked' : ''} aria-label="Pilih game"></td>
+                                <td><strong>${players}</strong><div class="stat-value" style="font-size:0.75rem;">${meta || escHtml(an.id)}</div></td>
+                                <td>${depth}</td>
+                                <td><span class="stat-value">${escHtml(an.analyzed === false ? '—' : (an.updated_at || an.created_at))}</span></td>
+                                <td><button class="btn btn--secondary btn--xs" onclick="window.appReanalyze(${jsStr(an.id)})">${ICONS.refresh} ${an.analyzed === false ? 'Analisis' : 'Ulang'}</button></td>
+                            </tr>`;
+                        }).join('')}</tbody>
+                    </table>`;
+                    container.dataset.visibleIds = JSON.stringify(rows.map(an => an.id));
                 }
 
                 function renderAnalyses() {
@@ -1129,7 +1222,8 @@
 
                         // Admin delete button — always re-evaluated so it tracks login/logout instantly
                         const adminBtn = isAdminState
-                            ? `<button class="btn btn--danger btn--xs" onclick="window.appDeleteAnalysis(${jsStr(an.id)})" title="Hapus Analisis">${ICONS.trash} Hapus</button>`
+                            ? `<button class="btn btn--secondary btn--xs" onclick="window.appReanalyze(${jsStr(an.id)})" title="Jalankan Game Review lagi, dengan depth pilihan">${ICONS.refresh} ${an.analyzed === false ? 'Analisis' : 'Analisis Ulang'}</button>`
+                              + `<button class="btn btn--danger btn--xs" onclick="window.appDeleteAnalysis(${jsStr(an.id)})" title="Hapus Analisis">${ICONS.trash} Hapus</button>`
                             : '';
 
                         // ── Parse PGN headers ──
@@ -3097,19 +3191,147 @@
                         }
                     }
 
-                    function getMaterial(fen, turn) {
-                        const pieces = fen.split(' ')[0];
-                        const values = { 'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9 };
-                        let total = 0;
-                        for (let i = 0; i < pieces.length; i++) {
-                            const char = pieces[i];
-                            if (turn === 'w' && char >= 'A' && char <= 'Z') {
-                                total += values[char.toLowerCase()] || 0;
-                            } else if (turn === 'b' && char >= 'a' && char <= 'z') {
-                                total += values[char] || 0;
-                            }
+                    // ── Move-classification helpers (see getMoveAnnotationIcon) ──
+                    const MATERIAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+                    const boardOf = fen => fen.split(' ')[0];
+
+                    // Piece balance (knights, bishops, rooks, queens — pawns left out, since
+                    // Brilliant is about piece sacrifices) from `color`'s side: theirs minus the
+                    // opponent's. Counting only the mover's own pieces, as this used to, made
+                    // every ordinary trade look like a sacrifice: BxN, then the recapture, "lost"
+                    // a bishop with the captured knight never counted.
+                    function pieceBalance(fen, color) {
+                        let balance = 0;
+                        for (const ch of boardOf(fen)) {
+                            const value = MATERIAL[ch.toLowerCase()];
+                            if (!value || ch === 'p' || ch === 'P') continue;
+                            balance += (ch === ch.toUpperCase()) === (color === 'w') ? value : -value;
                         }
-                        return total;
+                        return balance;
+                    }
+
+                    // The move that led from prevPos to currPos, as UCI (e.g. "e2e4", "e7e8q").
+                    // Positions only carry SAN, and engine lines are UCI, so the legal move whose
+                    // resulting board matches currPos is the played move. Cached per position.
+                    const playedUciCache = new WeakMap();
+                    function playedMoveUci(prevPos, currPos) {
+                        if (!prevPos?.fen || !currPos?.fen) return null;
+                        if (playedUciCache.has(currPos)) return playedUciCache.get(currPos);
+                        let found = null;
+                        try {
+                            const board = new window.Chess(prevPos.fen);
+                            const target = boardOf(currPos.fen);
+                            for (const m of board.moves({ verbose: true })) {
+                                board.move(m);
+                                const hit = boardOf(board.fen()) === target;
+                                board.undo();
+                                if (hit) { found = m.from + m.to + (m.promotion || ''); break; }
+                            }
+                        } catch (e) { }
+                        playedUciCache.set(currPos, found);
+                        return found;
+                    }
+
+                    // `color`'s piece balance after playing `plies` moves of an engine line from
+                    // fen; null if the line is shorter or doesn't apply.
+                    function balanceAlongLine(fen, line, plies, color) {
+                        if (!line || line.length < plies) return null;
+                        try {
+                            const board = new window.Chess(fen);
+                            for (const uci of line.slice(0, plies)) {
+                                if (!board.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] })) return null;
+                            }
+                            return pieceBalance(board.fen(), color);
+                        } catch (e) {
+                            return null;
+                        }
+                    }
+
+                    // A piece the mover just put where the opponent can take it at a profit —
+                    // an offered sacrifice, which can be best play even when taking it is a
+                    // mistake (so the engine's reply declines it). Material the opponent nets
+                    // by capturing, after our recapture if there is one, minus anything this
+                    // move itself captured.
+                    function offeredMaterial(prevPos, currPos, played) {
+                        try {
+                            const square = played.slice(2, 4);
+                            const before = new window.Chess(prevPos.fen);
+                            // Valued as it stood before the move: a pawn that just promoted only
+                            // risks a pawn, however big the piece it became.
+                            const moved = before.get(played.slice(0, 2));
+                            if (!moved || !MATERIAL[moved.type] || moved.type === 'p') return 0;
+                            const took = before.get(square);
+                            const tookValue = took ? MATERIAL[took.type] : 0;
+                            const board = new window.Chess(currPos.fen);
+                            let best = 0;
+                            for (const capture of board.moves({ verbose: true }).filter(m => m.to === square)) {
+                                board.move(capture);
+                                const canRecapture = board.moves({ verbose: true }).some(m => m.to === square);
+                                board.undo();
+                                const net = MATERIAL[moved.type] - (canRecapture ? MATERIAL[capture.piece] : 0) - tookValue;
+                                best = Math.max(best, net);
+                            }
+                            return best;
+                        } catch (e) {
+                            return 0;
+                        }
+                    }
+
+                    // The mover gives up at least a minor piece's worth (SACRIFICE_MIN): either the
+                    // engine's line takes it (and it's still gone at the end of the line, up to
+                    // three plies, so it isn't a trade or a quick regain), or the moved piece is
+                    // left hanging. An exchange (rook for a minor piece, 2) doesn't count: it's
+                    // usually a capture made to simplify, which chess.com doesn't call a piece
+                    // sacrifice. Engine lines can be as short as two plies — a trade, capture and
+                    // recapture — so the later check uses however much of the line there is.
+                    const SACRIFICE_MIN = 3;
+                    // Mover's win% at or above which a big drop is a Miss, not a Mistake/Blunder:
+                    // ~+2.3 pawns, a clearly winning position (see getMoveAnnotationIcon).
+                    const MISS_STILL_WINNING = 70;
+                    // Mover's win% at or above which a move is never a Blunder (~+0.5 pawns).
+                    const STILL_BETTER = 55;
+                    function isPieceSacrifice(prevPos, currPos, played, color) {
+                        const before = pieceBalance(prevPos.fen, color);
+                        const afterReply = balanceAlongLine(currPos.fen, currPos.pv, 1, color);
+                        const laterPlies = Math.min(3, currPos.pv?.length || 0);
+                        const afterLater = laterPlies > 1 ? balanceAlongLine(currPos.fen, currPos.pv, laterPlies, color) : afterReply;
+                        if (afterReply !== null && afterLater !== null
+                            && before - afterReply >= SACRIFICE_MIN && before - afterLater >= SACRIFICE_MIN) return true;
+                        return offeredMaterial(prevPos, currPos, played) >= SACRIFICE_MIN;
+                    }
+
+                    // Moves that are often the only good one but never hard to find, so they stay
+                    // Best rather than Great: delivering mate, taking back on the square the
+                    // opponent just captured on, taking material the opponent can't recapture,
+                    // and promoting.
+                    function isObviousMove(prevPrevPos, prevPos, currPos, played) {
+                        if (played.length === 5) return true;
+                        try {
+                            if (String(currPos.move_san || '').endsWith('#')) return true;
+                            const after = new window.Chess(currPos.fen);
+                            if (after.in_checkmate ? after.in_checkmate() : after.isCheckmate()) return true;
+                            const square = played.slice(2, 4);
+                            if (!new window.Chess(prevPos.fen).get(square)) return false; // not a capture
+                            const opponentMove = playedMoveUci(prevPrevPos, prevPos);
+                            if (opponentMove && opponentMove.slice(2, 4) === square && new window.Chess(prevPrevPos.fen).get(square)) {
+                                return true; // recapture
+                            }
+                            return !new window.Chess(currPos.fen).moves({ verbose: true }).some(m => m.to === square);
+                        } catch (e) {
+                            return false;
+                        }
+                    }
+
+                    // Mover's win% for the engine's first and second lines from prevPos; null when
+                    // the second line is missing (an older single-line analysis, or only one legal move).
+                    function topTwoLinePcts(prevPos) {
+                        const lines = prevPos?.multipv;
+                        const pv1 = lines?.['1'] || lines?.[1];
+                        const pv2 = lines?.['2'] || lines?.[2];
+                        if (!pv1 || !pv2 || pv1.score === null || pv2.score === null) return null;
+                        // Engine lines score from the side to move, which here is the mover.
+                        const pct = line => getWinPct(line.score_type === 'mate' ? (line.score > 0 ? 9999 : -9999) : line.score);
+                        return [pct(pv1), pct(pv2)];
                     }
 
                     function getWinPct(cp) {
@@ -3277,87 +3499,84 @@
                     }
                     window.computePlayerAnalysisStats = computePlayerAnalysisStats;
 
-                    // Mirrors chess.com's move-classification model (see
-                    // support.chess.com/en/articles/8572705): a fixed ladder by expected-points
-                    // (here, win%) lost, with Brilliant/Great/Miss as special overrides checked
-                    // first, and Book exempted entirely via a real opening-database lookup.
-                    // prevPrevPos (2 plies back, i.e. the position before the opponent's last
-                    // move) is optional — only needed to detect Miss. leniency (see
-                    // classificationLeniency) is 1 by default; every threshold below scales with
-                    // it, so a matched player's own rating shifts the whole ladder for their moves.
+                    // Mirrors chess.com's move-classification model (support.chess.com/en/articles/8572705),
+                    // checked in chess.com's order:
+                    //   Book       — the move is opening theory (masters database via /api/opening-book,
+                    //                or the bundled named-opening list for analyses without that).
+                    //   Brilliant  — a sound piece sacrifice: at most Excellent-level loss, a real
+                    //                piece given up (not a trade), not completely winning without it,
+                    //                not worse after.
+                    //   Great      — the engine's top move when it's the only move that holds: the
+                    //                second-best line is clearly worse, and the move itself isn't
+                    //                losing. Obvious ones (recaptures, taking free material,
+                    //                promoting) are left to Best.
+                    //   Miss       — a missed winning chance: a big drop that still leaves the mover
+                    //                clearly winning, or failing to punish the opponent's mistake.
+                    //   Best       — exactly the engine's top move (one per position, never a tie).
+                    //   Excellent / Good / Inaccuracy / Mistake / Blunder — every other move, by
+                    //                win% lost (chess.com's expected-points bands ×100).
+                    // prevPrevPos (2 plies back) is optional — only Miss and the recapture check use
+                    // it. leniency (see classificationLeniency) is 1 by default; the thresholds
+                    // scale with it, so a matched player's rating shifts the ladder for their moves.
                     function getMoveAnnotationIcon(prevCp, currCp, turn, moveNum, prevPos, currPos, prevPrevPos, leniency) {
                         if (prevCp === null || prevCp === undefined || currCp === null || currCp === undefined) return null;
                         if (leniency === null || leniency === undefined) leniency = 1;
 
-                        let prevPct = playerWinPct(prevCp, turn);
-                        let currPct = playerWinPct(currCp, turn);
-                        let loss = prevPct - currPct; // How much win% was lost
+                        const prevPct = playerWinPct(prevCp, turn);
+                        const currPct = playerWinPct(currCp, turn);
+                        const loss = prevPct - currPct; // win% the mover gave up
 
-                        // Book: matches a known position in the opening database. Real opening
-                        // theory, not an eval guess — exempt from every other judgment below,
-                        // same as chess.com/lichess. (Not rating-adjusted — theory is theory.)
-                        if (!isCurrentGame960 && currPos && currPos.fen) {
-                            const fenParts = currPos.fen.split(' ');
-                            if (fenParts.length >= 4 && openingsDatabase[fenParts.slice(0, 4).join(' ')]) {
-                                return { src: window.MOVE_ICON_URLS.theoritical_move, title: 'Book: A known opening move' };
-                            }
+                        // Book. A review records currPos.book from the masters database; older
+                        // analyses (book undefined) fall back to the bundled named-opening list.
+                        // Theory is theory, so this isn't rating-adjusted.
+                        if (currPos.book === true) {
+                            return { src: window.MOVE_ICON_URLS.theoritical_move, title: 'Book: A known opening move' };
+                        }
+                        if (currPos.book === undefined && !isCurrentGame960 && currPos.fen && openingAt(currPos.fen)) {
+                            return { src: window.MOVE_ICON_URLS.theoritical_move, title: 'Book: A known opening move' };
                         }
 
-                        // Brilliant: a sound sacrifice. chess.com's own criteria: you must not be
-                        // in a bad position afterward, AND the position must not have already been
-                        // completely winning beforehand (a flashy sac when you're already crushing
-                        // isn't brilliant, it's just winning). Both bounds loosen for a more
-                        // generous (lower-rated) leniency and tighten for a stricter one.
+                        const played = playedMoveUci(prevPos, currPos);
+                        const engineBest = prevPos.bestmove && prevPos.bestmove !== '(none)' ? prevPos.bestmove : null;
+                        const isBest = !!played && played === engineBest;
+
+                        // Engine's first and second lines (Game Review always computes two — see
+                        // startPgnAnalysis); null for older single-line analyses.
+                        const lines = topTwoLinePcts(prevPos);
+
+                        // Brilliant: not in a bad position afterward, and — chess.com's wording —
+                        // not completely winning even without the sacrifice. That's judged by the
+                        // best move that ISN'T this one: Morphy's 16.Qb8+ is mate, while every
+                        // other move scores ~77-87% depending on the engine, so it's Brilliant.
+                        // Both bounds loosen for a lower-rated player and tighten for a higher one.
                         const brilliantFloor = Math.max(20, Math.min(60, 45 / leniency));
-                        const brilliantCeil = Math.max(80, Math.min(99, 95 * leniency));
-                        if (loss < 2 && currPct >= brilliantFloor && prevPct < brilliantCeil && currPos.pv && currPos.pv.length > 0) {
-                            try {
-                                const tempChess = new window.Chess(currPos.fen);
-                                const pvMove = currPos.pv[0];
-                                if (pvMove && pvMove.length >= 4 && pvMove !== '(none)') {
-                                    tempChess.move({ from: pvMove.substring(0, 2), to: pvMove.substring(2, 4), promotion: pvMove[4] });
-                                    const matBefore = getMaterial(prevPos.fen, turn);
-                                    const matAfter = getMaterial(tempChess.fen(), turn);
-                                    if (matAfter <= matBefore - 2) {
-                                        return { src: window.MOVE_ICON_URLS.brilliant, title: "Brilliant: A sound sacrifice" };
-                                    }
-                                }
-                            } catch (e) { }
+                        const brilliantCeil = Math.max(80, Math.min(95, 90 * leniency));
+                        const withoutSacrifice = !lines ? prevPct : (isBest ? lines[1] : lines[0]);
+                        if (played && loss < 2 * leniency && currPct >= brilliantFloor && withoutSacrifice < brilliantCeil
+                            && isPieceSacrifice(prevPos, currPos, played, turn)) {
+                            return { src: window.MOVE_ICON_URLS.brilliant, title: "Brilliant: A sound sacrifice" };
                         }
 
-                        // Great: the only good move in the position (beats the 2nd-best line by a
-                        // wide margin — the required margin shrinks for a more generous leniency).
-                        // chess.com also awards it for a move that swings the game (losing to
-                        // equal, equal to winning), but measured here that only ever fired on
-                        // engine inconsistency: a move can't raise the mover's win% unless the
-                        // previous eval was wrong. Zero such badges across four games analysed
-                        // consistently (incl. native full-net Stockfish), ten in the same games'
-                        // mixed-source production evals — so that rule was dropped.
-                        if (loss < 2) {
-                            const requiredGap = Math.max(8, Math.min(35, 18 / leniency));
-                            if (prevPos && prevPos.multipv && Object.keys(prevPos.multipv).length >= 2) {
-                                const pv1 = prevPos.multipv["1"] || prevPos.multipv[1];
-                                const pv2 = prevPos.multipv["2"] || prevPos.multipv[2];
-                                if (pv1 && pv2) {
-                                    let s1 = pv1.score_type === 'mate' ? (pv1.score > 0 ? 9999 : -9999) : pv1.score;
-                                    let s2 = pv2.score_type === 'mate' ? (pv2.score > 0 ? 9999 : -9999) : pv2.score;
-                                    // Engine lines are scored from the side to move — here, the
-                                    // mover — so they're already the mover's win%. playerWinPct()
-                                    // expects White-side scores and would flip them again for Black.
-                                    let pct1 = getWinPct(s1);
-                                    let pct2 = getWinPct(s2);
-                                    if (pct1 - pct2 >= requiredGap) {
-                                        return { src: window.MOVE_ICON_URLS.the_only_move, title: "Great: The only good choice" };
-                                    }
-                                }
+                        if (isBest && !isObviousMove(prevPrevPos, prevPos, currPos, played)) {
+                            const requiredGap = Math.max(12, Math.min(35, 20 / leniency));
+                            if (lines && lines[0] >= 40 && lines[0] - lines[1] >= requiredGap) {
+                                return { src: window.MOVE_ICON_URLS.the_only_move, title: "Great: The only good move" };
                             }
                         }
 
-                        // Miss: the opponent handed you a big swing in your favor (their previous
-                        // move was a mistake) and instead of capitalizing, this move gives a
-                        // meaningful chunk of it back — replaces what would otherwise just be
-                        // labeled Mistake/Blunder. A more generous leniency requires a bigger gift
-                        // squandered before it counts against you.
+                        // Miss — a missed chance rather than a collapse. Two cases, each replacing
+                        // what would otherwise be a Mistake or Blunder:
+                        // 1. A Mistake-sized chunk (or more) given up while the mover is still
+                        //    clearly winning afterward (MISS_STILL_WINNING, about +2.3): missing a
+                        //    forced mate but staying at +5, or dropping +8 to +2.5. Calling those
+                        //    Blunders punished a missed tactic like a lost game.
+                        if (loss >= 10 * leniency && currPct >= MISS_STILL_WINNING) {
+                            return { src: window.MOVE_ICON_URLS.missed_tactic, title: "Miss: Missed a winning chance" };
+                        }
+                        // 2. The opponent handed you a big swing in your favor (their previous
+                        //    move was a mistake) and instead of capitalizing, this move gives a
+                        //    meaningful chunk of it back. A more generous leniency requires a
+                        //    bigger gift squandered before it counts against you.
                         if (prevPrevPos && prevPrevPos.score_cp !== null && prevPrevPos.score_cp !== undefined) {
                             const pctTwoAgo = playerWinPct(prevPrevPos.score_cp, turn);
                             const opponentGift = prevPct - pctTwoAgo;
@@ -3368,12 +3587,16 @@
                             }
                         }
 
-                        // Primary ladder — win% lost this move (chess.com's expected-points bands,
-                        // scaled from 0-1 to 0-100): Best 0, Excellent 0-2, Good 2-5,
-                        // Inaccuracy 5-10, Mistake 10-20, Blunder 20+. Every cutoff scales with
-                        // leniency, so the whole ladder is easier to climb for a lower-rated player
-                        // and harder for a higher-rated one, same objective loss either way.
-                        if (loss >= 20 * leniency) {
+                        if (isBest) {
+                            return { src: window.MOVE_ICON_URLS.best_move, title: "Best: The engine's top choice" };
+                        }
+
+                        // Every other move, by win% lost: Excellent under 2, Good 2-5, Inaccuracy
+                        // 5-10, Mistake 10-20, Blunder 20+, each cutoff scaled by leniency. A move
+                        // that loses nothing but isn't the engine's choice is Excellent, not Best.
+                        // A Blunder hands the game away; a move that still leaves the mover better
+                        // (about +0.5 or more) is at worst a Mistake.
+                        if (loss >= 20 * leniency && currPct < STILL_BETTER) {
                             return { src: window.MOVE_ICON_URLS.blunder, title: "Blunder: Extremely costly mistake" };
                         }
                         if (loss >= 10 * leniency) {
@@ -3385,10 +3608,12 @@
                         if (loss >= 2 * leniency) {
                             return { src: window.MOVE_ICON_URLS.good_move, title: "Good: A solid, sensible move" };
                         }
-                        if (loss >= 0.5 * leniency) {
-                            return { src: window.MOVE_ICON_URLS.good_move, title: "Excellent: Nearly the top choice" };
+                        // Positions saved without an engine best move (old analyses) can't tell
+                        // Best from Excellent, so a near-zero loss reads as Best, as it used to.
+                        if (!engineBest && loss < 0.5 * leniency) {
+                            return { src: window.MOVE_ICON_URLS.best_move, title: "Best: The engine's top choice" };
                         }
-                        return { src: window.MOVE_ICON_URLS.best_move, title: "Best: The engine's top choice" };
+                        return { src: window.MOVE_ICON_URLS.good_move, title: "Excellent: Nearly the top choice" };
                     }
 
                     function drawMoveAnnotationOnBoard() {
@@ -3443,20 +3668,31 @@
                         boardEl.appendChild(overlay);
                     }
 
-                    async function startPgnAnalysis() {
+                    // options.depth: search every position to this depth instead of the default
+                    // node budget (the admin panel's custom-depth re-analysis). Resolves to
+                    // { ok, saved } — saved is whether the result was written back to the saved
+                    // analysis (null when there was none to write to) — or undefined when the
+                    // review didn't run. The Start button passes its click event; that has no depth.
+                    async function startPgnAnalysis(options = {}) {
+                        const customDepth = Number.isInteger(options?.depth) ? options.depth : null;
                         const pgn = $('#pgnInput').value.trim();
                         if (!pgn) { toast('Masukkan PGN terlebih dahulu.', 'error'); return; }
                         // Fixed standard depth, independent of #liveDepthSelect — that input
                         // controls only the live/interactive position eval (depth 99), which
                         // would make a full-game batch analysis impractically slow at this depth.
-                        // Server-side engine only: the browser pool searches to clientNodes instead.
-                        const depth = 22;
+                        // Server-side engine only, unless a custom depth was asked for: the browser
+                        // pool searches to NODES_PER_LINE instead.
+                        const depth = customDepth ?? 22;
                         const multipv = parseInt($('#liveMultiPvSelect')?.value) || 1;
                         // Per-position budget for the browser engine pool — lichess's fishnet
                         // model (a fixed node count, not a depth). 2M nodes matched depth 22's
                         // accuracy against native full-net Stockfish in benchmarks; MultiPV splits
                         // the search between lines, so each extra line gets its own 2M.
-                        const clientNodes = 2_000_000 * multipv;
+                        const NODES_PER_LINE = 2_000_000;
+                        // The Great label needs the engine's second-best line, but only where the
+                        // played move was the engine's best (see addSecondLines) — two lines for
+                        // every position made the whole review ~2.4× slower.
+                        const GREAT_LINES = 2;
 
                         // Parse PGN client-side
                         function parsePGNToMoves(pgnText) {
@@ -3625,6 +3861,38 @@
 
                         const total = fenList.length;
 
+                        // Walks the game from move 1 while each played move is in the Lichess masters
+                        // database (/api/opening-book), stopping at the first that isn't: like
+                        // chess.com, a game leaves book once rather than drifting back in by
+                        // transposition. complete:false when the lookup couldn't finish (no Lichess
+                        // token on the server, Lichess unreachable) — see where its result is applied.
+                        const BOOK_MIN_GAMES = 2;  // a lone master game can be a one-off, not theory
+                        const BOOK_MAX_PLIES = 40;
+                        async function lookupOpeningBook() {
+                            if (isCurrentGame960) return { plies: 0, complete: false };
+                            const bare = san => String(san || '').replace(/[+#!?]+$/, '');
+                            let plies = 0;
+                            for (let i = 1; i < total && i <= BOOK_MAX_PLIES; i++) {
+                                // Named openings (the bundled list) count too: common amateur lines
+                                // like the Scholar's Mate attack have few or no master games.
+                                if (openingAt(fenList[i])) {
+                                    plies = i;
+                                    continue;
+                                }
+                                try {
+                                    const res = await fetch(`/api/opening-book?fen=${encodeURIComponent(fenList[i - 1])}`);
+                                    const data = await res.json();
+                                    if (!res.ok || !data.success || !data.available) return { plies, complete: false };
+                                    const entry = data.moves.find(m => bare(m.san) === bare(analysisMovesSan[i - 1]));
+                                    if (!entry || entry.games < BOOK_MIN_GAMES) break;
+                                    plies = i;
+                                } catch (e) {
+                                    return { plies, complete: false };
+                                }
+                            }
+                            return { plies, complete: true };
+                        }
+
                         // A live search still running on the previous position would only take CPU
                         // from the review; gotoMove(0) afterwards decides whether it resumes.
                         if (liveAnalysisAbort) liveAnalysisAbort.abort();
@@ -3637,8 +3905,9 @@
                         $('#analysisProgressBar').style.width = '0%';
 
                         // Analyzes one FEN on one pool engine, shaped like a /api/engine/analyze position entry.
-                        async function analyzeFenClient(session, fen, moveIndex) {
-                            const result = await session.analyze(fen, { nodes: clientNodes, multipv, chess960: isCurrentGame960 });
+                        async function analyzeFenClient(session, fen, moveIndex, lines = multipv) {
+                            const limit = customDepth ? { depth: customDepth } : { nodes: NODES_PER_LINE * lines };
+                            const result = await session.analyze(fen, { ...limit, multipv: lines, chess960: isCurrentGame960 });
 
                             let scoreDisplay = null;
                             let scoreCp = null;
@@ -3673,7 +3942,7 @@
                             const timer = setTimeout(() => controller.abort(), 3000);
                             try {
                                 const res = await fetch(
-                                    `https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=${multipv}`,
+                                    `https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=${Math.max(GREAT_LINES, multipv)}`,
                                     { signal: controller.signal, credentials: 'omit' },
                                 );
                                 if (res.status === 429) {
@@ -3777,6 +4046,38 @@
                             }
                         }
 
+                        // Re-searches, with GREAT_LINES lines, each position where the played move
+                        // was the engine's best and only one line was computed, so the classifier
+                        // can tell whether that move was the only good one (Great). The two-line
+                        // result replaces the one-line one: a stronger search, internally consistent.
+                        // A position whose re-search fails keeps its one-line result.
+                        async function addSecondLines(pool) {
+                            const wanted = [];
+                            for (let i = 1; i < total; i++) {
+                                const prev = analysisPositions[i - 1], curr = analysisPositions[i];
+                                if (!prev || !curr || prev.multipv?.['2'] || prev.multipv?.[2]) continue;
+                                if (prev.bestmove && playedMoveUci(prev, curr) === prev.bestmove) wanted.push(i - 1);
+                            }
+                            if (!pool.length || !wanted.length) return;
+
+                            let next = 0, done = 0;
+                            $('#analysisCurrent').textContent = '0';
+                            $('#analysisTotal').textContent = `${wanted.length} (jalur kedua)`;
+                            $('#analysisProgressBar').style.width = '0%';
+                            await Promise.all(pool.map(async (session) => {
+                                while (!session.wedged && next < wanted.length) {
+                                    const idx = wanted[next++];
+                                    try {
+                                        analysisPositions[idx] = buildPosEntry(await analyzeFenClient(session, fenList[idx], idx, GREAT_LINES), idx);
+                                    } catch (e) {
+                                        console.warn(`Second engine line failed for position ${idx}:`, e);
+                                    }
+                                    $('#analysisCurrent').textContent = ++done;
+                                    $('#analysisProgressBar').style.width = Math.round(done / wanted.length * 100) + '%';
+                                }
+                            }));
+                        }
+
                         async function runClientPool(pool) {
                             clientPoolSize = Math.max(1, pool.length);
                             await Promise.all(pool.map(clientBatchWorker));
@@ -3822,7 +4123,7 @@
                                 const res = await fetch('/api/engine/analyze/batch', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ fens: batchIdxs.map((i) => fenList[i]), depth, multipv, chess960: isCurrentGame960 })
+                                    body: JSON.stringify({ fens: batchIdxs.map((i) => fenList[i]), depth, multipv: serverLines, chess960: isCurrentGame960 })
                                 });
                                 const data = await res.json();
                                 if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
@@ -3875,12 +4176,20 @@
                         // and sitting in backstop-only mode while clientBatchWorker's own probe is the
                         // one that would have corrected it, which never arrives if the browser engine
                         // turns out to be unavailable.
+                        // Opening theory for the Book label, looked up alongside the engines.
+                        const bookReady = lookupOpeningBook();
+
                         await probeClientEngine();
 
                         // Boot the browser engine pool while the Lichess lookups are in flight.
                         const poolReady = enginePreference === 'server' ? Promise.resolve([]) : window.VRChessEngine.pool();
-                        const lichessHits = await runLichessOpeningPhase();
+                        // A custom depth means every position at exactly that depth, so Lichess's
+                        // (much deeper) stored evaluations are left out of that review.
+                        const lichessHits = customDepth ? 0 : await runLichessOpeningPhase();
                         const pool = await poolReady;
+                        // Without a browser pool (server-only mode) nothing can add the second
+                        // line afterwards, so the server computes two lines up front.
+                        const serverLines = pool.length ? multipv : Math.max(GREAT_LINES, multipv);
 
                         if ($('#analysisEngineLabel')) {
                             const browser = `${ICONS.monitor} Browser ×${pool.length}`;
@@ -3891,11 +4200,22 @@
                         }
 
                         await Promise.all([runClientPool(pool), serverBatchWorker()]);
+                        if (!batchFailed) await addSecondLines(pool);
 
                         $('#btnStartPgnAnalysis').disabled = false;
                         $('#analysisProgress').style.display = 'none';
 
                         if (batchFailed) return;
+
+                        // Moves 1..plies are book. Only a lookup that ran to the end of the
+                        // opening may mark the rest as not-book; after a failed or partial one
+                        // those stay unset, so the classifier falls back to the bundled list.
+                        const book = await bookReady;
+                        analysisPositions.forEach((pos, i) => {
+                            if (!pos || i === 0) return;
+                            if (i <= book.plies) pos.book = true;
+                            else if (book.complete) pos.book = false;
+                        });
 
                         analysisPositions = analysisPositions.filter(Boolean); // defensive — should already be fully populated
                         mainPositions = [...analysisPositions];
@@ -3924,17 +4244,119 @@
                             gotoMove(0);
                         }, 50);
 
-                        // Auto-save back to DB if this was a shared link that needed re-analysis
+                        // Save back to the saved analysis this review belongs to (a shared link that
+                        // needed re-analysis, or an admin re-analysis). Awaited so a batch can tell
+                        // whether each game was actually stored.
+                        let saved = null;
                         if (currentAnalysisId && mainPositions.length > 1) {
                             try {
-                                fetch(`/api/analyses/${encodeURIComponent(currentAnalysisId)}`, {
+                                const res = await fetch(`/api/analyses/${encodeURIComponent(currentAnalysisId)}`, {
                                     method: 'PATCH',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ analysis: mainPositions })
                                 });
-                            } catch (e) { console.error('Auto-save failed:', e); }
+                                saved = res.ok && (await res.json()).success === true;
+                            } catch (e) {
+                                console.error('Auto-save failed:', e);
+                                saved = false;
+                            }
                         }
+                        return { ok: true, saved };
                     }
+
+                    // ── Admin: (re)analyze saved games ──
+                    // Each game runs through the normal Game Review above, one at a time, on the
+                    // Analysis tab so its progress shows, and is saved back to its saved analysis
+                    // (replacing existing evaluations needs the admin session this runs under).
+
+                    // '' → default node budget; otherwise a whole depth within what the server
+                    // engine also accepts, so both engines honor it.
+                    function parseReanalysisDepth(raw) {
+                        const text = String(raw ?? '').trim();
+                        if (!text) return { depth: null };
+                        const depth = Number(text);
+                        if (!Number.isInteger(depth) || depth < 8 || depth > 26) {
+                            return { error: 'Depth harus angka bulat 8–26, atau kosong untuk default.' };
+                        }
+                        return { depth };
+                    }
+
+                    let reanalysisRunning = false;
+                    async function reviewSavedAnalyses(ids, depth) {
+                        if (reanalysisRunning) { toast('Analisis lain masih berjalan.', 'error'); return; }
+                        reanalysisRunning = true;
+                        const status = $('#reanalysisStatus');
+                        const failed = [];
+                        try {
+                            $('#tabBtnAnalysis').click();
+                            for (const [n, id] of ids.entries()) {
+                                const label = `Analisis ${n + 1}/${ids.length}${depth ? ` (depth ${depth})` : ''}…`;
+                                if (status) status.textContent = label;
+                                toast(label, 'info');
+                                let result;
+                                try {
+                                    const res = await apiCall(`/api/analyses/${encodeURIComponent(id)}`);
+                                    currentAnalysisId = id;
+                                    $('#pgnInput').value = res.data.pgn;
+                                    result = await startPgnAnalysis(depth ? { depth } : {});
+                                } catch (e) {
+                                    console.error(`Re-analysis of ${id} failed:`, e);
+                                }
+                                if (!result?.ok || !result.saved) failed.push(id);
+                                else { reviewSelection.delete(id); fetchAnalyses(true); } // the panel shows this game's new depth
+                            }
+                        } finally {
+                            reanalysisRunning = false;
+                        }
+                        const message = `Selesai: ${ids.length - failed.length}/${ids.length} tersimpan` + (failed.length ? `; gagal: ${failed.join(', ')}` : '.');
+                        if (status) status.textContent = message;
+                        toast(message, failed.length ? 'error' : 'success');
+                        fetchAnalyses(true);
+                    }
+
+                    // Panel buttons: each runs its set of games at the depth field's value.
+                    function analyzeBatch(ids, emptyMessage, what) {
+                        const parsed = parseReanalysisDepth($('#reanalysisDepth')?.value);
+                        if (parsed.error) { toast(parsed.error, 'error'); return; }
+                        if (!ids.length) { toast(emptyMessage, 'info'); return; }
+                        if (!confirm(`Analisis ${ids.length} ${what} di browser ini${parsed.depth ? ` (depth ${parsed.depth})` : ''}? Halaman ini harus tetap terbuka sampai selesai.`)) return;
+                        reviewSavedAnalyses(ids, parsed.depth);
+                    }
+                    $('#btnAnalyzeUnanalyzed')?.addEventListener('click', () => analyzeBatch(
+                        allAnalyses.filter(an => an.analyzed === false).map(an => an.id),
+                        'Semua game tersimpan sudah dianalisis.', 'game yang belum dianalisis'));
+                    $('#btnAnalyzeShallow')?.addEventListener('click', () => {
+                        const target = reviewTargetDepth();
+                        if (!target) { toast('Isi depth (8–26) dulu: game di bawah depth itu yang dianalisis ulang.', 'error'); return; }
+                        analyzeBatch(allAnalyses.filter(an => isShallowReview(an, target)).map(an => an.id),
+                            `Tidak ada game yang lebih dangkal dari depth ${target}.`, `game yang lebih dangkal dari depth ${target}`);
+                    });
+                    $('#btnAnalyzeSelected')?.addEventListener('click', () => analyzeBatch(
+                        [...reviewSelection], 'Belum ada game yang dipilih.', 'game yang dipilih'));
+                    $('#reanalysisDepth')?.addEventListener('input', renderReviewQueue);
+                    $('#reviewQueueFilter')?.addEventListener('change', renderReviewQueue);
+                    $('#reviewQueue')?.addEventListener('change', (e) => {
+                        const box = e.target;
+                        if (box.dataset.reviewAll !== undefined) {
+                            const visible = JSON.parse($('#reviewQueue').dataset.visibleIds || '[]');
+                            visible.forEach(id => box.checked ? reviewSelection.add(id) : reviewSelection.delete(id));
+                        } else if (box.dataset.reviewId) {
+                            box.checked ? reviewSelection.add(box.dataset.reviewId) : reviewSelection.delete(box.dataset.reviewId);
+                        } else {
+                            return;
+                        }
+                        renderReviewQueue();
+                    });
+
+                    // Per-game "Analisis Ulang" button in Riwayat Analisis (admin only), with its
+                    // own depth prompt, prefilled from the admin panel's depth field.
+                    window.appReanalyze = (id) => {
+                        const raw = prompt('Depth untuk analisis ulang (8–26, kosongkan untuk default):', $('#reanalysisDepth')?.value || '');
+                        if (raw === null) return;
+                        const parsed = parseReanalysisDepth(raw);
+                        if (parsed.error) { toast(parsed.error, 'error'); return; }
+                        reviewSavedAnalyses([id], parsed.depth);
+                    };
 
                     function gotoMove(idx) {
                         if (analysisPositions.length === 0) return;
@@ -4053,15 +4475,8 @@
 
                         let longestMatch = null;
                         for (let i = 1; i <= idx; i++) {
-                            if (analysisPositions[i] && analysisPositions[i].fen) {
-                                const parts = analysisPositions[i].fen.split(' ');
-                                if (parts.length >= 4) {
-                                    const fenStripped = parts.slice(0, 4).join(' ');
-                                    if (openingsDatabase[fenStripped]) {
-                                        longestMatch = openingsDatabase[fenStripped];
-                                    }
-                                }
-                            }
+                            const entry = analysisPositions[i]?.fen && openingAt(analysisPositions[i].fen);
+                            if (entry) longestMatch = entry;
                         }
 
                         if (longestMatch) {

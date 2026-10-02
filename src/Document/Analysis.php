@@ -117,6 +117,31 @@ class Analysis
             'created_at' => $this->createdAt,
             'pgn_preview' => $pgnPreview,
             'headers' => $headers,
+            // Lets the admin panel find saved games that still need a Game Review
+            // without fetching every full analysis.
+            'analyzed' => !empty($this->analysis),
+            'updated_at' => $this->updatedAt,
+            'depth' => $this->depthSummary(),
         ];
+    }
+
+    /**
+     * Search depth of the stored evaluations — the admin panel lists it so shallow
+     * reviews can be redone. Null when no position records a depth (no analysis yet,
+     * or one saved before depths were kept); game-over positions report none.
+     *
+     * @return array{min: int, avg: float}|null
+     */
+    private function depthSummary(): ?array
+    {
+        $depths = [];
+        foreach (is_array($this->analysis) ? $this->analysis : [] as $position) {
+            $depth = is_array($position) ? ($position['depth'] ?? null) : null;
+            if (is_int($depth) && $depth > 0) {
+                $depths[] = $depth;
+            }
+        }
+
+        return $depths === [] ? null : ['min' => min($depths), 'avg' => round(array_sum($depths) / count($depths), 1)];
     }
 }
