@@ -48,6 +48,18 @@ class ChessMatchRepository extends ServiceDocumentRepository
     }
 
     /**
+     * Highest player id any match refers to, including players since deleted
+     * (0 when there are no matches) — see MatchManager::getOrCreatePlayer().
+     */
+    public function maxReferencedPlayerId(): int
+    {
+        $byWhite = $this->createQueryBuilder()->sort('whiteId', 'desc')->limit(1)->getQuery()->getSingleResult();
+        $byBlack = $this->createQueryBuilder()->sort('blackId', 'desc')->limit(1)->getQuery()->getSingleResult();
+
+        return max($byWhite?->getWhiteId() ?? 0, $byBlack?->getBlackId() ?? 0);
+    }
+
+    /**
      * Next auto-increment app-level ID — same "max(id) + 1" scheme as the
      * legacy MongoDBDatabaseManager::getNextMatchId().
      */

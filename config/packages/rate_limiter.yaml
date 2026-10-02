@@ -6,8 +6,21 @@ framework:
             # without that override also affecting any other cache.app use.
             cache.rate_limiter.admin_login:
                 adapter: cache.app
+            cache.rate_limiter.engine_requests:
+                adapter: cache.app
 
     rate_limiter:
+        # Per-IP cap on the public server-engine routes (EngineController), for
+        # callers without an API token. A burst of 60 then 2/s covers someone
+        # clicking quickly through a game in server mode (one request per move)
+        # and a Game Review's batch chunks; it stops one client from queueing
+        # engine work faster than the MAX_CONCURRENT_ENGINES slots can serve it.
+        engine_requests:
+            policy: 'token_bucket'
+            limit: 60
+            rate: { interval: '1 second', amount: 2 }
+            cache_pool: 'cache.rate_limiter.engine_requests'
+
         # Brute-force guard on admin credential verification — shared by
         # both AdminLoginAuthenticator (session login) and
         # AdminHeaderAuthenticator (per-request X-Admin-* header auth),
@@ -34,3 +47,7 @@ when@test:
                 # previous run and failing non-deterministically.
                 cache.rate_limiter.admin_login:
                     adapter: cache.adapter.array
+                # engine_requests keeps the filesystem cache.app even under test: an
+                # array pool is reset between the test client's requests, so a limit
+                # spanning several requests could never trip. Tests that exercise it
+                # clear the pool first (see IntegrityFixesTest::setUp()).

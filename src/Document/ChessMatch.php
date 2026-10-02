@@ -167,6 +167,19 @@ class ChessMatch
     }
 
     /**
+     * The ratings going in and the changes this match produced, as of the latest
+     * full replay (MatchManager::recalculateRatings()) — so Match History matches
+     * the ratings the leaderboard actually shows after an invalidate/edit/delete.
+     */
+    public function setReplayedRatings(int $oldWhite, int $oldBlack, int $changeWhite, int $changeBlack): void
+    {
+        $this->oldWhiteRating = $oldWhite;
+        $this->oldBlackRating = $oldBlack;
+        $this->ratingChangeWhite = $changeWhite;
+        $this->ratingChangeBlack = $changeBlack;
+    }
+
+    /**
      * Matches the legacy MongoDBDatabaseManager::loadMatches() shape, minus
      * restored_white_rating/restored_black_rating — those were always null
      * in every live record (nothing in MatchManager ever sets them) and

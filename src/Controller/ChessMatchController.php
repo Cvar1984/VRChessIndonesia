@@ -85,13 +85,8 @@ class ChessMatchController extends AbstractApiController
             return $this->json(['success' => false, 'error' => 'Nama pemain tidak boleh kosong'], 400);
         }
 
-        // Priority: PGN > URL > blank. If PGN is supplied, save it as an
-        // analysis and use the returned ID as the match's analysis_url.
-        if ($pgn !== '') {
-            $analysis = new Analysis(bin2hex(random_bytes(8)), $pgn);
-            $this->dm->persist($analysis);
-            $this->dm->flush();
-            $analysisUrl = $analysis->getId();
+        if (!$this->isAllowedAnalysisUrl($analysisUrl)) {
+            return $this->json(['success' => false, 'error' => 'analysis_url harus berupa ID analisis internal atau URL http(s)://'], 400);
         }
 
         $result = match ($rawResult) {
@@ -108,10 +103,20 @@ class ChessMatchController extends AbstractApiController
             ], 400);
         }
 
+        // Priority: PGN > URL > blank. A supplied PGN is saved as an analysis whose id
+        // becomes the match's analysis_url — but only once the match itself has been
+        // recorded, so a rejected submission (bad result, self-play) leaves no orphan.
+        $analysisId = $pgn !== '' ? bin2hex(random_bytes(8)) : null;
+
         try {
-            $matchResult = $this->manager->play($white, $black, $result, $analysisUrl);
+            $matchResult = $this->manager->play($white, $black, $result, $analysisId ?? $analysisUrl);
         } catch (\Exception $e) {
             return $this->json(['success' => false, 'error' => $e->getMessage()], 400);
+        }
+
+        if ($analysisId !== null) {
+            $this->dm->persist(new Analysis($analysisId, $pgn));
+            $this->dm->flush();
         }
 
         return $this->json([
@@ -224,14 +229,7 @@ class ChessMatchController extends AbstractApiController
 
         if (isset($input['analysis_url'])) {
             $analysisUrl = trim((string) $input['analysis_url']);
-            // Same shapes play() accepts: our own internal analysis id (hex),
-            // or a genuine http(s) URL (e.g. an external chess.com/chessigma
-            // link) — never a javascript:/data: URI, which the SPA renders
-            // straight into an <a href> for every visitor, admin or not.
-            if ($analysisUrl !== ''
-                && !preg_match('/^[a-f0-9]{8,}$/i', $analysisUrl)
-                && !preg_match('#^https?://#i', $analysisUrl)
-            ) {
+            if (!$this->isAllowedAnalysisUrl($analysisUrl)) {
                 return $this->json([
                     'success' => false,
                     'error' => 'analysis_url harus berupa ID analisis internal atau URL http(s)://',
@@ -251,6 +249,19 @@ class ChessMatchController extends AbstractApiController
             'success' => $updated,
             'message' => $updated ? "Pertandingan #{$id} berhasil diperbarui." : 'Pertandingan tidak ditemukan.',
         ], $updated ? 200 : 404);
+    }
+
+    /**
+     * Blank, our own internal analysis id (hex), or a genuine http(s) URL (an
+     * external chess.com/chessigma link) — never a javascript:/data: URI, which
+     * the SPA renders into an <a href> for every visitor. Shared by play() and
+     * edit() so the two can't drift apart again.
+     */
+    private function isAllowedAnalysisUrl(string $url): bool
+    {
+        return $url === ''
+            || preg_match('/^[a-f0-9]{8,}$/i', $url) === 1
+            || preg_match('#^https?://\S+$#i', $url) === 1;
     }
 
     private function deleteAnalysisById(string $id): void

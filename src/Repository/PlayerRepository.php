@@ -44,12 +44,23 @@ class PlayerRepository extends ServiceDocumentRepository
      * Falls back to earlier usernames, so a bot or admin still using a player's old
      * name (before a VRChat rename) reaches the same record instead of, say, a match
      * submission creating a duplicate player. A current username always wins.
+     *
+     * Only for OLD_NAME_GRACE_DAYS after the rename: VRChat can let a different
+     * person claim a released display name, and past the grace period their games
+     * should create a new player rather than be credited to the old owner.
      */
     public function findOneByUsername(string $username): ?Player
     {
+        $since = date('Y-m-d H:i:s', strtotime('-' . self::OLD_NAME_GRACE_DAYS . ' days'));
+
         return $this->findOneBy(['username' => $username])
-            ?? $this->findOneBy(['username_history.username' => $username]);
+            ?? $this->findOneBy(['username_history' => ['$elemMatch' => [
+                'username' => $username,
+                'changed_at' => ['$gte' => $since], // 'Y-m-d H:i:s' sorts as a string
+            ]]]);
     }
+
+    public const int OLD_NAME_GRACE_DAYS = 90;
 
     /** Current usernames only — what the unique index on `username` cares about. */
     public function isUsernameTaken(string $username): bool

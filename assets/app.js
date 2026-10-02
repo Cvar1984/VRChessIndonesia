@@ -3,7 +3,6 @@
 
                 // ── State Variables ──
                 let isAdminState = false;
-                let activeApiToken = '';
                 let currentAdminName = '';
                 let playersCache = [];
                 let openingsDatabase = {};
@@ -78,6 +77,15 @@
                         .replace(/'/g, "&#039;");
                 }
 
+                // A string argument for JS inside an HTML attribute (onclick="fn(${jsStr(x)})").
+                // escHtml alone isn't enough there: the browser decodes &#039; back to ' before
+                // running the handler, so '${escHtml(x)}' lets a quote in x end the string —
+                // a username or VRChat display name like  x');alert(1);//  would run as code.
+                // JSON.stringify makes a valid JS literal; escHtml then keeps it inside the attribute.
+                function jsStr(value) {
+                    return escHtml(JSON.stringify(String(value ?? '')));
+                }
+
                 // ── Toast Notifications ──
                 function toast(message, type = 'info') {
                     const container = $('#toastContainer');
@@ -93,9 +101,6 @@
                 // ── API Fetch Wrapper ──
                 async function apiCall(url, options = {}) {
                     options.headers = options.headers || {};
-                    if (activeApiToken) {
-                        options.headers['X-API-Token'] = activeApiToken;
-                    }
                     try {
                         const response = await fetch(url, options);
                         const data = await response.json();
@@ -112,9 +117,6 @@
                 async function checkAuthStatus() {
                     try {
                         const res = await apiCall('/api/auth/status');
-                        if (res.default_token) {
-                            activeApiToken = res.default_token;
-                        }
                         if (res.username) {
                             currentAdminName = res.username;
                         }
@@ -312,13 +314,13 @@
                             <td>${statusTag}</td>
                             <td>
                                 <span class="token-code">${escHtml(t.token)}</span>
-                                <button class="btn btn--icon btn--xs" onclick="navigator.clipboard.writeText('${escHtml(t.token)}'); alert('Token berhasil di-copy!');" title="Copy Token">${ICONS.copy}</button>
+                                <button class="btn btn--icon btn--xs" onclick="navigator.clipboard.writeText(${jsStr(t.token)}); alert('Token berhasil di-copy!');" title="Copy Token">${ICONS.copy}</button>
                             </td>
                             <td><span class="stat-value">${escHtml(t.created_at)}</span></td>
                             <td><span class="stat-value">${escHtml(t.last_used)}</span></td>
                             <td>
-                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditToken('${escHtml(t.id)}', '${escHtml(t.name)}', ${isActive})" title="Edit Token">${ICONS.pencil}</button>
-                                <button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appRevokeToken('${escHtml(t.id)}')" title="Cabut Token">${ICONS.trash}</button>
+                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditToken(${jsStr(t.id)}, ${jsStr(t.name)}, ${isActive})" title="Edit Token">${ICONS.pencil}</button>
+                                <button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appRevokeToken(${jsStr(t.id)})" title="Cabut Token">${ICONS.trash}</button>
                             </td>
                         </tr>`;
                     });
@@ -358,8 +360,8 @@
                             <td><strong>${escHtml(a.username)}</strong>${meTag}</td>
                             <td><span class="stat-value">${escHtml(a.created_at)}</span></td>
                             <td>
-                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditAdmin('${escHtml(a.username)}')" title="Ubah Password">${ICONS.pencil} Password</button>
-                                ${!isSelf ? `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteAdmin('${escHtml(a.username)}')" title="Hapus Admin">${ICONS.trash}</button>` : ''}
+                                <button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditAdmin(${jsStr(a.username)})" title="Ubah Password">${ICONS.pencil} Password</button>
+                                ${!isSelf ? `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteAdmin(${jsStr(a.username)})" title="Hapus Admin">${ICONS.trash}</button>` : ''}
                             </td>
                         </tr>`;
                     });
@@ -385,7 +387,7 @@
                         <div class="gallery-admin-section">
                             <div class="gallery-admin-section__header">
                                 <span class="gallery-admin-section__title">${escHtml(g.name)}</span>
-                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appTriggerGalleryUpload('${escHtml(g.id)}')">${ICONS.plus} Upload Gambar</button>
+                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appTriggerGalleryUpload(${jsStr(g.id)})">${ICONS.plus} Upload Gambar</button>
                             </div>`;
 
                         if (g.photos.length === 0) {
@@ -400,7 +402,7 @@
                                         <span class="gallery-admin-card__date">${escHtml(relativeTime(p.createdAt))}</span>
                                     </div>
                                     <button class="btn ${p.hidden ? 'btn--secondary' : 'btn--danger'} btn--xs gallery-admin-card__toggle"
-                                        onclick="window.${p.hidden ? 'appUnhideGalleryPhoto' : 'appHideGalleryPhoto'}('${escHtml(p.id)}')">
+                                        onclick="window.${p.hidden ? 'appUnhideGalleryPhoto' : 'appHideGalleryPhoto'}(${jsStr(p.id)})">
                                         ${p.hidden ? ICONS.eye + ' Tampilkan' : ICONS.eyeoff + ' Sembunyikan'}
                                     </button>
                                 </div>`;
@@ -442,9 +444,9 @@
                                 <div class="newsletter-admin-card__meta">${escHtml(relativeTime(p.createdAt))}</div>
                             </div>
                             <div class="newsletter-admin-card__actions">
-                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appTriggerPostImageUpload('${escHtml(p.id)}')" title="Upload/Ganti Gambar">${ICONS.image}</button>
-                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appOpenEditPost('${escHtml(p.id)}')" title="Edit Post">${ICONS.pencil}</button>
-                                <button type="button" class="btn btn--danger btn--xs" onclick="window.appDeletePost('${escHtml(p.id)}')" title="Hapus Post">${ICONS.trash}</button>
+                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appTriggerPostImageUpload(${jsStr(p.id)})" title="Upload/Ganti Gambar">${ICONS.image}</button>
+                                <button type="button" class="btn btn--secondary btn--xs" onclick="window.appOpenEditPost(${jsStr(p.id)})" title="Edit Post">${ICONS.pencil}</button>
+                                <button type="button" class="btn btn--danger btn--xs" onclick="window.appDeletePost(${jsStr(p.id)})" title="Hapus Post">${ICONS.trash}</button>
                             </div>
                         </div>`;
                     });
@@ -636,7 +638,7 @@
                         const changeLabel = h.ratingChange > 0 ? `+${h.ratingChange}` : `${h.ratingChange}`;
                         const analysisUrl = resolveAnalysisUrl(h.analysisUrl);
                         const opponentHtml = h.opponentName
-                            ? `<button class="profile-history-row__opponent" onclick="window.appViewPlayer('${escHtml(h.opponentName)}')">${escHtml(h.opponentName)}</button>`
+                            ? `<button class="profile-history-row__opponent" onclick="window.appViewPlayer(${jsStr(h.opponentName)})">${escHtml(h.opponentName)}</button>`
                             : `<span class="profile-history-row__opponent profile-history-row__opponent--deleted">Pemain Dihapus</span>`;
 
                         return `
@@ -713,8 +715,8 @@
 
                         const adminActionsTd = isAdminState ? `
                             <td onclick="event.stopPropagation();">
-                                <button class="btn btn--icon btn--xs" onclick="window.appOpenEditPlayer('${escHtml(p.username)}', ${p.rating})" title="Edit Pemain">${ICONS.pencil}</button>
-                                <button class="btn btn--danger btn--xs" onclick="window.appDeletePlayer('${escHtml(p.username)}')" title="Hapus Pemain">${ICONS.trash}</button>
+                                <button class="btn btn--icon btn--xs" onclick="window.appOpenEditPlayer(${jsStr(p.username)}, ${p.rating})" title="Edit Pemain">${ICONS.pencil}</button>
+                                <button class="btn btn--danger btn--xs" onclick="window.appDeletePlayer(${jsStr(p.username)})" title="Hapus Pemain">${ICONS.trash}</button>
                             </td>` : '';
 
                         html += `
@@ -916,7 +918,7 @@
                             } else {
                                 adminButtons += `<button class="btn btn--success btn--xs match-actions-btn" onclick="window.appRevalidateMatch(${m.id})" title="Pulihkan Pertandingan">${ICONS.refresh} Pulihkan</button>`;
                             }
-                            adminButtons += `<button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditMatch(${m.id}, '${escHtml(m.result)}', '${escHtml(m.analysis_url || '')}')" title="Edit Match">${ICONS.pencil} Edit</button>`;
+                            adminButtons += `<button class="btn btn--icon btn--xs match-actions-btn" onclick="window.appOpenEditMatch(${m.id}, ${jsStr(m.result)}, ${jsStr(m.analysis_url || '')})" title="Edit Match">${ICONS.pencil} Edit</button>`;
                             adminButtons += `<button class="btn btn--danger btn--xs match-actions-btn" onclick="window.appDeleteMatch(${m.id})" title="Hapus Match">${ICONS.trash} Hapus</button>`;
                         }
 
@@ -1127,7 +1129,7 @@
 
                         // Admin delete button — always re-evaluated so it tracks login/logout instantly
                         const adminBtn = isAdminState
-                            ? `<button class="btn btn--danger btn--xs" onclick="window.appDeleteAnalysis('${an.id}')" title="Hapus Analisis">${ICONS.trash} Hapus</button>`
+                            ? `<button class="btn btn--danger btn--xs" onclick="window.appDeleteAnalysis(${jsStr(an.id)})" title="Hapus Analisis">${ICONS.trash} Hapus</button>`
                             : '';
 
                         // ── Parse PGN headers ──
@@ -1209,7 +1211,7 @@
                             </div>
                             <!-- Card footer: actions -->
                             <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:8px 14px;background:rgba(255,255,255,0.02);border-top:1px solid rgba(255,255,255,0.05);">
-                                <button class="btn btn--secondary btn--xs" onclick="navigator.clipboard.writeText('${escHtml(shareUrl)}').then(()=>toast('Link copied!','success'))">${ICONS.copy} Copy Link</button>
+                                <button class="btn btn--secondary btn--xs" onclick="navigator.clipboard.writeText(${jsStr(shareUrl)}).then(()=>toast('Link copied!','success'))">${ICONS.copy} Copy Link</button>
                                 ${adminBtn}
                             </div>
                         </div>`;
@@ -1519,7 +1521,7 @@
                     }
 
                     resultsEl.innerHTML = results.map(r => `
-                        <button type="button" class="vrchat-candidate" onclick="window.appLinkVrchat('${escHtml(username)}', '${escHtml(r.id)}', '${escHtml(r.displayName)}')">
+                        <button type="button" class="vrchat-candidate" onclick="window.appLinkVrchat(${jsStr(username)}, ${jsStr(r.id)}, ${jsStr(r.displayName)})">
                             ${avatarHtml(r.displayName, r.thumbnail)}
                             <span class="vrchat-candidate__name">${escHtml(r.displayName)}</span>
                         </button>`
@@ -3323,10 +3325,14 @@
                             } catch (e) { }
                         }
 
-                        // Great: chess.com defines this as EITHER the only good move in the
-                        // position (beats the 2nd-best line by a wide margin — the required margin
-                        // shrinks for a more generous leniency) OR a move that swings the game's
-                        // trajectory — losing to equal, or equal to winning.
+                        // Great: the only good move in the position (beats the 2nd-best line by a
+                        // wide margin — the required margin shrinks for a more generous leniency).
+                        // chess.com also awards it for a move that swings the game (losing to
+                        // equal, equal to winning), but measured here that only ever fired on
+                        // engine inconsistency: a move can't raise the mover's win% unless the
+                        // previous eval was wrong. Zero such badges across four games analysed
+                        // consistently (incl. native full-net Stockfish), ten in the same games'
+                        // mixed-source production evals — so that rule was dropped.
                         if (loss < 2) {
                             const requiredGap = Math.max(8, Math.min(35, 18 / leniency));
                             if (prevPos && prevPos.multipv && Object.keys(prevPos.multipv).length >= 2) {
@@ -3344,13 +3350,6 @@
                                         return { src: window.MOVE_ICON_URLS.the_only_move, title: "Great: The only good choice" };
                                     }
                                 }
-                            }
-                            const wasLosing = prevPct < 30;
-                            const wasEqual = prevPct >= 30 && prevPct <= 70;
-                            const nowEqualOrBetter = currPct >= 45;
-                            const nowWinning = currPct > 70;
-                            if ((wasLosing && nowEqualOrBetter) || (wasEqual && nowWinning)) {
-                                return { src: window.MOVE_ICON_URLS.the_only_move, title: "Great: Changes the course of the game" };
                             }
                         }
 

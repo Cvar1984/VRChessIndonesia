@@ -19,6 +19,11 @@ use VRchessIndo\Repository\AnalysisRepository;
  */
 class AnalysisController extends AbstractApiController
 {
+    // Both endpoints are public, so both are size-capped. A position entry is ~0.5 KB
+    // and real games stay far below 1000 plies; 2000 leaves room for very long ones.
+    private const int MAX_POSITIONS = 2000;
+    private const int MAX_PGN_BYTES = 200_000;
+
     public function __construct(
         private readonly AnalysisRepository $analyses,
         private readonly DocumentManager $dm,
@@ -34,6 +39,12 @@ class AnalysisController extends AbstractApiController
 
         if ($pgn === '') {
             return $this->json(['success' => false, 'error' => 'PGN required'], 400);
+        }
+        if (strlen($pgn) > self::MAX_PGN_BYTES) {
+            return $this->json(['success' => false, 'error' => 'PGN terlalu besar'], 400);
+        }
+        if (is_array($analysisData) && ($error = $this->invalidPositions($analysisData)) !== null) {
+            return $this->json(['success' => false, 'error' => $error], 400);
         }
 
         $analysis = new Analysis(bin2hex(random_bytes(8)), $pgn, is_array($analysisData) ? $analysisData : null);
@@ -83,6 +94,18 @@ class AnalysisController extends AbstractApiController
             return $this->json(['success' => false]);
         }
 
+        if (($error = $this->invalidPositions($analysisData)) !== null) {
+            return $this->json(['success' => false, 'error' => $error], 400);
+        }
+
+        // Anyone may backfill a saved game that has no evaluations yet — that's how a
+        // shared link without them gets filled in by its first visitor's Game Review.
+        // Replacing existing evaluations needs an API token: they feed every viewer's
+        // review and each player's profile accuracy/Brilliant stats.
+        if (!empty($analysis->getAnalysis()) && ($response = $this->requireApiAccess())) {
+            return $response;
+        }
+
         $analysis->setAnalysis($analysisData);
         $this->dm->flush();
 
@@ -105,5 +128,20 @@ class AnalysisController extends AbstractApiController
         $this->dm->flush();
 
         return $this->json(['success' => true, 'message' => "Analisis {$id} telah dihapus."]);
+    }
+
+    /** Null when $positions is a plausible list of position entries, else the error. */
+    private function invalidPositions(array $positions): ?string
+    {
+        if (!array_is_list($positions) || count($positions) > self::MAX_POSITIONS) {
+            return 'analysis harus berupa daftar posisi (maks. ' . self::MAX_POSITIONS . ')';
+        }
+        foreach ($positions as $position) {
+            if (!is_array($position) || !is_string($position['fen'] ?? null)) {
+                return 'setiap posisi harus berupa objek dengan fen';
+            }
+        }
+
+        return null;
     }
 }

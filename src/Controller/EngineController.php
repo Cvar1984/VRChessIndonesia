@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace VRchessIndo\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use VRchessIndo\Service\Engine\StockfishEngineFactory;
 
@@ -29,14 +33,30 @@ class EngineController extends AbstractController
      */
     private const float BATCH_BUDGET_SECONDS = 45.0;
 
-    public function __construct(private readonly StockfishEngineFactory $engines)
-    {
+    /**
+     * These routes are public and each one runs a multi-threaded Stockfish, so
+     * at most this many run at once across all PHP workers (one flock per slot);
+     * a request waits up to SLOT_WAIT_SECONDS for a free slot, then gets a 503.
+     * The wait plus BATCH_BUDGET_SECONDS stays under Cloudflare's 100s.
+     */
+    private const int MAX_CONCURRENT_ENGINES = 2;
+    private const float SLOT_WAIT_SECONDS = 20.0;
+
+    public function __construct(
+        private readonly StockfishEngineFactory $engines,
+        private readonly LockFactory $locks,
+        #[Autowire(service: 'limiter.engine_requests')] private readonly RateLimiterFactory $engineLimiter,
+    ) {
     }
 
     #[Route('/api/engine/analyze', name: 'api_engine_analyze', methods: ['GET', 'POST'])]
     public function analyze(Request $request): JsonResponse
     {
         set_time_limit(0);
+
+        if ($response = $this->throttled($request)) {
+            return $response;
+        }
 
         try {
             $input = $this->requestData($request);
@@ -50,8 +70,13 @@ class EngineController extends AbstractController
             $multipv = $this->resolveMultipv($input);
             $chess960 = (bool) ($input['chess960'] ?? false);
 
+            if (!($slot = $this->acquireEngineSlot())) {
+                return $this->busy();
+            }
+
             $engine = $this->engines->create($multipv, $chess960);
             $result = $engine->analyze($fen, $depth, $movetime);
+            $slot->release();
 
             return $this->json($result);
         } catch (\Throwable $e) {
@@ -63,6 +88,10 @@ class EngineController extends AbstractController
     public function analyzeBatch(Request $request): JsonResponse
     {
         set_time_limit(0);
+
+        if ($response = $this->throttled($request)) {
+            return $response;
+        }
 
         try {
             $input = $this->requestData($request);
@@ -84,7 +113,12 @@ class EngineController extends AbstractController
             $multipv = $this->resolveMultipv($input);
             $chess960 = (bool) ($input['chess960'] ?? false);
 
+            if (!($slot = $this->acquireEngineSlot())) {
+                return $this->busy();
+            }
+
             $positions = $this->analyzeFens($cleanFens, $depth, $multipv, $chess960);
+            $slot->release();
 
             return $this->json([
                 'success' => true,
@@ -105,6 +139,10 @@ class EngineController extends AbstractController
     public function analyzeStream(Request $request): Response
     {
         set_time_limit(0);
+
+        if ($response = $this->throttled($request)) {
+            return $response;
+        }
 
         // Validate *before* committing to the SSE content-type — legacy hits
         // sanitizeFen() (and its outer catch-all) before ever setting the
@@ -128,7 +166,13 @@ class EngineController extends AbstractController
             return $this->json(['error' => $e->getMessage()], 500);
         }
 
-        $response = new StreamedResponse(function () use ($fen, $depth, $movetime, $multipv, $chess960): void {
+        // Taken before the event-stream headers so a busy server still answers with a
+        // clean JSON 503; the closure holds it until the stream's last event.
+        if (!($slot = $this->acquireEngineSlot())) {
+            return $this->busy();
+        }
+
+        $response = new StreamedResponse(function () use ($fen, $depth, $movetime, $multipv, $chess960, $slot): void {
             try {
                 $engine = $this->engines->create($multipv, $chess960);
 
@@ -146,6 +190,8 @@ class EngineController extends AbstractController
                 $this->emitSse($this->infoPayload($result, 'done'));
             } catch (\Throwable $e) {
                 $this->emitSse(['type' => 'error', 'error' => $e->getMessage()]);
+            } finally {
+                $slot->release();
             }
         });
 
@@ -155,6 +201,42 @@ class EngineController extends AbstractController
         $response->headers->set('X-Accel-Buffering', 'no');
 
         return $response;
+    }
+
+    /**
+     * Per-IP request limit for anonymous callers (see config/packages/rate_limiter.yaml).
+     * API token holders and admins are trusted and skip it.
+     */
+    private function throttled(Request $request): ?JsonResponse
+    {
+        if ($this->isGranted('ROLE_API_TOKEN')
+            || $this->engineLimiter->create($request->getClientIp() ?? 'unknown')->consume()->isAccepted()) {
+            return null;
+        }
+
+        return $this->json(['error' => 'Terlalu banyak permintaan analisis server. Coba lagi sebentar lagi.'], 429);
+    }
+
+    /** One of the MAX_CONCURRENT_ENGINES slots, or null if none freed up in time. */
+    private function acquireEngineSlot(): ?LockInterface
+    {
+        $deadline = microtime(true) + self::SLOT_WAIT_SECONDS;
+        do {
+            for ($i = 0; $i < self::MAX_CONCURRENT_ENGINES; $i++) {
+                $lock = $this->locks->createLock("engine_slot_{$i}");
+                if ($lock->acquire(false)) {
+                    return $lock;
+                }
+            }
+            usleep(200_000);
+        } while (microtime(true) < $deadline);
+
+        return null;
+    }
+
+    private function busy(): JsonResponse
+    {
+        return $this->json(['error' => 'Server engine sedang penuh. Coba lagi sebentar lagi.'], 503);
     }
 
     /**

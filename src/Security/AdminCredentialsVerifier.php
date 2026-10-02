@@ -56,7 +56,10 @@ class AdminCredentialsVerifier
             return $admin;
         }
 
-        if (hash_equals($admin->getPassword(), $password)) {
+        // Legacy plaintext passwords, upgraded to bcrypt on first login. Only for a stored
+        // value that isn't a hash: comparing against a hash would accept the hash itself
+        // as the password, so a leaked database dump would be a working login.
+        if (password_get_info($admin->getPassword())['algo'] === null && hash_equals($admin->getPassword(), $password)) {
             $admin->setPassword(password_hash($password, PASSWORD_BCRYPT));
             $this->dm->flush();
             $limiter->reset();

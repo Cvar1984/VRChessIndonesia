@@ -245,8 +245,6 @@ All **Admin Only**. Token object shape:
 **3. Update** — body `{ "name", "is_active" }`.
 **4. Revoke** — deletes the token permanently.
 
-> A "Default Web App Token" is auto-created on first request and used internally by the frontend SPA.
-
 ---
 
 ## 👤 Admin User Management (Admin)
@@ -275,16 +273,16 @@ Analyses are Stockfish-evaluated PGN games, saved so a shareable link (`?analysi
 | 1 | Save analysis | `POST` | `/api/analyses` | Public |
 | 2 | List all analyses | `GET` | `/api/analyses` | Public |
 | 3 | Get one analysis | `GET` | `/api/analyses/{id}` | Public |
-| 4 | Update analysis | `PATCH` | `/api/analyses/{id}` | Public |
+| 4 | Update analysis | `PATCH` | `/api/analyses/{id}` | Public to fill an empty one; API Token Required to replace |
 | 5 | Delete analysis | `DELETE` | `/api/analyses/{id}` | API Token Required |
 
-**1. Save** — body `{ "pgn": "<PGN text>", "analysis": [ ...positions ] }` (`analysis` optional — can be attached later via #4, e.g. once background Stockfish evaluation finishes). Returns `{ success, id }` — a 16-char hex ID.
+**1. Save** — body `{ "pgn": "<PGN text>", "analysis": [ ...positions ] }` (`analysis` optional — can be attached later via #4, e.g. once background Stockfish evaluation finishes). Returns `{ success, id }` — a 16-char hex ID. The PGN is capped at 200 KB, and `analysis` must be a list of at most 2000 position objects, each with a `fen` (`400` otherwise).
 
 **3. Get one** — `404` if not found. Otherwise `{ success, data: { id, pgn, created_at, analysis? } }`, where `analysis` (if present) is the full array of evaluated positions (see [move accuracy model](#-move-accuracy--classification-model) for each position's shape: `fen`, `move_san`, `score_cp`, `score_type`, `bestmove`, `pv`, `multipv`, `depth`).
 
 **2. List all** — lightweight; omits the heavy `analysis` array. Returns `{ success, analyses: [{ id, created_at, pgn_preview, headers }] }`, where `headers` is the parsed PGN tag pairs (`White`, `Black`, `WhiteElo`, `Result`, `Event`, ...).
 
-**4. Update** — body `{ "analysis": [...] }`. ⚠️ One real quirk: if `id` doesn't exist, this returns `{success:false}` with HTTP **200**, not 404 — a deliberately preserved behavior of the original endpoint.
+**4. Update** — body `{ "analysis": [...] }`, same limits as #1. Anyone can fill in an analysis that has no evaluations yet; that's how a shared link saved without them gets completed by its first visitor's Game Review. Replacing existing evaluations needs an API token (`401` otherwise), since they feed every viewer's review and each player's profile accuracy and Brilliant count. ⚠️ One real quirk: if `id` doesn't exist, this returns `{success:false}` with HTTP **200**, not 404 — a deliberately preserved behavior of the original endpoint.
 
 ---
 
@@ -482,7 +480,7 @@ VRChat's CDN rejects direct browser `<img>` requests outright (its WAF requires 
 
 ## 🧠 Stockfish Engine Analysis API
 
-Wraps a local Stockfish binary via `StockfishEngine` (Symfony `Process`, UCI protocol). Supports Chess960/Fischer Random via `chess960: true`. All **Public** (read-only, no auth).
+Wraps a local Stockfish binary via `StockfishEngine` (Symfony `Process`, UCI protocol). Supports Chess960/Fischer Random via `chess960: true`. All **Public** (read-only, no auth), with two limits since each request runs a multi-threaded engine: at most 2 engines run at once across the server (a request waits up to 20s for a free one, then gets `503`), and callers without an API token are limited per IP to a burst of 60 requests, refilling at 2 per second (`429` beyond that).
 
 ### 1. Single FEN analysis
 | Method | URL |
@@ -664,7 +662,9 @@ Shown as an icon on the move that was just played (Analysis tab board overlay), 
 | `404` | Not Found | Player, Match, Token, Admin, Analysis, Post, Photo, or Avatar not found. |
 | `409` | Conflict | Renaming a player to a username another player already has. |
 | `500` | Internal Server Error | Unhandled server-side exception. |
+| `429` | Too Many Requests | Server-engine rate limit hit (anonymous callers, per IP). |
 | `502` | Bad Gateway | VRChat API unreachable, rejected the request, isn't configured, or (gallery/newsletter uploads specifically) the connected account lacks VRC+. |
+| `503` | Service Unavailable | Every server-engine slot stayed busy for 20s. |
 | `204` | No Content | CORS preflight (`OPTIONS`, any route). |
 
 ---

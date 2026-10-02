@@ -91,7 +91,11 @@ class MatchManager
             return $player;
         }
 
-        $player = new Player($this->playerRepository->nextId(), $username);
+        // Matches keep a deleted player's id, so a plain max(player id) + 1 could hand
+        // that id to a newcomer, who would then inherit the deleted player's matches
+        // (their stats, and their rating on the next replay). Skip every referenced id.
+        $id = max($this->playerRepository->nextId(), $this->matchRepository->maxReferencedPlayerId() + 1);
+        $player = new Player($id, $username);
         $this->dm->persist($player);
         $this->dm->flush();
 
@@ -459,10 +463,13 @@ class MatchManager
             $playersById[$player->getId()] = $player;
         }
 
+        // Dates have one-second precision, so two matches recorded in the same second
+        // tie; the id (assigned in recording order) keeps the replay order fixed.
         $validMatches = $this->matchRepository->findValid();
         usort(
             $validMatches,
-            static fn (ChessMatch $a, ChessMatch $b): int => strtotime($a->getDate()) <=> strtotime($b->getDate()),
+            static fn (ChessMatch $a, ChessMatch $b): int
+                => [strtotime($a->getDate()), $a->getId()] <=> [strtotime($b->getDate()), $b->getId()],
         );
 
         foreach ($validMatches as $match) {
@@ -481,6 +488,10 @@ class MatchManager
 
             $whiteCalc = $this->ratingCalculator->calculate($whiteRating, $blackRating, $whiteResult);
             $blackCalc = $this->ratingCalculator->calculate($blackRating, $whiteRating, $blackResult);
+
+            // Keep the record's before/±change in step with this replay; otherwise Match
+            // History keeps showing the numbers from when the match was first recorded.
+            $match->setReplayedRatings((int) $whiteRating, (int) $blackRating, $whiteCalc['change'], $blackCalc['change']);
 
             $whitePlayer?->setRating((int) $whiteCalc['new_rating']);
             $whitePlayer?->incrementGames();
