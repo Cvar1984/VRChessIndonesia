@@ -72,6 +72,9 @@
                     filetext: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h7l4 4v16H7Z"/><path d="M14 2v4h4"/><path d="M9.5 13h5M9.5 16.5h5"/></svg>',
                     eye: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
                     eyeoff: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-3.4 4.3M6.6 6.6C4 8.3 2 12 2 12s3.5 7 10 7a10.4 10.4 0 0 0 4-.8"/><path d="M9.5 9.7A3 3 0 0 0 14.3 14.4"/></svg>',
+                    pause: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>',
+                    play: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8Z"/></svg>',
+                    stop: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
                 };
 
                 // ── DOM Helpers ──
@@ -1059,6 +1062,125 @@
                 // profile accuracy and Brilliant counts thin — can be picked and (re)analyzed.
                 const reviewSelection = new Set();
 
+                // ── Batch run state ──
+                // A batch reviews one game at a time, so the panel is the only place that can
+                // show where the run as a whole is: per-game progress keyed by analysis id —
+                // kept outside the table so re-rendering the queue (every finished game calls
+                // fetchAnalyses) doesn't lose it — plus the gate every engine worker parks on
+                // between positions while the run is paused.
+                const reviewProgress = new Map(); // id -> { state, done, total, phase }
+                let reviewBatchIds = [];          // the ids of the run in progress, in order
+                let reviewActiveId = null;        // the game being reviewed right now
+                let reviewPaused = false;
+                let reviewStopRequested = false;
+                let reviewPauseWaiters = [];
+                let reanalysisRunning = false;
+
+                // Resolves once the run is no longer paused, or null when it isn't paused at
+                // all. Workers loop on it — `for (let gate; (gate = whenReviewResumed());) await
+                // gate;` — so a pause taken while one was already waiting still holds them.
+                function whenReviewResumed() {
+                    if (!reviewPaused) return null;
+                    return new Promise(resolve => reviewPauseWaiters.push(resolve));
+                }
+
+                function setReviewPaused(paused) {
+                    reviewPaused = paused;
+                    if (!paused) reviewPauseWaiters.splice(0).forEach(resolve => resolve());
+                    renderReviewQueue();
+                    renderReviewBatchBar();
+                }
+
+                function setReviewButtonsEnabled(enabled) {
+                    for (const sel of ['#btnAnalyzeUnanalyzed', '#btnAnalyzeShallow', '#btnAnalyzeSelected']) {
+                        const btn = $(sel);
+                        if (btn) btn.disabled = !enabled;
+                    }
+                }
+
+                const REVIEW_STATE_BADGES = {
+                    queued: ['Menunggu', 'orange'],
+                    done: ['Selesai', 'green'],
+                    failed: ['Gagal', 'red'],
+                    skipped: ['Dibatalkan', 'orange'],
+                };
+
+                // How far through a game a review is, 0..1. The second-line pass restarts the
+                // position counter on a smaller set of positions, so it counts as the game's last
+                // tenth instead of dropping the bar back to zero — a bar that only ever moves
+                // forward. A game whose pass finds nothing to re-search just jumps 0.9 → done.
+                function reviewFraction(prog) {
+                    if (!prog?.total) return 0;
+                    const frac = Math.min(1, prog.done / prog.total);
+                    return prog.phase === 'posisi' ? frac * 0.9 : 0.9 + frac * 0.1;
+                }
+
+                // One game's progress, as it appears under that game's row.
+                function reviewProgressHtml(id) {
+                    const prog = reviewProgress.get(id);
+                    if (!prog) return '';
+                    if (prog.state !== 'running') {
+                        const [text, color] = REVIEW_STATE_BADGES[prog.state] || ['', ''];
+                        return text ? `<div style="margin-top:6px;"><span class="card__badge card__badge--${color}">${text}</span></div>` : '';
+                    }
+                    const pct = Math.round(reviewFraction(prog) * 100);
+                    const label = reviewPaused ? 'Dijeda' : `${prog.phase} ${prog.done}/${prog.total || '?'}`;
+                    return `
+                    <div style="margin-top:6px;">
+                        <div style="display:flex; justify-content:space-between; gap:8px; font-size:0.7rem; color:var(--text-secondary); margin-bottom:3px;">
+                            <span>${escHtml(label)}</span><span>${pct}%</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:6px; overflow:hidden;">
+                            <div style="width:${pct}%; height:100%; background:var(--accent-primary); border-radius:6px; transition:width 0.2s ease;"></div>
+                        </div>
+                    </div>`;
+                }
+
+                // Repaints one game's progress block in place. A game fires this once per
+                // analyzed position, and re-rendering the whole table that often would drop the
+                // container's scroll position (and fight the checkboxes) on every tick.
+                function paintReviewRow(id) {
+                    for (const el of $$('#reviewQueue [data-review-progress]')) {
+                        if (el.getAttribute('data-review-progress') === id) el.innerHTML = reviewProgressHtml(id);
+                    }
+                }
+
+                // Called by the running Game Review for every position it finishes.
+                function updateReviewRowProgress(id, done, total, phase) {
+                    const prog = reviewProgress.get(id);
+                    if (!prog) return;
+                    Object.assign(prog, { state: 'running', done, total, phase });
+                    paintReviewRow(id);
+                    renderReviewBatchBar();
+                }
+
+                // The run's own bar: finished games plus how far into the current one it is, so
+                // it advances smoothly instead of jumping once per game.
+                function renderReviewBatchBar() {
+                    const panel = $('#reviewBatchPanel');
+                    if (!panel) return;
+                    panel.style.display = reanalysisRunning ? 'block' : 'none';
+                    if (!reanalysisRunning) return;
+
+                    const total = reviewBatchIds.length;
+                    const finished = reviewBatchIds.filter(id => ['done', 'failed', 'skipped'].includes(reviewProgress.get(id)?.state)).length;
+                    const active = reviewActiveId ? reviewProgress.get(reviewActiveId) : null;
+                    const pct = total ? Math.min(100, Math.round(((finished + reviewFraction(active)) / total) * 100)) : 0;
+
+                    $('#reviewBatchIndex').textContent = Math.min(total, finished + (active ? 1 : 0));
+                    $('#reviewBatchTotal').textContent = total;
+                    $('#reviewBatchPct').textContent = pct + '%';
+                    $('#reviewBatchBar').style.width = pct + '%';
+                    $('#reviewBatchState').textContent = reviewStopRequested ? 'Menghentikan…' : reviewPaused ? 'Dijeda' : 'Berjalan';
+                    const pauseBtn = $('#btnReviewPause');
+                    if (pauseBtn) {
+                        pauseBtn.innerHTML = reviewPaused ? `${ICONS.play} Lanjutkan` : `${ICONS.pause} Jeda`;
+                        pauseBtn.disabled = reviewStopRequested;
+                    }
+                    const stopBtn = $('#btnReviewStop');
+                    if (stopBtn) stopBtn.disabled = reviewStopRequested;
+                }
+
                 // Games reviewed less deeply than `depth` everywhere: the lowest depth any
                 // position reached is below it. Null depth = no target set, so none qualify.
                 function isShallowReview(an, depth) {
@@ -1092,6 +1214,8 @@
                             || (filter === 'shallow' && isShallowReview(an, target)))
                         .sort((a, b) => rank(a) - rank(b) || String(b.created_at).localeCompare(String(a.created_at)));
 
+                    renderReviewBatchBar();
+
                     if (rows.length === 0) {
                         const text = filter === 'shallow' && !target
                             ? 'Isi depth di atas untuk mencari game yang lebih dangkal.'
@@ -1105,7 +1229,7 @@
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
-                                <th><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} aria-label="Pilih semua di daftar ini"></th>
+                                <th><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} ${reanalysisRunning ? 'disabled' : ''} aria-label="Pilih semua di daftar ini"></th>
                                 <th>Game</th>
                                 <th>Depth (min / rata-rata)</th>
                                 <th>Dianalisis</th>
@@ -1122,12 +1246,13 @@
                                     ? '<span class="card__badge card__badge--orange">Tidak tercatat</span>'
                                     : `<span class="card__badge card__badge--${isShallowReview(an, target) ? 'orange' : 'green'}">${an.depth.min} / ${an.depth.avg}</span>`;
                             return `
-                            <tr>
-                                <td><input type="checkbox" data-review-id="${escHtml(an.id)}" ${reviewSelection.has(an.id) ? 'checked' : ''} aria-label="Pilih game"></td>
-                                <td><strong>${players}</strong><div class="stat-value" style="font-size:0.75rem;">${meta || escHtml(an.id)}</div></td>
+                            <tr${an.id === reviewActiveId ? ' style="background:rgba(127,166,80,0.10);"' : ''}>
+                                <td><input type="checkbox" data-review-id="${escHtml(an.id)}" ${reviewSelection.has(an.id) ? 'checked' : ''} ${reanalysisRunning ? 'disabled' : ''} aria-label="Pilih game"></td>
+                                <td><strong>${players}</strong><div class="stat-value" style="font-size:0.75rem;">${meta || escHtml(an.id)}</div>
+                                    <div data-review-progress="${escHtml(an.id)}">${reviewProgressHtml(an.id)}</div></td>
                                 <td>${depth}</td>
                                 <td><span class="stat-value">${escHtml(an.analyzed === false ? '—' : (an.updated_at || an.created_at))}</span></td>
-                                <td><button class="btn btn--secondary btn--xs" onclick="window.appReanalyze(${jsStr(an.id)})">${ICONS.refresh} ${an.analyzed === false ? 'Analisis' : 'Ulang'}</button></td>
+                                <td><button class="btn btn--secondary btn--xs" ${reanalysisRunning ? 'disabled' : ''} onclick="window.appReanalyze(${jsStr(an.id)})">${ICONS.refresh} ${an.analyzed === false ? 'Analisis' : 'Ulang'}</button></td>
                             </tr>`;
                         }).join('')}</tbody>
                     </table>`;
@@ -2171,6 +2296,12 @@
                                 setTimeout(() => {
                                     if (typeof analysisBoard !== 'undefined' && analysisBoard && $('#analysisMainLayout').style.display === 'block') {
                                         analysisBoard.redrawAll();
+                                        // A batch review that ran while this tab was hidden drew its
+                                        // arrows against a zero-sized board (NaN coordinates), so
+                                        // redraw the position itself now that it has real pixels.
+                                        // Skipped mid-run: analysisPositions is still being filled
+                                        // in, and the review's own gotoMove(0) follows each game.
+                                        if (!reanalysisRunning && analysisPositions.length) gotoMove(currentMoveIdx);
                                     }
                                 }, 50);
                             } else {
@@ -3669,11 +3800,23 @@
                     }
 
                     // options.depth: search every position to this depth instead of the default
-                    // node budget (the admin panel's custom-depth re-analysis). Resolves to
-                    // { ok, saved } — saved is whether the result was written back to the saved
-                    // analysis (null when there was none to write to) — or undefined when the
-                    // review didn't run. The Start button passes its click event; that has no depth.
+                    // node budget (the admin panel's custom-depth re-analysis).
+                    // options.onProgress(done, total, phase): called for every position finished,
+                    // so a batch can mirror this game's progress into its row in the review queue.
+                    // Resolves to { ok, saved } — saved is whether the result was written back to
+                    // the saved analysis (null when there was none to write to) —
+                    // { ok: false, stopped: true } when the admin stopped the run, or undefined
+                    // when the review didn't run. The Start button passes its click event; that
+                    // has neither a depth nor a progress callback.
                     async function startPgnAnalysis(options = {}) {
+                        // A batch owns the board and the engine pool for as long as it runs, so a
+                        // review started by hand on top of one would fight it for both — and park
+                        // on its pause gate. Only the batch's own calls (which pass onProgress)
+                        // get through while it's running.
+                        if (reanalysisRunning && !options?.onProgress) {
+                            toast('Analisis batch sedang berjalan di panel admin.', 'error');
+                            return;
+                        }
                         const customDepth = Number.isInteger(options?.depth) ? options.depth : null;
                         const pgn = $('#pgnInput').value.trim();
                         if (!pgn) { toast('Masukkan PGN terlebih dahulu.', 'error'); return; }
@@ -3898,11 +4041,19 @@
                         if (liveAnalysisAbort) liveAnalysisAbort.abort();
                         updateEngineStreamBadge(false);
 
-                        // Show progress
+                        // Show progress. Every update goes through setAnalysisProgress so the
+                        // admin panel's per-game bar (options.onProgress) can't drift out of sync
+                        // with the one on this tab.
                         $('#analysisProgress').style.display = 'block';
-                        $('#analysisCurrent').textContent = '0';
-                        $('#analysisTotal').textContent = total;
-                        $('#analysisProgressBar').style.width = '0%';
+                        let progressPhase = 'posisi';
+                        function setAnalysisProgress(done, outOf, phase) {
+                            if (phase) progressPhase = phase;
+                            $('#analysisCurrent').textContent = done;
+                            $('#analysisTotal').textContent = progressPhase === 'posisi' ? outOf : `${outOf} (${progressPhase})`;
+                            $('#analysisProgressBar').style.width = (outOf ? Math.round((done / outOf) * 100) : 0) + '%';
+                            options.onProgress?.(done, outOf, progressPhase);
+                        }
+                        setAnalysisProgress(0, total, 'posisi');
 
                         // Analyzes one FEN on one pool engine, shaped like a /api/engine/analyze position entry.
                         async function analyzeFenClient(session, fen, moveIndex, lines = multipv) {
@@ -4000,9 +4151,7 @@
                         }
 
                         function recordProgress() {
-                            completedCount++;
-                            $('#analysisCurrent').textContent = completedCount;
-                            $('#analysisProgressBar').style.width = Math.round((completedCount / total) * 100) + '%';
+                            setAnalysisProgress(++completedCount, total);
                         }
 
                         // Opening phase: take Lichess's stored evaluations one position at a time
@@ -4015,6 +4164,8 @@
                             if (isCurrentGame960 || Date.now() < lichessPausedUntil) return 0;
                             let hits = 0;
                             while (nextClaim < total) {
+                                for (let gate; (gate = whenReviewResumed());) await gate;
+                                if (reviewStopRequested) break;
                                 const pos = await lookupLichessCloudEval(fenList[nextClaim], nextClaim);
                                 if (!pos) break;
                                 analysisPositions[nextClaim] = buildPosEntry(pos, nextClaim);
@@ -4030,7 +4181,12 @@
                         // well would let the "browser only" backstop see completedCount >= total and
                         // quit with that position still unanalyzed.
                         async function clientBatchWorker(session) {
-                            while (!batchFailed && !session.wedged) {
+                            while (!batchFailed && !reviewStopRequested && !session.wedged) {
+                                // Claim only once the run is live: a pause parks the worker here,
+                                // before it takes a position, so nothing is left half-searched and
+                                // resuming carries on from the position the queue stopped at.
+                                for (let gate; (gate = whenReviewResumed());) await gate;
+                                if (batchFailed || reviewStopRequested) return;
                                 const i = nextClaim < total ? nextClaim++ : null;
                                 if (i === null) return;
                                 const startedAt = performance.now();
@@ -4061,19 +4217,18 @@
                             if (!pool.length || !wanted.length) return;
 
                             let next = 0, done = 0;
-                            $('#analysisCurrent').textContent = '0';
-                            $('#analysisTotal').textContent = `${wanted.length} (jalur kedua)`;
-                            $('#analysisProgressBar').style.width = '0%';
+                            setAnalysisProgress(0, wanted.length, 'jalur kedua');
                             await Promise.all(pool.map(async (session) => {
                                 while (!session.wedged && next < wanted.length) {
+                                    for (let gate; (gate = whenReviewResumed());) await gate;
+                                    if (reviewStopRequested) return;
                                     const idx = wanted[next++];
                                     try {
                                         analysisPositions[idx] = buildPosEntry(await analyzeFenClient(session, fenList[idx], idx, GREAT_LINES), idx);
                                     } catch (e) {
                                         console.warn(`Second engine line failed for position ${idx}:`, e);
                                     }
-                                    $('#analysisCurrent').textContent = ++done;
-                                    $('#analysisProgressBar').style.width = Math.round(done / wanted.length * 100) + '%';
+                                    setAnalysisProgress(++done, wanted.length);
                                 }
                             }));
                         }
@@ -4081,6 +4236,7 @@
                         async function runClientPool(pool) {
                             clientPoolSize = Math.max(1, pool.length);
                             await Promise.all(pool.map(clientBatchWorker));
+                            if (reviewStopRequested) return;
                             // No engine, or every engine wedged before the queue ran dry: hand the
                             // rest to the server rather than leave them unclaimed in "browser only" mode.
                             while (nextClaim < total) serverBacklog.push(nextClaim++);
@@ -4090,7 +4246,9 @@
                             if (enginePreference === 'client') {
                                 // Even in "browser only" mode, the server still mops up positions the
                                 // client engine couldn't handle — it just never competes for fresh work.
-                                while (!batchFailed) {
+                                while (!batchFailed && !reviewStopRequested) {
+                                    for (let gate; (gate = whenReviewResumed());) await gate;
+                                    if (reviewStopRequested) return;
                                     if (completedCount >= total) return;
                                     if (serverBacklog.length === 0) {
                                         await new Promise((r) => setTimeout(r, 60));
@@ -4101,7 +4259,9 @@
                                 return;
                             }
 
-                            while (!batchFailed) {
+                            while (!batchFailed && !reviewStopRequested) {
+                                for (let gate; (gate = whenReviewResumed());) await gate;
+                                if (reviewStopRequested) return;
                                 const batchIdxs = [];
                                 while (batchIdxs.length < serverChunkSize) {
                                     if (serverBacklog.length) { batchIdxs.push(serverBacklog.shift()); continue; }
@@ -4200,11 +4360,15 @@
                         }
 
                         await Promise.all([runClientPool(pool), serverBatchWorker()]);
-                        if (!batchFailed) await addSecondLines(pool);
+                        if (!batchFailed && !reviewStopRequested) await addSecondLines(pool);
 
                         $('#btnStartPgnAnalysis').disabled = false;
                         $('#analysisProgress').style.display = 'none';
 
+                        // A stopped run leaves this game only partly searched, so it returns
+                        // before the save below: the stored analysis keeps the evaluations it
+                        // already had rather than being overwritten with a half-reviewed game.
+                        if (reviewStopRequested) return { ok: false, stopped: true };
                         if (batchFailed) return;
 
                         // Moves 1..plies are book. Only a lookup that ran to the end of the
@@ -4281,38 +4445,99 @@
                         return { depth };
                     }
 
-                    let reanalysisRunning = false;
                     async function reviewSavedAnalyses(ids, depth) {
                         if (reanalysisRunning) { toast('Analisis lain masih berjalan.', 'error'); return; }
                         reanalysisRunning = true;
+                        reviewPaused = false;
+                        reviewStopRequested = false;
+                        reviewBatchIds = [...ids];
+                        reviewProgress.clear();
+                        for (const id of ids) reviewProgress.set(id, { state: 'queued', done: 0, total: 0, phase: 'posisi' });
+                        setReviewButtonsEnabled(false);
+                        renderReviewQueue();
+
                         const status = $('#reanalysisStatus');
                         const failed = [];
+                        // Where the run stopped, so the games after it are reported as cancelled
+                        // rather than failed; -1 means it ran to the end.
+                        let stoppedAt = -1;
                         try {
-                            $('#tabBtnAnalysis').click();
+                            // Watching the board is opt-in now: the per-game bars are in this
+                            // panel, so a run no longer has to drag the admin off it.
+                            if ($('#reviewFollowBoard')?.checked) $('#tabBtnAnalysis').click();
                             for (const [n, id] of ids.entries()) {
-                                const label = `Analisis ${n + 1}/${ids.length}${depth ? ` (depth ${depth})` : ''}…`;
-                                if (status) status.textContent = label;
-                                toast(label, 'info');
+                                // Pause holds between games too, so a run can be parked without
+                                // leaving a game half-reviewed.
+                                for (let gate; (gate = whenReviewResumed());) await gate;
+                                if (reviewStopRequested) { stoppedAt = n; break; }
+
+                                reviewActiveId = id;
+                                Object.assign(reviewProgress.get(id), { state: 'running', done: 0, total: 0, phase: 'posisi' });
+                                if (status) status.textContent = `Analisis ${n + 1}/${ids.length}${depth ? ` (depth ${depth})` : ''}…`;
+                                renderReviewQueue();
+
                                 let result;
                                 try {
                                     const res = await apiCall(`/api/analyses/${encodeURIComponent(id)}`);
                                     currentAnalysisId = id;
                                     $('#pgnInput').value = res.data.pgn;
-                                    result = await startPgnAnalysis(depth ? { depth } : {});
+                                    result = await startPgnAnalysis({
+                                        ...(depth ? { depth } : {}),
+                                        onProgress: (done, total, phase) => updateReviewRowProgress(id, done, total, phase),
+                                    });
                                 } catch (e) {
                                     console.error(`Re-analysis of ${id} failed:`, e);
                                 }
-                                if (!result?.ok || !result.saved) failed.push(id);
-                                else { reviewSelection.delete(id); fetchAnalyses(true); } // the panel shows this game's new depth
+                                reviewActiveId = null;
+
+                                const prog = reviewProgress.get(id);
+                                if (result?.stopped) { prog.state = 'skipped'; stoppedAt = n; break; }
+                                if (!result?.ok || !result.saved) { prog.state = 'failed'; failed.push(id); }
+                                else { prog.state = 'done'; reviewSelection.delete(id); fetchAnalyses(true); } // the panel shows this game's new depth
+                                renderReviewQueue();
                             }
                         } finally {
+                            reviewActiveId = null;
                             reanalysisRunning = false;
+                            reviewStopRequested = false;
+                            reviewPaused = false;
+                            reviewPauseWaiters.splice(0).forEach(resolve => resolve());
+                            if (stoppedAt >= 0) {
+                                for (const id of ids.slice(stoppedAt)) {
+                                    const prog = reviewProgress.get(id);
+                                    if (prog && prog.state !== 'done' && prog.state !== 'failed') prog.state = 'skipped';
+                                }
+                            }
+                            setReviewButtonsEnabled(true);
+                            renderReviewQueue();
                         }
-                        const message = `Selesai: ${ids.length - failed.length}/${ids.length} tersimpan` + (failed.length ? `; gagal: ${failed.join(', ')}` : '.');
+
+                        const attempted = stoppedAt >= 0 ? stoppedAt : ids.length;
+                        const saved = attempted - failed.length;
+                        const message = (stoppedAt >= 0
+                            ? `Dihentikan: ${saved}/${ids.length} tersimpan, ${ids.length - attempted} dibatalkan`
+                            : `Selesai: ${saved}/${ids.length} tersimpan`)
+                            + (failed.length ? `; gagal: ${failed.join(', ')}` : '.');
                         if (status) status.textContent = message;
                         toast(message, failed.length ? 'error' : 'success');
                         fetchAnalyses(true);
                     }
+
+                    $('#btnReviewPause')?.addEventListener('click', () => {
+                        if (!reanalysisRunning || reviewStopRequested) return;
+                        setReviewPaused(!reviewPaused);
+                        toast(reviewPaused
+                            ? 'Dijeda. Posisi yang sedang dihitung diselesaikan dulu.'
+                            : 'Dilanjutkan.', 'info');
+                    });
+
+                    $('#btnReviewStop')?.addEventListener('click', () => {
+                        if (!reanalysisRunning || reviewStopRequested) return;
+                        if (!confirm('Hentikan sisa analisis? Game yang sedang berjalan dibatalkan dan tidak disimpan — game yang sudah selesai tetap tersimpan.')) return;
+                        reviewStopRequested = true;
+                        setReviewPaused(false); // release the workers so they can see the stop and exit
+                        renderReviewBatchBar();
+                    });
 
                     // Panel buttons: each runs its set of games at the depth field's value.
                     function analyzeBatch(ids, emptyMessage, what) {
