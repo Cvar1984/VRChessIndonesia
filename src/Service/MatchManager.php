@@ -313,6 +313,104 @@ class MatchManager
         return true;
     }
 
+    /**
+     * Folds a duplicate player into the player they duplicate: their matches, their
+     * names and (only if the survivor has none) their VRChat link move across, the
+     * duplicate's document is deleted, and every rating is then replayed from
+     * scratch over the merged match set. The replay is what makes this correct —
+     * the survivor ends up with the rating and record they would have had if the
+     * duplicate had never existed, which adding two stat lines together would not
+     * produce, since each match's rating delta depends on both players' ratings at
+     * the time.
+     *
+     * This exists because AvatarRefresher::syncUsername() refuses to rename a
+     * linked player onto a display name another player currently holds, and that
+     * other player is almost always an unlinked duplicate of the same human. Until
+     * the duplicate is merged away the rename is skipped on every refresh, forever.
+     *
+     * Matches the two played against each other become one player against
+     * themselves. They are invalidated rather than deleted — the record is still
+     * evidence of what happened, and invalid matches are excluded from the replay.
+     *
+     * @return array{
+     *     from: string, into: string, matches_moved: int, head_to_head_invalidated: int,
+     *     names_absorbed: string[], vrchat_link_moved: bool
+     * }
+     * @throws \DomainException if either player is missing, both are the same
+     *   record, or the two are linked to different VRChat accounts (in which case
+     *   they are two different people and must not be merged)
+     */
+    public function mergePlayers(string $fromUsername, string $intoUsername): array
+    {
+        $fromUsername = trim($fromUsername);
+        $intoUsername = trim($intoUsername);
+
+        $from = $this->playerRepository->findOneByCurrentUsername($fromUsername);
+        if ($from === null) {
+            throw new \DomainException("Pemain '{$fromUsername}' tidak ditemukan.");
+        }
+
+        $into = $this->playerRepository->findOneByCurrentUsername($intoUsername);
+        if ($into === null) {
+            throw new \DomainException("Pemain '{$intoUsername}' tidak ditemukan.");
+        }
+
+        if ($from->getId() === $into->getId()) {
+            throw new \DomainException('Tidak bisa menggabungkan pemain dengan dirinya sendiri.');
+        }
+
+        $fromVrchatId = $from->getVrchatUserId();
+        $intoVrchatId = $into->getVrchatUserId();
+        if ($fromVrchatId !== null && $intoVrchatId !== null && $fromVrchatId !== $intoVrchatId) {
+            throw new \DomainException(
+                "'{$fromUsername}' dan '{$intoUsername}' tertaut ke akun VRChat yang berbeda, " .
+                'jadi keduanya orang yang berbeda — bukan duplikat.',
+            );
+        }
+
+        $matchesMoved = 0;
+        $headToHeadInvalidated = 0;
+        foreach ($this->matchRepository->findAll() as $match) {
+            if (!$match->reassignPlayer($from->getId(), $into->getId())) {
+                continue;
+            }
+
+            $matchesMoved++;
+
+            if ($match->isSelfMatch() && $match->isValid()) {
+                $match->setIsValid(false);
+                $match->setInvalidatedAt(date('Y-m-d H:i:s'));
+                $headToHeadInvalidated++;
+            }
+        }
+
+        $historyBefore = $into->getPreviousUsernames();
+        $into->absorbUsernamesFrom($from);
+        $namesAbsorbed = array_values(array_diff($into->getPreviousUsernames(), $historyBefore));
+
+        $vrchatLinkMoved = false;
+        if ($intoVrchatId === null && $fromVrchatId !== null) {
+            $into->setVrchatLink($fromVrchatId, $from->getVrchatDisplayName(), $from->getAvatarUrl());
+            $vrchatLinkMoved = true;
+        }
+
+        // Flushed before the replay so it reads the reassigned matches and no longer
+        // finds the duplicate to reset or credit.
+        $this->dm->remove($from);
+        $this->dm->flush();
+
+        $this->recalculateRatings();
+
+        return [
+            'from' => $fromUsername,
+            'into' => $into->getUsername(),
+            'matches_moved' => $matchesMoved,
+            'head_to_head_invalidated' => $headToHeadInvalidated,
+            'names_absorbed' => $namesAbsorbed,
+            'vrchat_link_moved' => $vrchatLinkMoved,
+        ];
+    }
+
     public function removeMatch(int $matchId): bool
     {
         $match = $this->matchRepository->findOneByAppId($matchId);

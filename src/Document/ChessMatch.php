@@ -106,6 +106,37 @@ class ChessMatch
         return $this->blackId;
     }
 
+    /**
+     * Repoints whichever side(s) referenced $fromId at $toId. The one case where a
+     * recorded match's players legitimately change: a duplicate player being folded
+     * into the player they duplicate (MatchManager::mergePlayers()). Returns whether
+     * this match referenced $fromId at all.
+     */
+    public function reassignPlayer(int $fromId, int $toId): bool
+    {
+        $referenced = false;
+
+        if ($this->whiteId === $fromId) {
+            $this->whiteId = $toId;
+            $referenced = true;
+        }
+        if ($this->blackId === $fromId) {
+            $this->blackId = $toId;
+            $referenced = true;
+        }
+
+        return $referenced;
+    }
+
+    /**
+     * Both sides are the same player — only reachable after a merge folded two
+     * players who had played each other into one. No rating replay can score it.
+     */
+    public function isSelfMatch(): bool
+    {
+        return $this->whiteId === $this->blackId;
+    }
+
     public function getResult(): string
     {
         return $this->result;

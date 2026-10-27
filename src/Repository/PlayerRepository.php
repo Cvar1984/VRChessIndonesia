@@ -62,10 +62,22 @@ class PlayerRepository extends ServiceDocumentRepository
 
     public const int OLD_NAME_GRACE_DAYS = 90;
 
+    /**
+     * Exact current-name lookup, with no username_history fallback — for callers
+     * that must act on the record actually holding a name right now, rather than
+     * one that merely used to. A merge resolves both of its players this way: via
+     * findOneByUsername(), an old name could silently resolve to the very player
+     * being merged into, or to a third record entirely.
+     */
+    public function findOneByCurrentUsername(string $username): ?Player
+    {
+        return $this->findOneBy(['username' => $username]);
+    }
+
     /** Current usernames only — what the unique index on `username` cares about. */
     public function isUsernameTaken(string $username): bool
     {
-        return $this->findOneBy(['username' => $username]) !== null;
+        return $this->findOneByCurrentUsername($username) !== null;
     }
 
     /**

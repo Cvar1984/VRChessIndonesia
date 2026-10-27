@@ -213,12 +213,105 @@
                             $('#playerCount').textContent = data.count || playersCache.length;
                             $('#adminStatPlayers').textContent = playersCache.length;
                             renderLeaderboard($('#playerSearch') ? $('#playerSearch').value : '');
+                            renderNameConflicts();
                             if (!silent) toast('Leaderboard diperbarui', 'success');
                         }
                     } catch (e) {
                         if (!silent) toast('Gagal mengambil data pemain: ' + e.message, 'error');
                     }
                 }
+
+                // ── Duplicate players (blocked VRChat renames) ──
+                // A linked player whose VRChat display name is currently held by a different
+                // player row: AvatarRefresher::syncUsername() reports that as a 'conflict' and
+                // skips the rename on every refresh, so it needs resolving by hand once.
+                // Derived from the player list rather than from a refresh response, so the
+                // card is accurate on page load too, not only right after a refresh.
+                //
+                // Matched case-sensitively and exactly, like the server's own
+                // PlayerRepository::isUsernameTaken(), so this never shows a conflict the
+                // backend wouldn't also see.
+                function nameConflicts() {
+                    const byUsername = new Map(playersCache.map(p => [p.username, p]));
+                    const out = [];
+                    for (const player of playersCache) {
+                        if (!player.vrchat_user_id) continue;
+                        const target = (player.vrchat_display_name || '').trim();
+                        if (!target || target === player.username) continue;
+                        const duplicate = byUsername.get(target);
+                        if (duplicate && duplicate.username !== player.username) out.push({ player, target, duplicate });
+                    }
+                    return out;
+                }
+
+                function renderNameConflicts() {
+                    const card = $('#nameConflictCard');
+                    const list = $('#nameConflictList');
+                    if (!card || !list) return;
+
+                    const conflicts = nameConflicts();
+                    card.style.display = conflicts.length ? 'block' : 'none';
+                    if (!conflicts.length) return;
+
+                    list.innerHTML = `
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>Pemain tertaut</th>
+                                <th>Nama VRChat</th>
+                                <th>Duplikat yang akan digabung</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>${conflicts.map(({ player, target, duplicate }) => {
+                            // Both linked, to different VRChat accounts: two different people
+                            // who happen to want the same name (a swap, or someone taking a
+                            // released one), not a duplicate. The server refuses this with a
+                            // 409, so don't offer a button that can only fail.
+                            const differentPeople = duplicate.vrchat_user_id && duplicate.vrchat_user_id !== player.vrchat_user_id;
+                            return `
+                            <tr>
+                                <td><strong>${escHtml(player.username)}</strong>
+                                    <div class="stat-value" style="font-size:0.75rem;">${player.games} match · ${player.rating}</div></td>
+                                <td><span class="card__badge card__badge--orange">${escHtml(target)}</span></td>
+                                <td><strong>${escHtml(duplicate.username)}</strong>
+                                    <div class="stat-value" style="font-size:0.75rem;">${duplicate.games} match · ${duplicate.rating}${duplicate.vrchat_user_id ? ' · tertaut' : ''}</div></td>
+                                <td>${differentPeople
+                                    ? `<span class="stat-value" style="font-size:0.75rem;" title="Keduanya tertaut ke akun VRChat yang berbeda, jadi bukan duplikat. Putuskan tautan salah satu lewat Edit Pemain kalau memang perlu digabung.">Tertaut ke akun VRChat lain — bukan duplikat</span>`
+                                    : `<button class="btn btn--danger btn--xs"
+                                        onclick="window.appMergePlayers(${jsStr(duplicate.username)}, ${jsStr(player.username)})">
+                                        ${ICONS.swords} Gabungkan</button>`}</td>
+                            </tr>`;
+                        }).join('')}</tbody>
+                    </table>`;
+                }
+
+                window.appMergePlayers = async function (from, into) {
+                    const dup = playersCache.find(p => p.username === from);
+                    if (!confirm(
+                        `Gabungkan '${from}' ke '${into}'?\n\n` +
+                        `${dup ? dup.games : '?'} match milik '${from}' akan dipindahkan ke '${into}', ` +
+                        `nama '${from}' disimpan sebagai riwayat, lalu '${from}' dihapus dan seluruh rating dihitung ulang.\n\n` +
+                        'Tidak bisa dibatalkan.'
+                    )) return;
+
+                    try {
+                        const res = await apiCall('/api/admin/players/merge', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ from, into })
+                        });
+                        if (res.success) {
+                            toast(res.message || `'${from}' digabungkan ke '${into}'.`, 'success');
+                            await fetchPlayers(true);
+                            await fetchMatches(true);
+                        } else {
+                            toast(res.error || 'Gagal menggabungkan pemain', 'error');
+                        }
+                    } catch (e) {
+                        toast('Gagal menggabungkan pemain: ' + e.message, 'error');
+                    }
+                };
 
                 async function fetchMatches(silent = false) {
                     try {

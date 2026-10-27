@@ -448,6 +448,25 @@
                     </div>
                 </div>
 
+                <!-- Duplicate-player card. Hidden unless a linked player's VRChat display
+                     name is held by another player row, which blocks their rename on every
+                     refresh until the duplicate is merged away. renderNameConflicts() in
+                     app.js owns its visibility and contents. -->
+                <div class="card" id="nameConflictCard" style="display:none;">
+                    <div class="card__header">
+                        <h2 class="card__title">{{ icons.icon('swords') }} Duplikat Pemain</h2>
+                        <span class="card__badge card__badge--orange">PERLU TINDAKAN</span>
+                    </div>
+                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
+                        Pemain berikut tertaut ke VRChat, tapi namanya tidak bisa mengikuti nama VRChat-nya
+                        karena nama itu masih dipakai baris pemain lain — hampir selalu akun duplikat orang
+                        yang sama. Menggabungkan akan memindahkan semua match duplikat ke pemain ini,
+                        menyimpan nama lamanya sebagai riwayat, lalu menghitung ulang seluruh rating dari
+                        awal. Match antar-keduanya ikut dibatalkan. Tindakan ini tidak bisa dibatalkan.
+                    </p>
+                    <div id="nameConflictList"></div>
+                </div>
+
                 <!-- Game Review (re)analysis Card — runs in this browser via setupEvents()' reviewSavedAnalyses() -->
                 <div class="card">
                     <div class="card__header">

@@ -62,8 +62,9 @@ class Player
 
     /**
      * Every earlier username, oldest first: [{username, changed_at, source}], where
-     * source is 'vrchat' (followed a VRChat display-name change) or 'admin'. Old names
-     * keep resolving to this player — see PlayerRepository::findOneByUsername().
+     * source is 'vrchat' (followed a VRChat display-name change), 'admin', or 'merge'
+     * (inherited from a duplicate player folded into this one). Old names keep
+     * resolving to this player — see PlayerRepository::findOneByUsername().
      */
     #[ODM\Field(type: 'raw', name: 'username_history')]
     private array $usernameHistory = [];
@@ -177,6 +178,33 @@ class Player
         $this->username = $newUsername;
 
         return true;
+    }
+
+    /**
+     * Takes over the names of a duplicate player being merged into this one
+     * (MatchManager::mergePlayers()): their current username and every name they
+     * held before, so all of them keep resolving here rather than dying with the
+     * duplicate's document.
+     *
+     * Entries are stamped at the merge rather than at the original rename, so the
+     * old-name grace period (PlayerRepository::OLD_NAME_GRACE_DAYS) runs from when
+     * the merge happened — the names only became ambiguous at that point. Names
+     * this player already holds or has held are skipped, so merging twice can't
+     * duplicate them.
+     */
+    public function absorbUsernamesFrom(self $other): void
+    {
+        $known = array_merge([$this->username], $this->getPreviousUsernames());
+        $changedAt = date('Y-m-d H:i:s');
+
+        foreach (array_merge([$other->getUsername()], $other->getPreviousUsernames()) as $name) {
+            if (in_array($name, $known, true)) {
+                continue;
+            }
+
+            $this->usernameHistory[] = ['username' => $name, 'changed_at' => $changedAt, 'source' => 'merge'];
+            $known[] = $name;
+        }
     }
 
     /**
