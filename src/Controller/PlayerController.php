@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace VRchessIndo\Controller;
 
+use Doctrine\ODM\MongoDB\DocumentManager;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use VRchessIndo\Document\Player;
+use VRchessIndo\Repository\PlayerRepository;
 use VRchessIndo\Service\MatchManager;
+use VRchessIndo\Service\VRChat\AvatarRefresher;
 
 /**
  * Player read + mutation endpoints. Read response shapes match the legacy
@@ -20,8 +23,12 @@ use VRchessIndo\Service\MatchManager;
  */
 class PlayerController extends AbstractApiController
 {
-    public function __construct(private readonly MatchManager $manager)
-    {
+    public function __construct(
+        private readonly MatchManager $manager,
+        private readonly PlayerRepository $players,
+        private readonly AvatarRefresher $avatarRefresher,
+        private readonly DocumentManager $dm,
+    ) {
     }
 
     #[Route('/api/players', name: 'api_players', methods: ['GET'])]
@@ -57,6 +64,65 @@ class PlayerController extends AbstractApiController
         }
 
         return $this->json(['success' => true, 'stats' => $stats]);
+    }
+
+    /**
+     * Folds the duplicate player `from` into `into`, then — since that is the whole
+     * point — immediately retries the VRChat rename the duplicate was blocking, so
+     * one call leaves the survivor already carrying their VRChat display name.
+     *
+     * Admin-only rather than requireApiAccess() like the other mutations: it merges
+     * two records irreversibly and replays every rating, which is not something a
+     * match-reporting bot's token should be able to do.
+     */
+    #[Route('/api/admin/players/merge', name: 'api_players_merge', methods: ['POST'])]
+    public function merge(Request $request): JsonResponse
+    {
+        if ($response = $this->requireAdmin()) {
+            return $response;
+        }
+
+        $input = json_decode($request->getContent(), true) ?? [];
+        $from = trim((string) ($input['from'] ?? ''));
+        $into = trim((string) ($input['into'] ?? ''));
+
+        if ($from === '' || $into === '') {
+            return $this->json(['success' => false, 'error' => 'from dan into diperlukan'], 400);
+        }
+
+        try {
+            $result = $this->manager->mergePlayers($from, $into);
+        } catch (\DomainException $e) {
+            return $this->json(['success' => false, 'error' => $e->getMessage()], 409);
+        }
+
+        // With the duplicate gone the display name is free, so the rename that kept
+        // being skipped can finally go through. A survivor with no VRChat link just
+        // reports 'unchanged'.
+        $survivor = $this->players->findOneByCurrentUsername($result['into']);
+        $nameStatus = $survivor !== null ? $this->avatarRefresher->syncUsername($survivor) : 'unchanged';
+        if ($nameStatus === 'renamed') {
+            $this->dm->flush();
+            $result['into'] = $survivor->getUsername();
+        }
+
+        $message = "'{$from}' digabungkan ke '{$result['into']}': {$result['matches_moved']} match dipindahkan";
+        if ($result['head_to_head_invalidated'] > 0) {
+            $message .= ", {$result['head_to_head_invalidated']} match antar-keduanya dibatalkan";
+        }
+        if ($result['vrchat_link_moved']) {
+            $message .= ', tautan VRChat dipindahkan';
+        }
+        if ($nameStatus === 'renamed') {
+            $message .= ", nama kini mengikuti VRChat: '{$result['into']}'";
+        }
+
+        return $this->json([
+            'success' => true,
+            'message' => $message . '.',
+            'name_status' => $nameStatus,
+            ...$result,
+        ]);
     }
 
     #[Route('/api/players/{username}', name: 'api_players_delete', methods: ['DELETE'])]

@@ -213,6 +213,9 @@
                             $('#playerCount').textContent = data.count || playersCache.length;
                             $('#adminStatPlayers').textContent = playersCache.length;
                             renderLeaderboard($('#playerSearch') ? $('#playerSearch').value : '');
+                            renderNameConflicts();
+                            renderMergePlayerOptions();
+                            renderMergePreview();
                             if (!silent) toast('Leaderboard diperbarui', 'success');
                         }
                     } catch (e) {
@@ -220,11 +223,202 @@
                     }
                 }
 
+                // ── Duplicate players (blocked VRChat renames) ──
+                // A linked player whose VRChat display name is currently held by a different
+                // player row: AvatarRefresher::syncUsername() reports that as a 'conflict' and
+                // skips the rename on every refresh, so it needs resolving by hand once.
+                // Derived from the player list rather than from a refresh response, so the
+                // card is accurate on page load too, not only right after a refresh.
+                //
+                // Matched case-sensitively and exactly, like the server's own
+                // PlayerRepository::isUsernameTaken(), so this never shows a conflict the
+                // backend wouldn't also see.
+                function nameConflicts() {
+                    const byUsername = new Map(playersCache.map(p => [p.username, p]));
+                    const out = [];
+                    for (const player of playersCache) {
+                        if (!player.vrchat_user_id) continue;
+                        const target = (player.vrchat_display_name || '').trim();
+                        if (!target || target === player.username) continue;
+                        const duplicate = byUsername.get(target);
+                        if (duplicate && duplicate.username !== player.username) out.push({ player, target, duplicate });
+                    }
+                    return out;
+                }
+
+                function renderNameConflicts() {
+                    const list = $('#nameConflictList');
+                    if (!list) return;
+
+                    const conflicts = nameConflicts();
+                    // Only the conflict section hides — the card itself always shows, since it
+                    // now carries the manual merge form too.
+                    const section = $('#nameConflictSection');
+                    if (section) section.style.display = conflicts.length ? 'block' : 'none';
+                    if (!conflicts.length) return;
+
+                    list.innerHTML = `
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Pemain tertaut</th>
+                                <th scope="col">Nama VRChat</th>
+                                <th scope="col">Duplikat yang akan digabung</th>
+                                <th scope="col">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>${conflicts.map(({ player, target, duplicate }) => {
+                            // Both linked, to different VRChat accounts: two different people
+                            // who happen to want the same name (a swap, or someone taking a
+                            // released one), not a duplicate. The server refuses this with a
+                            // 409, so don't offer a button that can only fail.
+                            const differentPeople = duplicate.vrchat_user_id && duplicate.vrchat_user_id !== player.vrchat_user_id;
+                            return `
+                            <tr>
+                                <td><strong>${escHtml(player.username)}</strong>
+                                    <div class="stat-value" style="font-size:0.75rem;">${player.games} match · ${player.rating}</div></td>
+                                <td><span class="card__badge card__badge--orange">${escHtml(target)}</span></td>
+                                <td><strong>${escHtml(duplicate.username)}</strong>
+                                    <div class="stat-value" style="font-size:0.75rem;">${duplicate.games} match · ${duplicate.rating}${duplicate.vrchat_user_id ? ' · tertaut' : ''}</div></td>
+                                <td>${differentPeople
+                                    ? `<span class="card__badge card__badge--orange">Bukan duplikat</span>
+                                       <div class="stat-value" style="font-size:0.7rem; margin-top:4px;">Keduanya tertaut ke akun VRChat yang berbeda. Putuskan tautan salah satunya lewat Edit Pemain kalau memang perlu digabung.</div>`
+                                    : `<button class="btn btn--danger btn--xs"
+                                        onclick="window.appMergePlayers(${jsStr(duplicate.username)}, ${jsStr(player.username)})">
+                                        ${ICONS.swords} Gabungkan</button>`}</td>
+                            </tr>`;
+                        }).join('')}</tbody>
+                    </table>`;
+                }
+
+                // ── Manual merge: any two players ──
+                // The conflict list above only covers blocked VRChat renames; duplicates that
+                // never produced a conflict (neither row linked, or the names simply differ)
+                // still have to be mergeable by hand.
+
+                function playerByExactName(name) {
+                    // Exact and case-sensitive, matching the server's own lookup — a near-miss
+                    // must read as "not found" here rather than merging a different row.
+                    return playersCache.find(p => p.username === name) || null;
+                }
+
+                function renderMergePlayerOptions() {
+                    const list = $('#mergePlayerNames');
+                    if (!list) return;
+                    list.innerHTML = [...playersCache]
+                        .sort((a, b) => String(a.username).localeCompare(String(b.username)))
+                        .map(p => `<option value="${escHtml(p.username)}"></option>`).join('');
+                }
+
+                /**
+                 * Exactly what the merge will do, computed from the loaded players and matches so
+                 * the numbers are the real ones rather than an estimate. Mirrors every refusal the
+                 * server makes, so the button is only enabled for a merge that can actually run.
+                 */
+                function mergePlan(fromName, intoName) {
+                    if (!fromName || !intoName) return { error: 'Pilih dua pemain.' };
+                    if (fromName === intoName) return { error: 'Pilih dua pemain yang berbeda.' };
+
+                    const from = playerByExactName(fromName);
+                    const into = playerByExactName(intoName);
+                    if (!from) return { error: `Pemain '${fromName}' tidak ada. Nama harus sama persis, termasuk huruf besar/kecil.` };
+                    if (!into) return { error: `Pemain '${intoName}' tidak ada. Nama harus sama persis, termasuk huruf besar/kecil.` };
+                    if (from.id === into.id) return { error: 'Itu pemain yang sama.' };
+                    if (from.vrchat_user_id && into.vrchat_user_id && from.vrchat_user_id !== into.vrchat_user_id) {
+                        return { error: 'Keduanya tertaut ke akun VRChat yang berbeda, jadi bukan duplikat. Putuskan tautan salah satunya dulu kalau memang perlu digabung.' };
+                    }
+
+                    const involves = (m, id) => m.white_id === id || m.black_id === id;
+                    const moving = matchesCache.filter(m => involves(m, from.id));
+                    const headToHead = moving.filter(m => involves(m, into.id) && m.is_valid !== false);
+                    const known = new Set([into.username, ...(into.previous_usernames || [])]);
+                    const absorbed = [from.username, ...(from.previous_usernames || [])].filter(n => !known.has(n));
+
+                    return {
+                        from, into,
+                        matchesMoving: moving.length,
+                        headToHead: headToHead.length,
+                        absorbed,
+                        linkMoves: !into.vrchat_user_id && !!from.vrchat_user_id,
+                        // The survivor's rating is replayed, so it cannot be predicted here; only
+                        // the game count is arithmetic (head-to-head games stop counting at all).
+                        gamesAfter: into.games + from.games - headToHead.length * 2,
+                    };
+                }
+
+                function renderMergePreview() {
+                    const box = $('#mergePreview');
+                    const button = $('#btnMergePlayers');
+                    if (!box || !button) return;
+
+                    const plan = mergePlan($('#mergeFrom')?.value.trim(), $('#mergeInto')?.value.trim());
+                    if (plan.error) {
+                        box.innerHTML = `<span style="color:var(--text-muted);">${escHtml(plan.error)}</span>`;
+                        button.disabled = true;
+                        return;
+                    }
+
+                    button.disabled = false;
+                    const lines = [
+                        `<strong>${escHtml(plan.from.username)}</strong> (${plan.from.games} match, rating ${plan.from.rating}) akan dihapus.`,
+                        `${plan.matchesMoving} match dipindahkan ke <strong>${escHtml(plan.into.username)}</strong>.`,
+                    ];
+                    if (plan.headToHead > 0) {
+                        lines.push(`${plan.headToHead} match antar-keduanya dibatalkan (tidak bisa dinilai setelah digabung).`);
+                    }
+                    if (plan.absorbed.length) {
+                        lines.push(`Nama disimpan sebagai riwayat: ${plan.absorbed.map(escHtml).join(', ')}.`);
+                    }
+                    if (plan.linkMoves) {
+                        lines.push('Tautan VRChat duplikat dipindahkan ke pemain utama.');
+                    }
+                    lines.push(`Setelah digabung: ${plan.gamesAfter} match. Rating dihitung ulang dari awal, jadi angkanya bisa berubah.`);
+
+                    box.innerHTML = lines.map(l => `<div style="margin-bottom:3px;">• ${l}</div>`).join('');
+                }
+
+                window.appMergePlayers = async function (from, into) {
+                    const plan = mergePlan(from, into);
+                    if (plan.error) { toast(plan.error, 'error'); return; }
+
+                    const detail = [
+                        `${plan.matchesMoving} match milik '${from}' dipindahkan ke '${into}'.`,
+                        plan.headToHead ? `${plan.headToHead} match antar-keduanya dibatalkan.` : null,
+                        plan.absorbed.length ? `Nama disimpan sebagai riwayat: ${plan.absorbed.join(', ')}.` : null,
+                        plan.linkMoves ? 'Tautan VRChat dipindahkan.' : null,
+                        `'${from}' dihapus, lalu seluruh rating dihitung ulang.`,
+                    ].filter(Boolean).join('\n');
+
+                    if (!confirm(`Gabungkan '${from}' ke '${into}'?\n\n${detail}\n\nTidak bisa dibatalkan.`)) return;
+
+                    try {
+                        const res = await apiCall('/api/admin/players/merge', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ from, into })
+                        });
+                        if (res.success) {
+                            toast(res.message || `'${from}' digabungkan ke '${into}'.`, 'success');
+                            // 'from' is gone and 'into' may have been renamed by the VRChat sync,
+                            // so the form's contents are stale either way.
+                            if ($('#mergeFrom')) $('#mergeFrom').value = '';
+                            if ($('#mergeInto')) $('#mergeInto').value = '';
+                            await fetchPlayers(true);
+                            await fetchMatches(true);
+                        } else {
+                            toast(res.error || 'Gagal menggabungkan pemain', 'error');
+                        }
+                    } catch (e) {
+                        toast('Gagal menggabungkan pemain: ' + e.message, 'error');
+                    }
+                };
+
                 async function fetchMatches(silent = false) {
                     try {
                         const data = await apiCall('/api/matches');
                         if (data.success) {
                             matchesCache = data.matches || [];
+                            renderMergePreview(); // the preview's match counts come from here
                             $('#matchCount').textContent = data.count || matchesCache.length;
                             $('#adminStatMatches').textContent = matchesCache.length;
                             renderMatches();
@@ -1130,8 +1324,10 @@
                         <div style="display:flex; justify-content:space-between; gap:8px; font-size:0.7rem; color:var(--text-secondary); margin-bottom:3px;">
                             <span>${escHtml(label)}</span><span>${pct}%</span>
                         </div>
-                        <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:6px; overflow:hidden;">
-                            <div style="width:${pct}%; height:100%; background:var(--accent-primary); border-radius:6px; transition:width 0.2s ease;"></div>
+                        <div role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"
+                            aria-label="Progres analisis game ini" aria-valuetext="${escHtml(label)}"
+                            style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.36); border-radius:6px; height:8px; overflow:hidden;">
+                            <div style="width:${pct}%; height:100%; background:var(--accent-primary); transition:width 0.2s ease;"></div>
                         </div>
                     </div>`;
                 }
@@ -1171,6 +1367,7 @@
                     $('#reviewBatchTotal').textContent = total;
                     $('#reviewBatchPct').textContent = pct + '%';
                     $('#reviewBatchBar').style.width = pct + '%';
+                    $('#reviewBatchTrack')?.setAttribute('aria-valuenow', String(pct));
                     $('#reviewBatchState').textContent = reviewStopRequested ? 'Menghentikan…' : reviewPaused ? 'Dijeda' : 'Berjalan';
                     const pauseBtn = $('#btnReviewPause');
                     if (pauseBtn) {
@@ -1229,11 +1426,11 @@
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
-                                <th><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} ${reanalysisRunning ? 'disabled' : ''} aria-label="Pilih semua di daftar ini"></th>
-                                <th>Game</th>
-                                <th>Depth (min / rata-rata)</th>
-                                <th>Dianalisis</th>
-                                <th>Aksi</th>
+                                <th scope="col"><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} ${reanalysisRunning ? 'disabled' : ''} aria-label="Pilih semua di daftar ini"></th>
+                                <th scope="col">Game</th>
+                                <th scope="col">Depth (min / rata-rata)</th>
+                                <th scope="col">Dianalisis</th>
+                                <th scope="col">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>${rows.map(an => {
@@ -2312,6 +2509,20 @@
                     });
 
                     // Refresh buttons
+                    // ── Manual player merge form ──
+                    for (const sel of ['#mergeFrom', '#mergeInto']) {
+                        $(sel)?.addEventListener('input', renderMergePreview);
+                    }
+                    $('#btnMergeSwap')?.addEventListener('click', () => {
+                        const from = $('#mergeFrom'), into = $('#mergeInto');
+                        if (!from || !into) return;
+                        [from.value, into.value] = [into.value, from.value];
+                        renderMergePreview();
+                    });
+                    $('#btnMergePlayers')?.addEventListener('click', () => {
+                        window.appMergePlayers($('#mergeFrom').value.trim(), $('#mergeInto').value.trim());
+                    });
+
                     $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
                     $('#btnRefreshAnalyses')?.addEventListener('click', () => fetchAnalyses(false));
                     $('#btnRefreshMatches').addEventListener('click', () => fetchMatches(false));
@@ -4048,9 +4259,15 @@
                         let progressPhase = 'posisi';
                         function setAnalysisProgress(done, outOf, phase) {
                             if (phase) progressPhase = phase;
+                            const pct = outOf ? Math.min(100, Math.round((done / outOf) * 100)) : 0;
                             $('#analysisCurrent').textContent = done;
                             $('#analysisTotal').textContent = progressPhase === 'posisi' ? outOf : `${outOf} (${progressPhase})`;
-                            $('#analysisProgressBar').style.width = (outOf ? Math.round((done / outOf) * 100) : 0) + '%';
+                            $('#analysisProgressBar').style.width = pct + '%';
+                            const track = $('#analysisProgressTrack');
+                            if (track) {
+                                track.setAttribute('aria-valuenow', String(pct));
+                                track.setAttribute('aria-valuetext', `${progressPhase} ${done} dari ${outOf}`);
+                            }
                             options.onProgress?.(done, outOf, progressPhase);
                         }
                         setAnalysisProgress(0, total, 'posisi');
@@ -4455,6 +4672,9 @@
                         for (const id of ids) reviewProgress.set(id, { state: 'queued', done: 0, total: 0, phase: 'posisi' });
                         setReviewButtonsEnabled(false);
                         renderReviewQueue();
+                        // The button that was just clicked is now disabled, which drops focus to
+                        // the document; move it onto the controls that replaced it.
+                        $('#btnReviewPause')?.focus();
 
                         const status = $('#reanalysisStatus');
                         const failed = [];
@@ -4526,9 +4746,11 @@
                     $('#btnReviewPause')?.addEventListener('click', () => {
                         if (!reanalysisRunning || reviewStopRequested) return;
                         setReviewPaused(!reviewPaused);
-                        toast(reviewPaused
+                        const note = reviewPaused
                             ? 'Dijeda. Posisi yang sedang dihitung diselesaikan dulu.'
-                            : 'Dilanjutkan.', 'info');
+                            : 'Dilanjutkan.';
+                        if ($('#reanalysisStatus')) $('#reanalysisStatus').textContent = note;
+                        toast(note, 'info');
                     });
 
                     $('#btnReviewStop')?.addEventListener('click', () => {
@@ -4536,6 +4758,9 @@
                         if (!confirm('Hentikan sisa analisis? Game yang sedang berjalan dibatalkan dan tidak disimpan — game yang sudah selesai tetap tersimpan.')) return;
                         reviewStopRequested = true;
                         setReviewPaused(false); // release the workers so they can see the stop and exit
+                        if ($('#reanalysisStatus')) {
+                            $('#reanalysisStatus').textContent = 'Menghentikan setelah posisi yang sedang dihitung selesai…';
+                        }
                         renderReviewBatchBar();
                     });
 

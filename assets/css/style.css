@@ -339,7 +339,7 @@ svg.icon {
    actually defined — badge rendered with no color/background at all. */
 .card__badge--red {
     background: color-mix(in srgb, var(--accent-red) 14%, transparent);
-    color: var(--accent-red);
+    color: var(--accent-red-text);
 }
 
 /* ── Leaderboard Table ── */
@@ -471,7 +471,7 @@ svg.icon {
 
 .stat-win { color: var(--accent-green); }
 .stat-draw { color: var(--accent-orange); }
-.stat-loss { color: var(--accent-red); }
+.stat-loss { color: var(--accent-red-text); }
 
 /* Win rate bar */
 .winrate-bar {
@@ -619,7 +619,7 @@ svg.icon {
 }
 
 .history-card__delta--up { color: var(--accent-green); }
-.history-card__delta--down { color: var(--accent-red); }
+.history-card__delta--down { color: var(--accent-red-text); }
 .history-card__delta--even { color: var(--text-secondary); }
 
 .history-card__vs {
@@ -669,7 +669,7 @@ svg.icon {
 .history-card__chip--danger {
     background: color-mix(in srgb, var(--accent-red) 12%, transparent);
     border-color: color-mix(in srgb, var(--accent-red) 35%, transparent);
-    color: var(--accent-red);
+    color: var(--accent-red-text);
 }
 
 .history-card__footer {
@@ -800,7 +800,7 @@ svg.icon {
 .btn--danger {
     background: color-mix(in srgb, var(--accent-red) 12%, transparent);
     border-color: color-mix(in srgb, var(--accent-red) 30%, transparent);
-    color: var(--accent-red);
+    color: var(--accent-red-text);
 }
 
 .btn--danger:hover {
@@ -828,10 +828,14 @@ svg.icon {
     background: color-mix(in srgb, var(--accent-green) 20%, transparent);
 }
 
+/* --compact-scale shrinks these to roughly 20px and 14px tall, under the 24px
+   minimum target size (WCAG 2.2 AA 2.5.8). min-height restores the target without
+   growing the text, since .btn already centres its label. */
 .btn--sm {
     padding: calc(6px * var(--compact-scale, 1)) calc(14px * var(--compact-scale, 1));
     font-size: calc(0.78rem * var(--compact-scale, 1));
     border-radius: var(--radius-sm);
+    min-height: 24px;
 }
 
 .btn--xs {
@@ -839,6 +843,7 @@ svg.icon {
     font-size: calc(0.7rem * var(--compact-scale, 1));
     border-radius: var(--radius-sm);
     gap: 4px;
+    min-height: 24px;
 }
 
 .btn--icon {
@@ -925,7 +930,7 @@ svg.icon {
 
 .result-player__change.negative {
     background: color-mix(in srgb, var(--accent-red) 14%, transparent);
-    color: var(--accent-red);
+    color: var(--accent-red-text);
 }
 
 .result-player__change.neutral {
@@ -1102,7 +1107,7 @@ svg.icon {
 }
 
 .toast--error {
-    color: var(--accent-red);
+    color: var(--accent-red-text);
     border-color: color-mix(in srgb, var(--accent-red) 30%, transparent);
 }
 
@@ -1776,7 +1781,7 @@ svg.icon {
 
 .form-dot--win { background: color-mix(in srgb, var(--accent-green) 18%, transparent); color: var(--accent-green); }
 .form-dot--draw { background: color-mix(in srgb, var(--accent-orange) 18%, transparent); color: var(--accent-orange); }
-.form-dot--loss { background: color-mix(in srgb, var(--accent-red) 18%, transparent); color: var(--accent-red); }
+.form-dot--loss { background: color-mix(in srgb, var(--accent-red) 18%, transparent); color: var(--accent-red-text); }
 
 /* Segmented Win / Draw / Loss proportion bar */
 .wdl-bar {
@@ -1934,7 +1939,7 @@ svg.icon {
 
 .profile-history-row__result--win { background: color-mix(in srgb, var(--accent-green) 16%, transparent); color: var(--accent-green); }
 .profile-history-row__result--draw { background: color-mix(in srgb, var(--accent-orange) 16%, transparent); color: var(--accent-orange); }
-.profile-history-row__result--loss { background: color-mix(in srgb, var(--accent-red) 16%, transparent); color: var(--accent-red); }
+.profile-history-row__result--loss { background: color-mix(in srgb, var(--accent-red) 16%, transparent); color: var(--accent-red-text); }
 
 .profile-history-row__main {
     min-width: 0;
@@ -1975,7 +1980,7 @@ svg.icon {
 }
 
 .profile-history-row__invalid-tag {
-    color: var(--accent-red);
+    color: var(--accent-red-text);
     font-weight: 600;
 }
 
@@ -1994,7 +1999,7 @@ svg.icon {
 }
 
 .profile-history-row__rating--pos { color: var(--accent-green); }
-.profile-history-row__rating--neg { color: var(--accent-red); }
+.profile-history-row__rating--neg { color: var(--accent-red-text); }
 .profile-history-row__rating--zero { color: var(--text-muted); }
 
 .profile-history-row__link {

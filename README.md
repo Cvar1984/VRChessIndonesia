@@ -298,6 +298,7 @@ Analyses are Stockfish-evaluated PGN games, saved so a shareable link (`?analysi
 | 3 | Single player stats | `GET` | `/api/players/{username}/stats` | Public |
 | 4 | Edit player | `PATCH` | `/api/players/{username}` | API Token Required |
 | 5 | Delete player | `DELETE` | `/api/players/{username}` | API Token Required |
+| 6 | Merge duplicate players | `POST` | `/api/admin/players/merge` | **Admin Required** |
 
 Player object (from #1/#2 — sorted by `rating` descending, VRChat fields merged in even for unlinked players as `null`):
 
@@ -338,6 +339,10 @@ Player object (from #1/#2 — sorted by `rating` descending, VRChat fields merge
 
 **4. Edit** — body `{ "rating": 550, "username": "NewName" }` (either/both fields). Returns `409` for a rename to a name another player already has. Every rename is kept in the player's `username_history`. Admin edits are meant for debugging: renaming a VRChat-linked player works, but the next VRChat sync puts their VRChat name back (see [VRChat Profile Linking](#-vrchat-profile-linking-admin)).
 **5. Delete** — removes the player record. Does **not** delete their match history (matches keep referencing the now-orphaned player ID, shown as `DeletedPlayer#<id>`).
+
+**6. Merge** — body `{ "from": "DuplicateName", "into": "SurvivorName" }`. Folds a duplicate player row into the player it duplicates: `from`'s matches are repointed at `into`, `from`'s current and previous names are added to `into`'s `username_history` (as `source: merge`, so they keep resolving to `into` for the usual grace period), `from`'s VRChat link moves across **only** if `into` has none, `from`'s document is deleted, and every rating is then replayed from scratch. The replay is the point: `into` ends up with the rating and record it would have had if the duplicate had never existed — which adding two stat lines together would not produce, since each match's delta depends on both players' ratings at the time. Matches the two had played *against each other* become one player against themselves, and are invalidated (not deleted) so the record survives. Finally the VRChat rename that the duplicate was blocking is retried, so one call usually leaves the survivor already carrying their VRChat name — the response's `name_status` is `renamed`, `unchanged` or `conflict`.
+
+Returns `{ success, message, name_status, from, into, matches_moved, head_to_head_invalidated, names_absorbed, vrchat_link_moved }`. The Admin Panel's *Duplikat Pemain* card drives this two ways: a **merge form** for any two players (with a live preview computed from the loaded players and matches — how many matches move, how many were head-to-head, which names carry over, whether the VRChat link moves — so an irreversible merge is never run blind), and below it the list of **blocked VRChat renames** with one-click merges for each. Both names are resolved by *current* username only (no `username_history` fallback), so a stale name can't silently merge the wrong record. Returns `409` if either player doesn't exist, if they're the same record, or if the two are linked to **different** VRChat accounts — that means they're two different people, not a duplicate. Admin-only (not API token), since it merges records irreversibly and replays every rating. Irreversible: there is no unmerge.
 
 ---
 
@@ -406,7 +411,7 @@ All **Admin Only**.
 
 **2. Link** — body `{ "username": "<leaderboard username>", "vrchat_user_id": "usr_..." }`. Fetches the VRChat user, stores `vrchat_user_id`/`vrchat_display_name`/`avatar_url` on the player, renames the player to their VRChat display name, and returns the resolved `vrchat` object plus the resulting `username`.
 
-**Usernames follow VRChat.** A linked player's username is their VRChat display name. Linking renames them right away, and the refresh (#4) renames them again whenever their VRChat name changes. Each old name goes into the player's `username_history` (`[{ username, changed_at, source }]`, where `source` is `vrchat` or `admin`) and is listed in `previous_usernames`. Old names keep working: match submissions, stats and edits sent under a previous name reach the same player instead of creating a new one. If another player already has the VRChat name, the rename is skipped and reported, since that's usually an unlinked duplicate of the same person for an admin to sort out.
+**Usernames follow VRChat.** A linked player's username is their VRChat display name. Linking renames them right away, and the refresh (#4) renames them again whenever their VRChat name changes. Each old name goes into the player's `username_history` (`[{ username, changed_at, source }]`, where `source` is `vrchat`, `admin` or `merge`) and is listed in `previous_usernames`. Old names keep working: match submissions, stats and edits sent under a previous name reach the same player instead of creating a new one. If another player already has the VRChat name, the rename is skipped and reported, since that's usually an unlinked duplicate of the same person. Resolve it with [Merge duplicate players](#-player--ranking-endpoints) (#6) — the Admin Panel surfaces every such conflict in its *Duplikat Pemain* card with a one-click merge, and until one is merged the rename is skipped again on every refresh.
 
 **3. Unlink** — body `{ "username" }`. Clears the link and cached avatar.
 
