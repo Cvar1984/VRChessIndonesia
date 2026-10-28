@@ -257,10 +257,10 @@
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
-                                <th>Pemain tertaut</th>
-                                <th>Nama VRChat</th>
-                                <th>Duplikat yang akan digabung</th>
-                                <th>Aksi</th>
+                                <th scope="col">Pemain tertaut</th>
+                                <th scope="col">Nama VRChat</th>
+                                <th scope="col">Duplikat yang akan digabung</th>
+                                <th scope="col">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>${conflicts.map(({ player, target, duplicate }) => {
@@ -277,7 +277,8 @@
                                 <td><strong>${escHtml(duplicate.username)}</strong>
                                     <div class="stat-value" style="font-size:0.75rem;">${duplicate.games} match · ${duplicate.rating}${duplicate.vrchat_user_id ? ' · tertaut' : ''}</div></td>
                                 <td>${differentPeople
-                                    ? `<span class="stat-value" style="font-size:0.75rem;" title="Keduanya tertaut ke akun VRChat yang berbeda, jadi bukan duplikat. Putuskan tautan salah satu lewat Edit Pemain kalau memang perlu digabung.">Tertaut ke akun VRChat lain — bukan duplikat</span>`
+                                    ? `<span class="card__badge card__badge--orange">Bukan duplikat</span>
+                                       <div class="stat-value" style="font-size:0.7rem; margin-top:4px;">Keduanya tertaut ke akun VRChat yang berbeda. Putuskan tautan salah satunya lewat Edit Pemain kalau memang perlu digabung.</div>`
                                     : `<button class="btn btn--danger btn--xs"
                                         onclick="window.appMergePlayers(${jsStr(duplicate.username)}, ${jsStr(player.username)})">
                                         ${ICONS.swords} Gabungkan</button>`}</td>
@@ -1223,8 +1224,10 @@
                         <div style="display:flex; justify-content:space-between; gap:8px; font-size:0.7rem; color:var(--text-secondary); margin-bottom:3px;">
                             <span>${escHtml(label)}</span><span>${pct}%</span>
                         </div>
-                        <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:6px; overflow:hidden;">
-                            <div style="width:${pct}%; height:100%; background:var(--accent-primary); border-radius:6px; transition:width 0.2s ease;"></div>
+                        <div role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"
+                            aria-label="Progres analisis game ini" aria-valuetext="${escHtml(label)}"
+                            style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.36); border-radius:6px; height:8px; overflow:hidden;">
+                            <div style="width:${pct}%; height:100%; background:var(--accent-primary); transition:width 0.2s ease;"></div>
                         </div>
                     </div>`;
                 }
@@ -1264,6 +1267,7 @@
                     $('#reviewBatchTotal').textContent = total;
                     $('#reviewBatchPct').textContent = pct + '%';
                     $('#reviewBatchBar').style.width = pct + '%';
+                    $('#reviewBatchTrack')?.setAttribute('aria-valuenow', String(pct));
                     $('#reviewBatchState').textContent = reviewStopRequested ? 'Menghentikan…' : reviewPaused ? 'Dijeda' : 'Berjalan';
                     const pauseBtn = $('#btnReviewPause');
                     if (pauseBtn) {
@@ -1322,11 +1326,11 @@
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
-                                <th><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} ${reanalysisRunning ? 'disabled' : ''} aria-label="Pilih semua di daftar ini"></th>
-                                <th>Game</th>
-                                <th>Depth (min / rata-rata)</th>
-                                <th>Dianalisis</th>
-                                <th>Aksi</th>
+                                <th scope="col"><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} ${reanalysisRunning ? 'disabled' : ''} aria-label="Pilih semua di daftar ini"></th>
+                                <th scope="col">Game</th>
+                                <th scope="col">Depth (min / rata-rata)</th>
+                                <th scope="col">Dianalisis</th>
+                                <th scope="col">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>${rows.map(an => {
@@ -4141,9 +4145,15 @@
                         let progressPhase = 'posisi';
                         function setAnalysisProgress(done, outOf, phase) {
                             if (phase) progressPhase = phase;
+                            const pct = outOf ? Math.min(100, Math.round((done / outOf) * 100)) : 0;
                             $('#analysisCurrent').textContent = done;
                             $('#analysisTotal').textContent = progressPhase === 'posisi' ? outOf : `${outOf} (${progressPhase})`;
-                            $('#analysisProgressBar').style.width = (outOf ? Math.round((done / outOf) * 100) : 0) + '%';
+                            $('#analysisProgressBar').style.width = pct + '%';
+                            const track = $('#analysisProgressTrack');
+                            if (track) {
+                                track.setAttribute('aria-valuenow', String(pct));
+                                track.setAttribute('aria-valuetext', `${progressPhase} ${done} dari ${outOf}`);
+                            }
                             options.onProgress?.(done, outOf, progressPhase);
                         }
                         setAnalysisProgress(0, total, 'posisi');
@@ -4548,6 +4558,9 @@
                         for (const id of ids) reviewProgress.set(id, { state: 'queued', done: 0, total: 0, phase: 'posisi' });
                         setReviewButtonsEnabled(false);
                         renderReviewQueue();
+                        // The button that was just clicked is now disabled, which drops focus to
+                        // the document; move it onto the controls that replaced it.
+                        $('#btnReviewPause')?.focus();
 
                         const status = $('#reanalysisStatus');
                         const failed = [];
@@ -4619,9 +4632,11 @@
                     $('#btnReviewPause')?.addEventListener('click', () => {
                         if (!reanalysisRunning || reviewStopRequested) return;
                         setReviewPaused(!reviewPaused);
-                        toast(reviewPaused
+                        const note = reviewPaused
                             ? 'Dijeda. Posisi yang sedang dihitung diselesaikan dulu.'
-                            : 'Dilanjutkan.', 'info');
+                            : 'Dilanjutkan.';
+                        if ($('#reanalysisStatus')) $('#reanalysisStatus').textContent = note;
+                        toast(note, 'info');
                     });
 
                     $('#btnReviewStop')?.addEventListener('click', () => {
@@ -4629,6 +4644,9 @@
                         if (!confirm('Hentikan sisa analisis? Game yang sedang berjalan dibatalkan dan tidak disimpan — game yang sudah selesai tetap tersimpan.')) return;
                         reviewStopRequested = true;
                         setReviewPaused(false); // release the workers so they can see the stop and exit
+                        if ($('#reanalysisStatus')) {
+                            $('#reanalysisStatus').textContent = 'Menghentikan setelah posisi yang sedang dihitung selesai…';
+                        }
                         renderReviewBatchBar();
                     });
 

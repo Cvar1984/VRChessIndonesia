@@ -45,6 +45,12 @@
     --accent-bronze: #b5794a;
     --accent-green: #6fae4f;
     --accent-red: #c8383a;
+    /* --accent-red is vivid enough for fills and borders but only reaches
+       2.8-3.0:1 as text on its own 12-20% tints, under WCAG AA's 4.5:1. This is
+       the same hue at full saturation, lightened until the worst of those tints
+       clears 4.69:1 — used for every `color:` that previously took --accent-red,
+       while fills and borders keep the darker one. */
+    --accent-red-text: #ff5c5e;
     --accent-orange: #d9a441;
     --accent-cyan: #9ca3af;
 

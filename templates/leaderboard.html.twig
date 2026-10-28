@@ -511,7 +511,10 @@
                         <input type="checkbox" id="reviewFollowBoard">
                         Ikuti di tab Analisis (pindah tab dan tampilkan papannya tiap game)
                     </label>
-                    <div id="reanalysisStatus" style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;"></div>
+                    <!-- The run's only announced surface: it changes once per game, and on
+                         pause/resume/stop. The per-position counters below are not live. -->
+                    <div id="reanalysisStatus" role="status" aria-live="polite"
+                        style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;"></div>
 
                     <!-- Whole-run progress + pause/stop, shown only while a batch is running
                          (renderReviewBatchBar() in app.js owns its visibility and contents). -->
@@ -528,9 +531,11 @@
                                     title="Batalkan game yang sedang jalan dan sisa antreannya">{{ icons.icon('stop') }} Hentikan</button>
                             </div>
                         </div>
-                        <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:8px; overflow:hidden;">
+                        <div id="reviewBatchTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+                            aria-valuenow="0" aria-label="Progres keseluruhan antrean analisis"
+                            style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.36); border-radius:6px; height:10px; overflow:hidden;">
                             <div id="reviewBatchBar"
-                                style="width:0%; height:100%; background:var(--accent-primary); border-radius:6px; transition: width 0.3s ease;">
+                                style="width:0%; height:100%; background:var(--accent-primary); transition: width 0.3s ease;">
                             </div>
                         </div>
                     </div>
@@ -661,9 +666,11 @@
                             Menganalisis posisi <span id="analysisCurrent">0</span> / <span id="analysisTotal">0</span>…
                             <span id="analysisEngineLabel" style="color:#7fa650; font-weight:600;"></span>
                         </div>
-                        <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:8px; overflow:hidden;">
+                        <div id="analysisProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+                            aria-valuenow="0" aria-label="Progres analisis posisi"
+                            style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.36); border-radius:6px; height:10px; overflow:hidden;">
                             <div id="analysisProgressBar"
-                                style="width:0%; height:100%; background:var(--accent-primary); border-radius:6px; transition: width 0.3s ease;">
+                                style="width:0%; height:100%; background:var(--accent-primary); transition: width 0.3s ease;">
                             </div>
                         </div>
                     </div>
