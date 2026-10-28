@@ -452,19 +452,58 @@
                      name is held by another player row, which blocks their rename on every
                      refresh until the duplicate is merged away. renderNameConflicts() in
                      app.js owns its visibility and contents. -->
-                <div class="card" id="nameConflictCard" style="display:none;">
+                <div class="card" id="nameConflictCard">
                     <div class="card__header">
                         <h2 class="card__title">{{ icons.icon('swords') }} Duplikat Pemain</h2>
-                        <span class="card__badge card__badge--orange">PERLU TINDAKAN</span>
+                        <span class="card__badge card__badge--purple">ADMIN ACTION</span>
                     </div>
                     <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
-                        Pemain berikut tertaut ke VRChat, tapi namanya tidak bisa mengikuti nama VRChat-nya
-                        karena nama itu masih dipakai baris pemain lain — hampir selalu akun duplikat orang
-                        yang sama. Menggabungkan akan memindahkan semua match duplikat ke pemain ini,
-                        menyimpan nama lamanya sebagai riwayat, lalu menghitung ulang seluruh rating dari
-                        awal. Match antar-keduanya ikut dibatalkan. Tindakan ini tidak bisa dibatalkan.
+                        Dua baris pemain yang sebenarnya satu orang. Menggabungkan memindahkan semua match
+                        milik duplikat ke pemain utama, menyimpan nama duplikat sebagai riwayat (nama lama
+                        tetap mengarah ke pemain utama), lalu menghitung ulang seluruh rating dari awal —
+                        hasilnya sama seperti kalau duplikat itu tidak pernah ada. Match antar-keduanya
+                        dibatalkan karena tidak bisa dinilai. <strong>Tidak bisa dibatalkan.</strong>
                     </p>
-                    <div id="nameConflictList"></div>
+
+                    <!-- Manual merge: any two players, not only the auto-detected conflicts below. -->
+                    <datalist id="mergePlayerNames"></datalist>
+                    <div class="form-row" style="align-items:flex-end; flex-wrap:wrap;">
+                        <div class="form-group">
+                            <label class="form-label" for="mergeFrom">Duplikat (akan dihapus)</label>
+                            <input type="text" class="form-input" id="mergeFrom" list="mergePlayerNames"
+                                autocomplete="off" placeholder="nama pemain">
+                        </div>
+                        <div class="form-group" style="flex:0 0 auto;">
+                            <button class="btn btn--secondary btn--sm" id="btnMergeSwap" type="button"
+                                title="Tukar arah penggabungan">{{ icons.icon('refresh') }} Tukar</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="mergeInto">Pemain utama (disimpan)</label>
+                            <input type="text" class="form-input" id="mergeInto" list="mergePlayerNames"
+                                autocomplete="off" placeholder="nama pemain">
+                        </div>
+                    </div>
+
+                    <!-- Exact preview, computed from the loaded players and matches, so an
+                         irreversible merge is never run blind. -->
+                    <div id="mergePreview" role="status" aria-live="polite"
+                        style="font-size:0.8rem; color:var(--text-secondary); margin:4px 0 12px;"></div>
+
+                    <button class="btn btn--danger btn--sm" id="btnMergePlayers" type="button" disabled>
+                        {{ icons.icon('swords') }} Gabungkan Pemain
+                    </button>
+
+                    <div id="nameConflictSection" style="display:none; margin-top:24px;">
+                        <h3 style="font-size:0.85rem; color:var(--text-primary); margin-bottom:6px;">
+                            {{ icons.icon('ban') }} Nama VRChat terhalang
+                        </h3>
+                        <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:12px;">
+                            Pemain ini tertaut ke VRChat tapi namanya tidak bisa mengikuti nama VRChat-nya,
+                            karena nama itu masih dipakai baris pemain lain. Selama belum digabung, penggantian
+                            nama akan dilewati terus setiap kali refresh.
+                        </p>
+                        <div id="nameConflictList"></div>
+                    </div>
                 </div>
 
                 <!-- Game Review (re)analysis Card — runs in this browser via setupEvents()' reviewSavedAnalyses() -->
