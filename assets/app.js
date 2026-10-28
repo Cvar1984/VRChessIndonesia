@@ -151,6 +151,7 @@
                         fetchAdmins(true);
                         fetchGalleryPhotos(true);
                         fetchNewsletterPosts(true);
+                        fetchAuditLog(true);
                     } else {
                         document.body.classList.remove('is-admin');
                         $('#authBadge').className = 'auth-badge admin-only';
@@ -522,6 +523,65 @@
                         console.error("fetchMatches Error:", e);
                         if (!silent) toast('Gagal mengambil data pertandingan: ' + e.message, 'error');
                     }
+                }
+
+                // ── Admin action log ──
+                let auditCache = [];
+
+                async function fetchAuditLog(silent = false) {
+                    if (!isAdminState) return;
+                    try {
+                        const actor = $('#auditActorFilter')?.value.trim() || '';
+                        const query = actor ? `?actor=${encodeURIComponent(actor)}` : '';
+                        const data = await apiCall(`/api/admin/audit-log${query}`);
+                        if (data.success) {
+                            auditCache = data.entries || [];
+                            if ($('#auditRetention')) $('#auditRetention').textContent = data.retention_days;
+                            renderAuditLog();
+                            if (!silent) toast('Log aksi admin diperbarui', 'success');
+                        }
+                    } catch (e) {
+                        if (!silent) toast('Gagal mengambil log: ' + e.message, 'error');
+                    }
+                }
+
+                // The detail is whatever the request carried, already redacted and
+                // size-capped server-side, so it renders as plain key=value pairs.
+                function auditDetailText(detail) {
+                    const pairs = Object.entries(detail || {});
+                    if (!pairs.length) return '—';
+                    return pairs.map(([k, v]) => `${k}=${v === null ? 'null' : v}`).join(', ');
+                }
+
+                function renderAuditLog() {
+                    const container = $('#auditLogList');
+                    if (!container) return;
+
+                    if (!auditCache.length) {
+                        container.innerHTML = `<div class="empty-state"><div class="empty-state__text">Belum ada aksi yang tercatat.</div></div>`;
+                        return;
+                    }
+
+                    container.innerHTML = `
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Waktu</th>
+                                <th scope="col">Pelaku</th>
+                                <th scope="col">Aksi</th>
+                                <th scope="col">Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>${auditCache.map(e => `
+                            <tr>
+                                <td><span class="stat-value">${escHtml(e.at)}</span></td>
+                                <td><strong>${escHtml(e.actor)}</strong>
+                                    <div class="stat-value" style="font-size:0.7rem;">${escHtml(e.actor_type)}${e.ip ? ' · ' + escHtml(e.ip) : ''}</div></td>
+                                <td><span class="card__badge card__badge--${e.method === 'DELETE' ? 'red' : 'green'}">${escHtml(e.method)}</span>
+                                    <div class="stat-value" style="font-size:0.7rem;">${escHtml(e.route || e.path)}</div></td>
+                                <td><span class="stat-value" style="font-size:0.7rem;">${escHtml(auditDetailText(e.detail))}</span></td>
+                            </tr>`).join('')}</tbody>
+                    </table>`;
                 }
 
                 async function fetchTokens(silent = false) {
@@ -2621,6 +2681,9 @@
                     $('#btnMergePlayers')?.addEventListener('click', () => {
                         window.appMergePlayers($('#mergeFrom').value.trim(), $('#mergeInto').value.trim());
                     });
+
+                    $('#btnRefreshAuditLog')?.addEventListener('click', () => fetchAuditLog(false));
+                    $('#auditActorFilter')?.addEventListener('change', () => fetchAuditLog(true));
 
                     $('#btnRefreshPlayers').addEventListener('click', () => fetchPlayers(false));
                     $('#btnRefreshAnalyses')?.addEventListener('click', () => fetchAnalyses(false));

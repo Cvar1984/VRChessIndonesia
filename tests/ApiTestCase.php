@@ -11,6 +11,7 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use VRchessIndo\Document\Admin;
 use VRchessIndo\Document\Analysis;
 use VRchessIndo\Document\ApiToken;
+use VRchessIndo\Document\AuditEntry;
 use VRchessIndo\Document\ChessMatch;
 use VRchessIndo\Document\Player;
 use VRchessIndo\Document\Setting;
@@ -48,7 +49,7 @@ abstract class ApiTestCase extends WebTestCase
             'This test wipes its database before every run.',
         );
 
-        foreach ([Player::class, ChessMatch::class, ApiToken::class, Admin::class, Analysis::class, Setting::class] as $class) {
+        foreach ([Player::class, ChessMatch::class, ApiToken::class, Admin::class, Analysis::class, Setting::class, AuditEntry::class] as $class) {
             $this->dm->getDocumentCollection($class)->deleteMany([]);
         }
         $this->dm->clear();
