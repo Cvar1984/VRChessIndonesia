@@ -23,8 +23,9 @@ This document covers every HTTP endpoint the backend exposes, the rating and mov
 15. [Stockfish Engine Analysis API](#-stockfish-engine-analysis-api)
 16. [Rating System](#-rating-system)
 17. [Move Accuracy & Classification Model](#-move-accuracy--classification-model)
-18. [Error Handling & Status Codes](#-error-handling--status-codes)
-19. [Tests](#-tests)
+18. [Admin Action Log](#-admin-action-log)
+19. [Error Handling & Status Codes](#-error-handling--status-codes)
+20. [Tests](#-tests)
 
 ---
 
@@ -666,6 +667,28 @@ Shown as an icon on the move that was just played (Analysis tab board overlay), 
 | ⚠️ Inaccuracy | `tactical_move.png` | `loss` 5–10 |
 | ❌ Mistake | `strange_move.png` | `loss` 10–20 |
 | 🔥 Blunder | `blunder.png` | `loss ≥ 20` and the mover is below 55 win% afterward (still better than that is at worst a Mistake). |
+
+---
+
+## 📋 Admin Action Log
+
+| Method | URL | Auth |
+| :--- | :--- | :--- |
+| `GET` | `/api/admin/audit-log?limit=100&actor=` | **Admin Required** |
+
+`src/EventListener/AuditLogListener.php` records every **successful mutating request made by an authenticated caller** — one listener on `kernel.response` rather than a call in each controller, since authorization here is already a uniform in-controller `requireAdmin()`/`requireApiAccess()` check, so an admin action is by construction a `POST`/`PUT`/`PATCH`/`DELETE` that returned 2xx with a security token in place. An endpoint added later is logged without anyone remembering to wire it up. Reads, and rejected attempts (401/4xx), are not recorded — logging the latter would let an unauthenticated caller fill the collection.
+
+Each entry holds the time, the actor (admin username, or `api-token:<id>` for a bot, with `actor_type` distinguishing them), method, path, route name, status, client IP, and the request's own parameters. The trade-off of doing this centrally is that entries describe the **request**, not the domain effect: a merge is recorded as `POST /api/admin/players/merge {from, into}`, not as the number of matches it moved.
+
+**Secrets are never stored.** Any parameter whose key contains `password`, `token`, `secret` or `totp` is replaced with `[redacted]` before the entry is written, so a successful login is auditable without its password and admin creation without the new one. Values are also size-capped: strings over 200 characters are truncated and nested arrays become `[n items]`, because `PATCH /api/analyses/{id}` posts a whole game's evaluations that would otherwise put megabytes of engine output in the log.
+
+Entries live in a new `audit_log` collection (there's no Monolog bundle here, and Railway's container filesystem is recreated on each deploy, so a log file would be gone exactly when needed). They expire **90 days** after being written, via a TTL index on the entry's date — which Mongo only enforces once that index exists, so on an existing deployment run:
+
+```bash
+php bin/console doctrine:mongodb:schema:update
+```
+
+Audit writes are wrapped so a failure can never turn a succeeded action into a 500. The Admin Panel shows the log in its *Log Aksi Admin* card, filterable by actor.
 
 ---
 

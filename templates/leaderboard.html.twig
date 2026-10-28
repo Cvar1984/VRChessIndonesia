@@ -515,6 +515,31 @@
                     </div>
                 </div>
 
+                <!-- Admin action log — written by src/EventListener/AuditLogListener.php on
+                     every successful mutating request from an authenticated caller. -->
+                <div class="card">
+                    <div class="card__header">
+                        <h2 class="card__title">{{ icons.icon('clipboard') }} Log Aksi Admin</h2>
+                        <button class="btn btn--secondary btn--sm" id="btnRefreshAuditLog" type="button">
+                            {{ icons.icon('refresh') }} Muat Ulang
+                        </button>
+                    </div>
+                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
+                        Setiap aksi yang mengubah data — oleh admin maupun API token — dicatat di sini
+                        beserta pelaku, waktu, dan IP-nya. Password, token, dan secret tidak pernah ikut
+                        tercatat. Entri lebih tua dari <span id="auditRetention">90</span> hari dihapus
+                        otomatis.
+                    </p>
+                    <div class="form-row" style="align-items:flex-end; flex-wrap:wrap;">
+                        <div class="form-group">
+                            <label class="form-label" for="auditActorFilter">Filter pelaku (kosongkan untuk semua)</label>
+                            <input type="text" class="form-input" id="auditActorFilter" autocomplete="off"
+                                placeholder="nama admin atau api-token:&lt;id&gt;">
+                        </div>
+                    </div>
+                    <div id="auditLogList" style="max-height:420px; overflow:auto; margin-top:12px;"></div>
+                </div>
+
                 <!-- Game Review (re)analysis Card — runs in this browser via setupEvents()' reviewSavedAnalyses() -->
                 <div class="card">
                     <div class="card__header">
