@@ -466,21 +466,30 @@
                     </p>
 
                     <!-- Manual merge: any two players, not only the auto-detected conflicts below. -->
-                    <datalist id="mergePlayerNames"></datalist>
                     <div class="form-row" style="align-items:flex-end; flex-wrap:wrap;">
-                        <div class="form-group">
+                        <div class="form-group" style="position:relative;">
                             <label class="form-label" for="mergeFrom">Duplikat (akan dihapus)</label>
-                            <input type="text" class="form-input" id="mergeFrom" list="mergePlayerNames"
-                                autocomplete="off" placeholder="nama pemain">
+                            <input type="text" class="form-input" id="mergeFrom" autocomplete="off"
+                                role="combobox" aria-expanded="false" aria-autocomplete="list"
+                                aria-controls="mergeFromSuggest" placeholder="ketik nama pemain">
+                            <div id="mergeFromSuggest" role="listbox" aria-label="Saran nama pemain"
+                                style="display:none; position:absolute; left:0; right:0; top:100%; z-index:30;
+                                    max-height:220px; overflow:auto; background:var(--bg-card);
+                                    border:1px solid var(--border-strong); box-shadow:var(--shadow-md);"></div>
                         </div>
                         <div class="form-group" style="flex:0 0 auto;">
                             <button class="btn btn--secondary btn--sm" id="btnMergeSwap" type="button"
                                 title="Tukar arah penggabungan">{{ icons.icon('refresh') }} Tukar</button>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" style="position:relative;">
                             <label class="form-label" for="mergeInto">Pemain utama (disimpan)</label>
-                            <input type="text" class="form-input" id="mergeInto" list="mergePlayerNames"
-                                autocomplete="off" placeholder="nama pemain">
+                            <input type="text" class="form-input" id="mergeInto" autocomplete="off"
+                                role="combobox" aria-expanded="false" aria-autocomplete="list"
+                                aria-controls="mergeIntoSuggest" placeholder="ketik nama pemain">
+                            <div id="mergeIntoSuggest" role="listbox" aria-label="Saran nama pemain"
+                                style="display:none; position:absolute; left:0; right:0; top:100%; z-index:30;
+                                    max-height:220px; overflow:auto; background:var(--bg-card);
+                                    border:1px solid var(--border-strong); box-shadow:var(--shadow-md);"></div>
                         </div>
                     </div>
 
@@ -546,10 +555,6 @@
                             {{ icons.icon('cpu') }} Analisis yang Dipilih (<span id="selectedReviewCount">0</span>)
                         </button>
                     </div>
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-secondary); margin-top:12px;">
-                        <input type="checkbox" id="reviewFollowBoard">
-                        Ikuti di tab Analisis (pindah tab dan tampilkan papannya tiap game)
-                    </label>
                     <!-- The run's only announced surface: it changes once per game, and on
                          pause/resume/stop. The per-position counters below are not live. -->
                     <div id="reanalysisStatus" role="status" aria-live="polite"
