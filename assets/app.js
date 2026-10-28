@@ -214,7 +214,7 @@
                             $('#adminStatPlayers').textContent = playersCache.length;
                             renderLeaderboard($('#playerSearch') ? $('#playerSearch').value : '');
                             renderNameConflicts();
-                            renderMergePlayerOptions();
+                            refreshMergeSuggestions();
                             renderMergePreview();
                             if (!silent) toast('Leaderboard diperbarui', 'success');
                         }
@@ -302,13 +302,107 @@
                     return playersCache.find(p => p.username === name) || null;
                 }
 
-                function renderMergePlayerOptions() {
-                    const list = $('#mergePlayerNames');
-                    if (!list) return;
-                    list.innerHTML = [...playersCache]
-                        .sort((a, b) => String(a.username).localeCompare(String(b.username)))
-                        .map(p => `<option value="${escHtml(p.username)}"></option>`).join('');
+                /**
+                 * Player-name suggestions for a merge input. Replaces a native <datalist>,
+                 * which renders as a bare list of names with no context — no help at all for
+                 * the judgement this form needs, which is telling two near-identical names
+                 * apart by their match count and whether either is linked to VRChat.
+                 *
+                 * Filtering is substring and case-insensitive, so "cat" finds
+                 * "konna cat (vrc)". The lookup that actually runs the merge stays exact and
+                 * case-sensitive — picking from this list is what guarantees the typed name
+                 * matches a real player.
+                 */
+                function attachPlayerSuggest(inputId, listId) {
+                    const input = $(inputId);
+                    const list = $(listId);
+                    if (!input || !list) return;
+
+                    let shown = [];
+                    let active = -1; // highlighted option; -1 = none
+
+                    function close() {
+                        list.style.display = 'none';
+                        list.innerHTML = '';
+                        input.setAttribute('aria-expanded', 'false');
+                        input.removeAttribute('aria-activedescendant');
+                        shown = [];
+                        active = -1;
+                    }
+
+                    function paint() {
+                        const optId = i => `${listId.slice(1)}-opt${i}`;
+                        list.innerHTML = shown.map((p, i) => `
+                            <div role="option" id="${optId(i)}" data-name="${escHtml(p.username)}"
+                                aria-selected="${i === active}"
+                                style="padding:6px 10px; min-height:24px; cursor:pointer; background:${i === active ? 'var(--bg-card-hover)' : 'transparent'};">
+                                <div style="color:var(--text-primary);">${escHtml(p.username)}</div>
+                                <div style="font-size:0.7rem; color:var(--text-secondary);">${p.games} match · rating ${p.rating}${p.vrchat_user_id ? ' · tertaut VRChat' : ''}</div>
+                            </div>`).join('');
+                        if (active >= 0) {
+                            input.setAttribute('aria-activedescendant', optId(active));
+                        } else {
+                            input.removeAttribute('aria-activedescendant');
+                        }
+                    }
+
+                    function open() {
+                        const query = input.value.trim().toLowerCase();
+                        shown = playersCache
+                            .filter(p => !query || String(p.username).toLowerCase().includes(query))
+                            .sort((a, b) => String(a.username).localeCompare(String(b.username)))
+                            .slice(0, 8);
+                        if (!shown.length) { close(); return; }
+                        active = -1;
+                        paint();
+                        list.style.display = 'block';
+                        input.setAttribute('aria-expanded', 'true');
+                    }
+
+                    function pick(name) {
+                        input.value = name;
+                        close();
+                        renderMergePreview();
+                    }
+
+                    input.addEventListener('input', open);
+                    input.addEventListener('focus', open);
+                    input.addEventListener('keydown', (e) => {
+                        if (list.style.display === 'none') {
+                            if (e.key === 'ArrowDown') { open(); e.preventDefault(); }
+                            return;
+                        }
+                        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                            active = e.key === 'ArrowDown'
+                                ? (active + 1) % shown.length
+                                : (active <= 0 ? shown.length - 1 : active - 1);
+                            paint();
+                            e.preventDefault();
+                        } else if (e.key === 'Enter' && active >= 0) {
+                            pick(shown[active].username);
+                            e.preventDefault();
+                        } else if (e.key === 'Escape') {
+                            close();
+                            e.preventDefault();
+                        } else if (e.key === 'Tab') {
+                            close();
+                        }
+                    });
+                    // mousedown, not click: the input's blur would tear the list down before a
+                    // click could land on it.
+                    list.addEventListener('mousedown', (e) => {
+                        const option = e.target.closest('[data-name]');
+                        if (!option) return;
+                        e.preventDefault();
+                        pick(option.dataset.name);
+                    });
+                    input.addEventListener('blur', () => setTimeout(close, 120));
+
+                    // Re-filter against a refreshed player list if the field is still open.
+                    return () => { if (list.style.display !== 'none') open(); };
                 }
+
+                let refreshMergeSuggestions = () => {};
 
                 /**
                  * Exactly what the merge will do, computed from the loaded players and matches so
@@ -2513,6 +2607,11 @@
                     for (const sel of ['#mergeFrom', '#mergeInto']) {
                         $(sel)?.addEventListener('input', renderMergePreview);
                     }
+                    const suggestRefreshers = [
+                        attachPlayerSuggest('#mergeFrom', '#mergeFromSuggest'),
+                        attachPlayerSuggest('#mergeInto', '#mergeIntoSuggest'),
+                    ].filter(Boolean);
+                    refreshMergeSuggestions = () => suggestRefreshers.forEach(fn => fn());
                     $('#btnMergeSwap')?.addEventListener('click', () => {
                         const from = $('#mergeFrom'), into = $('#mergeInto');
                         if (!from || !into) return;
@@ -4682,9 +4781,6 @@
                         // rather than failed; -1 means it ran to the end.
                         let stoppedAt = -1;
                         try {
-                            // Watching the board is opt-in now: the per-game bars are in this
-                            // panel, so a run no longer has to drag the admin off it.
-                            if ($('#reviewFollowBoard')?.checked) $('#tabBtnAnalysis').click();
                             for (const [n, id] of ids.entries()) {
                                 // Pause holds between games too, so a run can be parked without
                                 // leaving a game half-reviewed.
