@@ -5318,15 +5318,20 @@
                             s.textContent = `.analysis-move-btn:hover{background:#363430 !important;}
                                 .analysis-move-btn.active{background:#363430 !important; color:white!important; font-weight:700;}
                                 .analysis-move-btn.variant-move.active{background:#45433d !important; color:white!important; border-bottom: 2px solid #ff9e00 !important;}
+                                /* White on these mid-tone fills ran 2.28-3.96:1, under AA's 4.5:1 —
+                                   the worst contrast in the app, on the labels the Analysis tab is
+                                   built around. Dark text on the same fills clears it at 4.70:1 or
+                                   better and keeps the palette, which is what .ann-ok (black on
+                                   yellow, 10.95:1) was already doing. */
                                 .ann-badge { font-size: 0.6rem; padding: 2px 4px; border-radius: 4px; margin-left: 6px; font-weight: 800; text-transform: uppercase; display: inline-block; vertical-align: middle; }
-                                .ann-sigma { background: #06b6d4; color: #fff; }
-                                .ann-awesome { background: #22c55e; color: #fff; }
-                                .ann-best { background: #3b82f6; color: #fff; }
-                                .ann-nice { background: #10b981; color: #fff; }
+                                .ann-sigma { background: #06b6d4; color: #10140f; }
+                                .ann-awesome { background: #22c55e; color: #10140f; }
+                                .ann-best { background: #3b82f6; color: #10140f; }
+                                .ann-nice { background: #10b981; color: #10140f; }
                                 .ann-ok { background: #eab308; color: #000; }
-                                .ann-theoretical { background: #a855f7; color: #fff; }
-                                .ann-strange { background: #f97316; color: #fff; }
-                                .ann-bad { background: #ef4444; color: #fff; }
+                                .ann-theoretical { background: #a855f7; color: #10140f; }
+                                .ann-strange { background: #f97316; color: #10140f; }
+                                .ann-bad { background: #ef4444; color: #10140f; }
                                 .ann-clown { background: #991b1b; color: #fff; }`;
                             document.head.appendChild(s);
                         }
