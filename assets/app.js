@@ -260,7 +260,7 @@
 
                     list.innerHTML = `
                     <table class="leaderboard-table">
-                        <thead>
+                        <th scope="col"ead>
                             <tr>
                                 <th scope="col">Pemain tertaut</th>
                                 <th scope="col">Nama VRChat</th>
@@ -564,7 +564,7 @@
 
                     container.innerHTML = `
                     <table class="leaderboard-table">
-                        <thead>
+                        <th scope="col"ead>
                             <tr>
                                 <th scope="col">Waktu</th>
                                 <th scope="col">Pelaku</th>
@@ -655,14 +655,14 @@
 
                     let html = `
                     <table class="leaderboard-table">
-                        <thead>
+                        <th scope="col"ead>
                             <tr>
-                                <th>Nama Token</th>
-                                <th>Status</th>
-                                <th>API Token Secret</th>
-                                <th>Tgl Dibuat</th>
-                                <th>Terakhir Dipakai</th>
-                                <th>Aksi</th>
+                                <th scope="col">Nama Token</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">API Token Secret</th>
+                                <th scope="col">Tgl Dibuat</th>
+                                <th scope="col">Terakhir Dipakai</th>
+                                <th scope="col">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>`;
@@ -704,11 +704,11 @@
 
                     let html = `
                     <table class="leaderboard-table">
-                        <thead>
+                        <th scope="col"ead>
                             <tr>
-                                <th>Username</th>
-                                <th>Tgl Dibuat</th>
-                                <th>Aksi</th>
+                                <th scope="col">Username</th>
+                                <th scope="col">Tgl Dibuat</th>
+                                <th scope="col">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>`;
@@ -1051,17 +1051,17 @@
 
                     let html = `
                     <table class="leaderboard-table">
-                        <thead>
+                        <th scope="col"ead>
                             <tr>
-                                <th>#</th>
-                                <th>Pemain</th>
-                                <th>Rating</th>
-                                <th class="hide-mobile">W</th>
-                                <th class="hide-mobile">D</th>
-                                <th class="hide-mobile">L</th>
-                                <th>Games</th>
-                                <th class="hide-mobile">Win Rate</th>
-                                ${isAdminState ? '<th>Aksi Admin</th>' : ''}
+                                <th scope="col">#</th>
+                                <th scope="col">Pemain</th>
+                                <th scope="col">Rating</th>
+                                <th scope="col" class="hide-mobile">W</th>
+                                <th scope="col" class="hide-mobile">D</th>
+                                <th scope="col" class="hide-mobile">L</th>
+                                <th scope="col">Games</th>
+                                <th scope="col" class="hide-mobile">Win Rate</th>
+                                ${isAdminState ? '<th scope="col">Aksi Admin</th>' : ''}
                             </tr>
                         </thead>
                         <tbody>`;
@@ -1578,7 +1578,7 @@
                     const allChecked = rows.every(an => reviewSelection.has(an.id));
                     container.innerHTML = `
                     <table class="leaderboard-table">
-                        <thead>
+                        <th scope="col"ead>
                             <tr>
                                 <th scope="col"><input type="checkbox" data-review-all ${allChecked ? 'checked' : ''} ${reanalysisRunning ? 'disabled' : ''} aria-label="Pilih semua di daftar ini"></th>
                                 <th scope="col">Game</th>
@@ -4168,7 +4168,9 @@
                         overlay.id = 'boardAnnOverlay';
                         overlay.style.cssText = `position: absolute; left: ${xPct}%; top: ${yPct}%; width: 12.5%; height: 12.5%; pointer-events: none; z-index: 15; display: flex; align-items: flex-start; justify-content: flex-end;`;
 
-                        overlay.innerHTML = `<img src="${annIcon.src}" title="${annIcon.title}" style="width: 22px; height: 22px; pointer-events: auto; transform: translate(30%, -30%); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));" />`;
+                        // The badge IS the information (Brilliant vs Blunder), so it needs a
+                        // text alternative, not an empty alt.
+                        overlay.innerHTML = `<img src="${annIcon.src}" alt="${escHtml(annIcon.title)}" title="${annIcon.title}" style="width: 22px; height: 22px; pointer-events: auto; transform: translate(30%, -30%); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));" />`;
                         boardEl.appendChild(overlay);
                     }
 
@@ -5137,7 +5139,7 @@
                             for (const src of order) {
                                 if (stats[src] && stats[src].count > 0) {
                                     html += `<div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.4); padding:2px 5px; border-radius:4px;" title="${stats[src].title}">
-                                                <img src="${src}" style="width:14px; height:14px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));" />
+                                                <img src="${src}" alt="${escHtml(stats[src].title)}" style="width:14px; height:14px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));" />
                                                 <span style="color:#eee; font-size:0.75rem; font-weight:600;">${stats[src].count}</span>
                                              </div>`;
                                 }
@@ -5265,7 +5267,7 @@
                                 const siblings = childrenOf(line[line.length - 2]);
                                 if (siblings[0] === pos && siblings.length > 1) {
                                     for (const alt of siblings.slice(1)) {
-                                        out += `<span style="color:#777; display:inline-flex; flex-wrap:wrap; align-items:center;">(${renderVariation([...line.slice(0, -1), alt])})</span>`;
+                                        out += `<span style="color:var(--text-secondary); display:inline-flex; flex-wrap:wrap; align-items:center;">(${renderVariation([...line.slice(0, -1), alt])})</span>`;
                                     }
                                     needNum = true;
                                 }
@@ -5286,7 +5288,7 @@
                             if (ply % 2 === 1 || row === null) {
                                 closeRow();
                                 row = `<div style="width:100%; display:flex; align-items:center; margin-bottom:2px;">`
-                                    + `<div style="width:35px; color:#666; text-align:right; margin-right:8px; font-size:0.85rem;">${Math.ceil(ply / 2)}${ply % 2 === 1 ? '.' : '...'}</div>`
+                                    + `<div style="width:35px; color:var(--text-secondary); text-align:right; margin-right:8px; font-size:0.85rem;">${Math.ceil(ply / 2)}${ply % 2 === 1 ? '.' : '...'}</div>`
                                     + `<div style="flex:1; display:flex;">`;
                             } else {
                                 row += `<div style="width:12px;"></div>`; // spacer
@@ -5316,15 +5318,20 @@
                             s.textContent = `.analysis-move-btn:hover{background:#363430 !important;}
                                 .analysis-move-btn.active{background:#363430 !important; color:white!important; font-weight:700;}
                                 .analysis-move-btn.variant-move.active{background:#45433d !important; color:white!important; border-bottom: 2px solid #ff9e00 !important;}
+                                /* White on these mid-tone fills ran 2.28-3.96:1, under AA's 4.5:1 —
+                                   the worst contrast in the app, on the labels the Analysis tab is
+                                   built around. Dark text on the same fills clears it at 4.70:1 or
+                                   better and keeps the palette, which is what .ann-ok (black on
+                                   yellow, 10.95:1) was already doing. */
                                 .ann-badge { font-size: 0.6rem; padding: 2px 4px; border-radius: 4px; margin-left: 6px; font-weight: 800; text-transform: uppercase; display: inline-block; vertical-align: middle; }
-                                .ann-sigma { background: #06b6d4; color: #fff; }
-                                .ann-awesome { background: #22c55e; color: #fff; }
-                                .ann-best { background: #3b82f6; color: #fff; }
-                                .ann-nice { background: #10b981; color: #fff; }
+                                .ann-sigma { background: #06b6d4; color: #10140f; }
+                                .ann-awesome { background: #22c55e; color: #10140f; }
+                                .ann-best { background: #3b82f6; color: #10140f; }
+                                .ann-nice { background: #10b981; color: #10140f; }
                                 .ann-ok { background: #eab308; color: #000; }
-                                .ann-theoretical { background: #a855f7; color: #fff; }
-                                .ann-strange { background: #f97316; color: #fff; }
-                                .ann-bad { background: #ef4444; color: #fff; }
+                                .ann-theoretical { background: #a855f7; color: #10140f; }
+                                .ann-strange { background: #f97316; color: #10140f; }
+                                .ann-bad { background: #ef4444; color: #10140f; }
                                 .ann-clown { background: #991b1b; color: #fff; }`;
                             document.head.appendChild(s);
                         }

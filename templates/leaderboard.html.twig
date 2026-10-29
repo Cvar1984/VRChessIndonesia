@@ -274,7 +274,7 @@
 
                     <div class="search-wrapper">
                         <span class="search-wrapper__icon">{{ icons.icon('search') }}</span>
-                        <input type="text" class="search-input" id="playerSearch" placeholder="Cari pemain...">
+                        <input type="text" class="search-input" id="playerSearch" aria-label="Cari pemain" placeholder="Cari pemain...">
                     </div>
 
                     <div id="leaderboardContainer">
@@ -303,7 +303,7 @@
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
                         <div class="search-wrapper" style="flex: 1; min-width: 140px; margin-bottom: 0;">
                             <span class="search-wrapper__icon" style="font-size: 0.9rem;">{{ icons.icon('search') }}</span>
-                            <input type="text" class="search-input" id="matchSearch"
+                            <input type="text" class="search-input" id="matchSearch" aria-label="Cari pertandingan"
                                 placeholder="Cari (nama, w:nama, b:nama, y:2026, m:8, d:15)..." list="playerNamesList"
                                 autocomplete="off"
                                 title="Filter: w:nama (putih), b:nama (hitam), y:YYYY (tahun), m:MM (bulan), d:DD (hari)">
@@ -363,7 +363,7 @@
 
                         <!-- PGN is the primary option — saved automatically on submit -->
                         <div class="form-group">
-                            <label class="form-label">{{ icons.icon('filetext') }} Upload PGN <span
+                            <label class="form-label" for="playPgn">{{ icons.icon('filetext') }} Upload PGN <span
                                     style="font-weight:400;color:var(--text-secondary);">(Diutamakan)</span></label>
                             <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:8px;">
                                 PGN akan disimpan otomatis sebagai analisis saat pertandingan dicatat.
@@ -1023,7 +1023,7 @@
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; padding: 0 16px; flex-wrap: wrap;">
                         <div class="search-wrapper" style="flex: 1; min-width: 140px; margin-bottom: 0;">
                             <span class="search-wrapper__icon" style="font-size: 0.9rem;">{{ icons.icon('search') }}</span>
-                            <input type="text" class="search-input" id="analysisSearch"
+                            <input type="text" class="search-input" id="analysisSearch" aria-label="Cari analisis"
                                 placeholder="Cari analisis (nama, event, opening, elo, title, w:nama)..."
                                 autocomplete="off"
                                 title="Filter: w:nama (putih), b:nama (hitam), elo:2600 (rating), title:GM (gelar)">
@@ -1174,7 +1174,7 @@
                 <form id="editAdminForm">
                     <input type="hidden" id="editAdminUsernameHidden">
                     <div class="form-group">
-                        <label class="form-label">Username Admin</label>
+                        <label class="form-label" for="editAdminUsernameDisplay">Username Admin</label>
                         <input type="text" class="form-input" id="editAdminUsernameDisplay" disabled>
                     </div>
                     <div class="form-group">
@@ -1402,7 +1402,7 @@
                 </form>
 
                 <div class="vrchat-link-section">
-                    <label class="form-label">Akun VRChat</label>
+                    <label class="form-label" for="vrchatSearchInput">Akun VRChat</label>
                     <div class="vrchat-link-status" id="vrchatLinkStatus"></div>
                     <div class="vrchat-search-row">
                         <input type="text" class="form-input" id="vrchatSearchInput" placeholder="Cari nama VRChat...">

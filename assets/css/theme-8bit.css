@@ -42,7 +42,8 @@
     --accent-primary-hover: #ffd766;
     --accent-gold: #e8b84b;
     --accent-silver: #9ca3af;
-    --accent-bronze: #b5794a;
+    /* Was #b5794a, which came 0.02 short of AA as text on a card (4.48:1). */
+    --accent-bronze: #bf8a62;
     --accent-green: #6fae4f;
     --accent-red: #c8383a;
     /* --accent-red is vivid enough for fills and borders but only reaches
@@ -56,7 +57,12 @@
 
     --text-primary: #ede4c8;
     --text-secondary: #a89f86;
-    --text-muted: #6b6552;
+    /* Was #6b6552, which reached only 2.36-3.26:1 against the backgrounds it is
+       used on — a text token that never passed AA anywhere, across 28 uses. Same
+       hue and saturation, lightened until the worst case clears 4.71:1. Still
+       dimmer than --text-secondary (5.21:1 worst), so the visual hierarchy of
+       primary > secondary > muted survives. */
+    --text-muted: #9e9780;
     --text-accent: var(--accent-primary);
 
     --border-subtle: rgba(232, 184, 75, 0.18);
