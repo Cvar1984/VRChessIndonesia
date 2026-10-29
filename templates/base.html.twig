@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
     <head>
         <meta charset="UTF-8">
         {# Anchors every relative/root-relative URL on the page (assets, favicons,
@@ -43,6 +43,12 @@
         {% endif %}
     </head>
     <body>
-        {% block body %}{% endblock %}
+        {# Skip link and <main> live here rather than per page, so all three pages
+           (leaderboard, gallery, newsletter) get the landmark and the bypass. The
+           link is off-screen until focused. #}
+        <a href="#main" class="skip-link">Lewati ke konten utama</a>
+        <main id="main">
+            {% block body %}{% endblock %}
+        </main>
     </body>
 </html>

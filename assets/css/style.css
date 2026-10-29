@@ -2186,3 +2186,26 @@ img.player-avatar-sm {
 .board-column.flipped #evalBarOuter {
     flex-direction: column-reverse !important;
 }
+
+/* ── Skip link (WCAG 2.4.1) ──
+   Off-screen until focused, then pinned top-left over the page. clip-path rather
+   than display:none, which would take it out of the tab order entirely. */
+.skip-link {
+    position: absolute;
+    left: 8px;
+    top: -60px;
+    z-index: 200;
+    padding: 8px 14px;
+    min-height: 24px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    text-decoration: none;
+    transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+    top: 8px;
+}
